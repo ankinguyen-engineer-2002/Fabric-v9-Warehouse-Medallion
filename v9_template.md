@@ -6,26 +6,21 @@
 
 ## 1. Architecture Pattern
 
-```
-Source Lakehouse (shortcuts / external data)
-        │
-        ▼
-┌─────────────────────────────────────────────────┐
-│            Fabric Warehouse                      │
-│                                                  │
-│   ┌──────────┐   ┌──────────┐   ┌──────────┐   │
-│   │  bronze   │──▶│  silver   │──▶│   gold   │   │
-│   │ raw mirror│   │ transform │   │ BI-ready │   │
-│   └──────────┘   └──────────┘   └──────────┘   │
-│                                                  │
-│   ┌──────────────────────────────────────────┐  │
-│   │              meta                         │  │
-│   │  config · log · DQ · lineage · DAG        │  │
-│   └──────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────┘
-        │
-        ▼
-   Power BI Direct Lake
+```mermaid
+flowchart LR
+    SRC[Source Lakehouse\nshortcuts / external data]
+
+    subgraph WH[Fabric Warehouse]
+        direction LR
+        B[bronze\nraw mirror]
+        S[silver\ntransform]
+        G[gold\nBI-ready]
+        M[meta\nconfig · log · DQ · DAG]
+        B --> S --> G
+    end
+
+    SRC --> B
+    G --> PBI[Power BI\nDirect Lake]
 ```
 
 ### 4 Schemas
@@ -399,51 +394,63 @@ END
 ## 6. Pipeline Templates
 
 ### 6.1 Master Pipeline
-```
-pl_{project}_master (sequential, concurrency=1):
-  [1] Execute pl_{project}_bronze
-  [2] Execute pl_{project}_silver
-  [3] Execute pl_{project}_gold
+
+```mermaid
+flowchart LR
+    M[pl_master] --> B[pl_bronze]
+    B --> S[pl_silver]
+    S --> G[pl_gold]
 ```
 
 ### 6.2 Bronze/Gold Pipeline (Lookup + ForEach)
-```
-pl_{project}_{layer}:
-  [1] Lookup (LakehouseTableSource, cross-DB):
-      SELECT sp_name FROM {Warehouse}.meta.sp_registry
-      WHERE layer = '{LAYER}' AND is_active = 1
 
-  [2] ForEach (batch=N, PARALLEL):
-      SqlServerStoredProcedure: EXEC @item().sp_name
-      linkedService: {Warehouse} (DataWarehouse endpoint)
+```mermaid
+flowchart LR
+    L[Lookup\nmeta.sp_registry\nWHERE layer = LAYER\nis_active = 1]
+    F[ForEach\nbatch = N\nPARALLEL]
+    SP[EXEC @item.sp_name]
+
+    L -->|N SPs| F --> SP
 ```
+
+> Lookup: `LakehouseTableSource` + cross-DB query → `{Warehouse}.meta.sp_registry`
+> SP: `SqlServerStoredProcedure` + `linkedService` (DataWarehouse endpoint)
 
 ### 6.3 Silver Pipeline (Hybrid DAG — auto-scale N waves)
+
+```mermaid
+flowchart TD
+    CW[SP: compute_waves\ncompute DAG from depends_on]
+    MX[Lookup: MAX wave]
+
+    subgraph UNTIL[Until: current_wave > max_wave]
+        LK[Lookup\nSPs for this wave]
+        FE[ForEach batch=N\nPARALLEL]
+        SV1[SetVariable\nnext = curr + 1]
+        SV2[SetVariable\ncurr = next]
+        LK --> FE --> SV1 --> SV2
+    end
+
+    CW --> MX --> UNTIL
 ```
-pl_{project}_silver:
-  variables: current_wave="0", next_wave="0"
 
-  [1] SP: EXEC meta.usp_compute_slv_waves
-      → compute DAG waves from depends_on
+> **Variables**: `current_wave` + `next_wave` (2 vars to avoid self-reference)
+> **Auto-scale**: SP computes waves → Until loops N times → ForEach parallel per wave
 
-  [2] Lookup: SELECT MAX(wave) AS max_wave
-      → know how many waves
+### 6.4 Connection Pattern
 
-  [3] Until (current_wave > max_wave):
-      [3a] Lookup: SELECT sp_name WHERE wave = @current_wave
-      [3b] ForEach (batch=N, PARALLEL): EXEC @item().sp_name
-      [3c] SetVariable: next_wave = current_wave + 1
-      [3d] SetVariable: current_wave = next_wave
-```
+```mermaid
+flowchart LR
+    subgraph Pipeline
+        LK[Lookup]
+        SP[SP Activity]
+    end
 
-### Connection Pattern
-```
-Lookup: LakehouseTableSource + connectionSettings + Lakehouse connection
-        sqlReaderQuery: cross-DB → {Warehouse}.meta.sp_registry
+    LH[Lakehouse\nLakehouseTableSource\ncross-DB query]
+    WH[Warehouse\nDataWarehouse\nlinkedService]
 
-SP:     SqlServerStoredProcedure + linkedService (DataWarehouse endpoint)
-
-Invoke: InvokePipeline + externalReferences.connection
+    LK --> LH -.-> WH
+    SP --> WH
 ```
 
 ---
