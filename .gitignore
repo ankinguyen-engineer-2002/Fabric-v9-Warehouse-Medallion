@@ -1,0 +1,10 @@
+# Large files
+files.zip
+all_10_notebooks_source.txt
+files/
+
+# OS
+.DS_Store
+
+# Claude cache
+.claude/
