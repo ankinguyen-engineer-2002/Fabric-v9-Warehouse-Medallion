@@ -262,11 +262,21 @@ Column prefixes: `id_` keys · `code_` categories · `name_` descriptions · `qt
 
 ## Documentation
 
+### Templates (generic, apply to any project)
+
 | File | Description |
 |------|-------------|
-| [v9_architecture_complete.md](v9_architecture_complete.md) | Definitive reference: all objects, pipelines, DAG, meta schema, DQ, lineage, constraints |
-| [v9_pipeline_deep_dive.md](v9_pipeline_deep_dive.md) | Step-by-step execution trace when pipeline triggers, meta auto-population, adding new tables |
-| [v9_setup_guide.md](v9_setup_guide.md) | Phase-by-phase setup with Fabric UI and REST API approaches, DDL, SP templates, JSON definitions |
+| [template_architecture.md](template_architecture.md) | Architecture reference template: schemas, pipelines, DAG, meta, DQ, naming, constraints |
+| [template_pipeline_guide.md](template_pipeline_guide.md) | Pipeline execution trace template: what happens when master triggers, meta auto-population |
+| [template_setup_guide.md](template_setup_guide.md) | Phase-by-phase setup guide: DDL, SP templates, pipeline JSON, both Fabric UI and REST API |
+
+### Project-specific (SupplyChain implementation)
+
+| File | Description |
+|------|-------------|
+| [v9_architecture_supplychain.md](v9_architecture_supplychain.md) | All 98 objects with names, row counts, pipeline IDs, source mappings |
+| [v9_pipeline_supplychain.md](v9_pipeline_supplychain.md) | Execution trace with actual SP names, durations, wave assignments |
+| [v9_setup_supplychain.md](v9_setup_supplychain.md) | Implementation log: Spark→T-SQL conversions, bugs encountered, fixes applied |
 
 ---
 
