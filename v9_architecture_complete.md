@@ -1,0 +1,1174 @@
+# Architecture v9 — Complete Reference
+> SupplyChain_Warehouse | Microsoft Fabric F256 | Warehouse-Native Medallion Architecture
+> Build date: 2026-04-13 | Authors: Claude Code + Aric Nguyen
+> This document is the single source of truth for the entire v9 architecture.
+
+---
+
+## 1. Architecture Overview
+
+### 1.1 Data Flow
+
+```mermaid
+flowchart LR
+    EL["Enterprise_Lakehouse\n(US team - source of truth)\nShortcuts to external systems"]
+
+    subgraph WH["SupplyChain_Warehouse"]
+        direction LR
+        B["bronze\n18 tables\nraw mirror from source"]
+        S["silver\n8 tables\nclean + join + business rules"]
+        G["gold\n2 tables\nBI-ready facts"]
+        M["meta\n7 tables + 6 SPs + 1 fn + 1 view\nconfig / log / DQ / DAG"]
+        B --> S --> G
+    end
+
+    EL -->|"3-part naming\nvia bronze views"| B
+    G -->|"Direct Lake"| PBI["Power BI\nReports + Dashboards"]
+```
+
+### 1.2 Four Schemas
+
+| Schema | Role | Contains |
+|--------|------|----------|
+| `bronze` | Raw mirror from Enterprise_Lakehouse | 18 Tables + 17 Views (ETL logic) + 18 SPs (load execution) |
+| `silver` | Clean, conform, join, apply business rules | 8 Tables + 8 Views + 8 SPs |
+| `gold` | Business-ready facts/dimensions for Power BI | 2 Tables + 2 Views + 2 SPs |
+| `meta` | System control plane | 7 Tables + 6 SPs + 1 Function + 1 View |
+
+### 1.3 Design Principles
+
+| Principle | Implementation |
+|-----------|---------------|
+| **Pure T-SQL** | No Notebooks, no PySpark, no Lakehouse ETL. All logic in SQL views and stored procedures. |
+| **3-file-per-table** | Every data table has exactly 3 objects: VIEW (ETL formula) + SP (execution robot) + TABLE (materialized data). |
+| **Metadata-driven** | Adding a new table = INSERT 1 row in `meta.sp_registry`. The pipeline picks it up automatically. No pipeline JSON changes. |
+| **DAG orchestration** | Silver SPs declare `depends_on` in sp_registry. `usp_compute_slv_waves` auto-computes execution waves. Pipeline runs waves sequentially, SPs within a wave in parallel. |
+| **Config-driven DQ** | DQ rules stored in `meta.dq_rules` table, not hardcoded. 7 check types. Add a rule = INSERT 1 row. |
+| **Auto-built lineage** | `source_objects` JSON in sp_registry is parsed by `usp_build_lineage` to generate a full lineage graph (52 edges). |
+
+### 1.4 v8 to v9 Comparison
+
+| Aspect | v8 (Legacy) | v9 (Current) |
+|--------|-------------|--------------|
+| Storage | SupplyChain_Lakehouse (Delta) | SupplyChain_Warehouse (native Parquet) |
+| Compute | PySpark Notebooks | T-SQL Stored Procedures |
+| ETL logic | Python variables (COLUMN_SQL, SQL_TRANSFORM) | CREATE VIEW statements |
+| Orchestration | Pipeline -> ForEach -> Notebook | Pipeline -> ForEach -> EXEC SP |
+| Metadata | utl_pipeline_metadata (1 table) | meta schema (7 tables + 6 SPs) |
+| DAG | execution_order (static integer) | depends_on + auto wave computation |
+| DQ | Python nb_dq_engine (hardcoded) | Config-driven dq_rules table |
+
+---
+
+## 2. Warehouse Structure (Full Tree)
+
+```
+SupplyChain_Warehouse/
+|
++-- bronze/
+|   +-- Tables/ (18)
+|   |   +-- brz_saleshistory_afi__invoicedetail             35,798,317 rows
+|   |   +-- brz_saleshistory_afi__invoiceheader              4,044,847 rows
+|   |   +-- brz_supplychain_enh_1__demandforecastsnapshotdaily  1,306,460,284 rows
+|   |   +-- brz_wholesale_codis_afi__codatan                   918,213 rows
+|   |   +-- brz_wholesale_codis_afi__comast                    229,461 rows
+|   |   +-- brz_wholesale_codis_afi__extord                    229,736 rows
+|   |   +-- brz_wholesale_codis_afi__extorit                   912,132 rows
+|   |   +-- ref_calendar                                        21,551 rows
+|   |   +-- ref_customer_account                                35,581 rows
+|   |   +-- ref_customer_account_group                          35,454 rows
+|   |   +-- ref_customer_grouping                                    9 rows
+|   |   +-- ref_customer_shipping_location                     127,515 rows
+|   |   +-- ref_forecast_cycle                                      43 rows
+|   |   +-- ref_forecast_horizon                                     8 rows
+|   |   +-- ref_item_master                                    379,331 rows
+|   |   +-- ref_order_type                                          29 rows
+|   |   +-- ref_product                                        373,326 rows
+|   |   +-- ref_warehouse                                           55 rows
+|   |
+|   +-- Views/ (17)
+|   |   +-- vw_brz_saleshistory_afi__invoicedetail
+|   |   +-- vw_brz_saleshistory_afi__invoiceheader
+|   |   +-- vw_brz_supplychain_enh_1__demandforecastsnapshotdaily
+|   |   +-- vw_brz_wholesale_codis_afi__codatan
+|   |   +-- vw_brz_wholesale_codis_afi__comast
+|   |   +-- vw_brz_wholesale_codis_afi__extord
+|   |   +-- vw_brz_wholesale_codis_afi__extorit
+|   |   +-- vw_ref_calendar
+|   |   +-- vw_ref_customer_account
+|   |   +-- vw_ref_customer_account_group
+|   |   +-- vw_ref_customer_grouping
+|   |   +-- vw_ref_customer_shipping_location
+|   |   +-- vw_ref_forecast_cycle
+|   |   (no view for ref_forecast_horizon -- hardcoded INSERT)
+|   |   +-- vw_ref_item_master
+|   |   +-- vw_ref_order_type
+|   |   +-- vw_ref_product
+|   |   +-- vw_ref_warehouse
+|   |
+|   +-- Stored Procedures/ (18)
+|       +-- usp_load_brz_saleshistory_afi__invoicedetail
+|       +-- usp_load_brz_saleshistory_afi__invoiceheader
+|       +-- usp_load_brz_supplychain_enh_1__demandforecastsnapshotdaily
+|       +-- usp_load_brz_wholesale_codis_afi__codatan
+|       +-- usp_load_brz_wholesale_codis_afi__comast
+|       +-- usp_load_brz_wholesale_codis_afi__extord
+|       +-- usp_load_brz_wholesale_codis_afi__extorit
+|       +-- usp_load_ref_calendar
+|       +-- usp_load_ref_customer_account
+|       +-- usp_load_ref_customer_account_group
+|       +-- usp_load_ref_customer_grouping
+|       +-- usp_load_ref_customer_shipping_location
+|       +-- usp_load_ref_forecast_cycle
+|       +-- usp_load_ref_forecast_horizon
+|       +-- usp_load_ref_item_master
+|       +-- usp_load_ref_order_type
+|       +-- usp_load_ref_product
+|       +-- usp_load_ref_warehouse
+|
++-- silver/
+|   +-- Tables/ (8)
+|   |   +-- slv_invoice_detail_line_level                  35,798,317 rows  (wave 0)
+|   |   +-- slv_forecast_demand_monthly                    13,876,949 rows  (wave 0)
+|   |   +-- slv_open_order_line_level                         258,197 rows  (wave 0)
+|   |   +-- slv_actual_demand_monthly                         571,822 rows  (wave 1)
+|   |   +-- slv_actual_demand_weekly                        1,102,162 rows  (wave 1)
+|   |   +-- slv_invoice_weekly                             15,571,003 rows  (wave 1)
+|   |   +-- slv_open_order_monthly                            119,575 rows  (wave 1)
+|   |   +-- slv_naive_forecast_monthly                        346,792 rows  (wave 2)
+|   |
+|   +-- Views/ (8)
+|   |   +-- vw_slv_invoice_detail_line_level
+|   |   +-- vw_slv_forecast_demand_monthly
+|   |   +-- vw_slv_open_order_line_level
+|   |   +-- vw_slv_actual_demand_monthly
+|   |   +-- vw_slv_actual_demand_weekly
+|   |   +-- vw_slv_invoice_weekly
+|   |   +-- vw_slv_open_order_monthly
+|   |   +-- vw_slv_naive_forecast_monthly
+|   |
+|   +-- Stored Procedures/ (8)
+|       +-- usp_load_slv_invoice_detail_line_level
+|       +-- usp_load_slv_forecast_demand_monthly
+|       +-- usp_load_slv_open_order_line_level
+|       +-- usp_load_slv_actual_demand_monthly
+|       +-- usp_load_slv_actual_demand_weekly
+|       +-- usp_load_slv_invoice_weekly
+|       +-- usp_load_slv_open_order_monthly
+|       +-- usp_load_slv_naive_forecast_monthly
+|
++-- gold/
+|   +-- Tables/ (2)
+|   |   +-- gld_fact_flat_forecast_actual                  14,795,563 rows
+|   |   +-- gld_fact_forecast_kpi                          41,055,048 rows
+|   |
+|   +-- Views/ (2)
+|   |   +-- vw_gld_fact_flat_forecast_actual
+|   |   +-- vw_gld_fact_forecast_kpi
+|   |
+|   +-- Stored Procedures/ (2)
+|       +-- usp_load_gld_fact_flat_forecast_actual
+|       +-- usp_load_gld_fact_forecast_kpi
+|
++-- meta/
+    +-- Tables/ (7)
+    |   +-- sp_registry                    28 rows     config: SP definitions
+    |   +-- sp_run_history                129 rows     log: SP executions
+    |   +-- dq_rules                       30 rows     config: DQ check definitions
+    |   +-- dq_results                     30 rows     log: DQ check outcomes
+    |   +-- sp_lineage                     52 rows     map: data flow edges
+    |   +-- pipeline_run_log                0 rows     log: pipeline-level runs
+    |   +-- slv_dag_waves_runtime           8 rows     runtime: wave computation results
+    |
+    +-- Stored Procedures/ (5)
+    |   +-- usp_log_run                   log SP start/end/rows/status
+    |   +-- usp_check_dq                  DQ engine (read rules -> execute -> log)
+    |   +-- usp_build_lineage             parse source_objects -> build lineage
+    |   +-- usp_compute_slv_waves         iterative DAG wave computation
+    |   +-- usp_run_silver_dag            orchestrator backup (sequential)
+    |
+    +-- Stored Procedures (additional)/ (1)
+    |   +-- usp_debug_loop                debugging utility for WHILE loop behavior
+    |
+    +-- Functions/ (1)
+    |   +-- ufn_should_run                check schedule gate (returns 1/0)
+    |
+    +-- Views/ (1)
+        +-- vw_slv_dag_waves              legacy fixed 3-CTE view (replaced by SP)
+```
+
+---
+
+## 3. Pipeline Architecture (Super Detailed)
+
+### 3.1 Pipeline Inventory
+
+| Pipeline | ID | Purpose | Activities |
+|----------|----|---------|------------|
+| pl_sc_master | 319a8160 | Orchestrate bronze -> silver -> gold sequentially | 3 InvokePipeline |
+| pl_sc_bronze | 1bdbaebb | Load all bronze/ref tables in parallel | 1 Lookup + 1 ForEach(SP) |
+| pl_sc_silver | 46437ae6 | Parent: compute waves, iterate wave-by-wave | 1 SP + 10 Lookup + 10 ForEach = 21 activities |
+| pl_sc_silver_wave | 57a09720 | Child: run all SPs for a given wave in parallel | 1 Lookup + 1 ForEach(SP) |
+| pl_sc_gold | 94fc130e | Load all gold tables in parallel | 1 Lookup + 1 ForEach(SP) |
+
+### 3.2 pl_sc_master (319a8160)
+
+```mermaid
+flowchart LR
+    M["pl_sc_master\n(sequential orchestrator)"]
+    B["pl_sc_bronze\n1bdbaebb"]
+    S["pl_sc_silver\n46437ae6"]
+    G["pl_sc_gold\n94fc130e"]
+
+    M -->|"Step 1"| B
+    B -->|"on success"| S
+    S -->|"on success"| G
+```
+
+The master pipeline invokes each child pipeline sequentially using InvokePipeline activities. If any child fails, the master stops (no subsequent layers run).
+
+### 3.3 pl_sc_bronze (1bdbaebb)
+
+```mermaid
+flowchart LR
+    L["Lookup: get_bronze_sps\n\nSource: LakehouseTableSource\nConnection: b4311980 (Lakehouse)\nQuery: SELECT sp_name\nFROM SupplyChain_Warehouse.meta.sp_registry\nWHERE layer IN ('BRZ','REF')\nAND is_active = 1\nAND meta.ufn_should_run(sp_name) = 1"]
+
+    F["ForEach: run_bronze_sps\nbatch = 8\nisSequential = false (PARALLEL)"]
+
+    SP["SqlServerStoredProcedure\nEXEC @item().sp_name\nlinkedService: DataWarehouse endpoint\nRetry: 2, interval: 30s"]
+
+    L -->|"Returns 18 sp_names\n(7 BRZ + 11 REF)"| F
+    F --> SP
+```
+
+**Retry policy**: Each SP activity has retry=2, interval=30 seconds. This handles snapshot isolation conflicts that occur when multiple DROP+CTAS operations run in parallel on overlapping Parquet files.
+
+### 3.4 pl_sc_silver (46437ae6) -- PARENT Pipeline
+
+**Important architectural note**: The original design used an Until loop to iterate over waves dynamically. However, Fabric Pipeline does not support the Until activity (or has critical issues with SetVariable inside Until loops). The final implementation uses **10 pre-built sequential Lookup+ForEach stages** (wave 0 through wave 9). Empty waves (where the Lookup returns no SPs) simply result in an empty ForEach that skips execution.
+
+```mermaid
+flowchart TD
+    CW["[Step 1] SqlServerStoredProcedure\nEXEC meta.usp_compute_slv_waves\n\nReads depends_on from sp_registry\nIteratively assigns waves\nWrites to slv_dag_waves_runtime"]
+
+    subgraph W0["Wave 0 (Sequential after Step 1)"]
+        L0["Lookup: wave_0_sps\nSELECT sp_name\nFROM meta.slv_dag_waves_runtime\nWHERE wave = 0"]
+        F0["ForEach batch=8\nPARALLEL"]
+        L0 --> F0
+    end
+
+    subgraph W1["Wave 1 (Sequential after Wave 0)"]
+        L1["Lookup: wave_1_sps\nSELECT sp_name\nFROM meta.slv_dag_waves_runtime\nWHERE wave = 1"]
+        F1["ForEach batch=8\nPARALLEL"]
+        L1 --> F1
+    end
+
+    subgraph W2["Wave 2 (Sequential after Wave 1)"]
+        L2["Lookup: wave_2_sps\nSELECT sp_name\nFROM meta.slv_dag_waves_runtime\nWHERE wave = 2"]
+        F2["ForEach batch=8\nPARALLEL"]
+        L2 --> F2
+    end
+
+    W39["Waves 3-9: same pattern\n(currently empty, ForEach skips)"]
+
+    CW --> W0 --> W1 --> W2 --> W39
+```
+
+**Total activities**: 1 SP + 10 Lookup + 10 ForEach = 21 activities.
+**Scaling**: Supports up to 10 DAG waves without pipeline changes. Beyond 10 waves, add more Lookup+ForEach stages.
+
+**Alternative design (parent-child pattern)**: An alternative approach uses a parent pipeline that invokes a child pipeline `pl_sc_silver_wave` for each wave. This is the Microsoft-recommended pattern for dynamic iteration. The parent does a Lookup for distinct waves, then a ForEach (isSequential=true) that invokes the child with parameter `wave_number`. The child does its own Lookup for SPs in that wave and a ForEach (parallel) to execute them. This pattern is cleaner but adds cross-pipeline invocation overhead.
+
+### 3.5 pl_sc_silver_wave (57a09720) -- CHILD Pipeline (Alternative Pattern)
+
+```mermaid
+flowchart LR
+    L["Lookup: get_wave_sps\n\nSELECT sp_name\nFROM SupplyChain_Warehouse\n.meta.slv_dag_waves_runtime\nWHERE wave = @pipeline().parameters.wave_number"]
+
+    F["ForEach: run_wave_sps\nbatch = 8\nisSequential = false (PARALLEL)"]
+
+    SP["SqlServerStoredProcedure\nEXEC @item().sp_name"]
+
+    L -->|"SPs for this wave"| F
+    F --> SP
+```
+
+**Parameter**: `wave_number` (INT) -- passed from the parent pipeline's ForEach.
+
+### 3.6 pl_sc_gold (94fc130e)
+
+```mermaid
+flowchart LR
+    L["Lookup: get_gold_sps\n\nSource: LakehouseTableSource\nConnection: b4311980\nQuery: SELECT sp_name\nFROM SupplyChain_Warehouse.meta.sp_registry\nWHERE layer = 'GLD'\nAND is_active = 1"]
+
+    F["ForEach: run_gold_sps\nbatch = 2\nisSequential = false (PARALLEL)"]
+
+    SP["SqlServerStoredProcedure\nEXEC @item().sp_name"]
+
+    L -->|"Returns 2 sp_names"| F
+    F --> SP
+```
+
+### 3.7 Pipeline Execution Timeline (Actual Run #3)
+
+```mermaid
+gantt
+    title pl_sc_master Run #3 (2026-04-14, ~16 min total)
+    dateFormat HH:mm
+    axisFormat %H:%M
+
+    section Bronze
+    18 SPs batch=8 parallel      :b, 14:18, 3m
+
+    section Silver
+    Wave 0 (3 SPs parallel)      :s0, after b, 2m
+    Wave 1 (4 SPs parallel)      :s1, after s0, 3m
+    Wave 2 (1 SP)                :s2, after s1, 1m
+
+    section Gold
+    2 SPs parallel               :g, after s2, 1m
+```
+
+---
+
+## 4. Connection Topology
+
+### 4.1 Connection Architecture
+
+```mermaid
+flowchart TD
+    subgraph Pipeline["Fabric Data Pipeline"]
+        LK["Lookup Activity\n(LakehouseTableSource)"]
+        SP["SP Activity\n(SqlServerStoredProcedure)"]
+        IP["InvokePipeline Activity"]
+    end
+
+    subgraph Connections["Connection Layer"]
+        LH_CONN["Lakehouse Connection\nID: b4311980\nType: connectionSettings\nartifactId: 62a3081e\n(SupplyChain_Lakehouse)"]
+        WH_CONN["Warehouse Connection\nType: linkedService\nendpoint: 7woj2w...datawarehouse.fabric.microsoft.com\nartifactId: e146ffe2\n(SupplyChain_Warehouse)"]
+        PL_CONN["Pipeline Connection\nID: 3bee8b0e\nType: externalReferences.connection\n(for InvokePipeline)"]
+    end
+
+    subgraph Targets["Data Layer"]
+        LH["SupplyChain_Lakehouse\nSQL Endpoint"]
+        WH["SupplyChain_Warehouse\nWarehouse Engine"]
+    end
+
+    LK --> LH_CONN --> LH
+    LH -.->|"cross-DB 3-part naming:\nSELECT FROM SupplyChain_Warehouse.meta.*"| WH
+    SP --> WH_CONN --> WH
+    IP --> PL_CONN
+```
+
+### 4.2 Why Lakehouse for Lookup?
+
+Fabric Pipeline's Lookup activity natively supports `LakehouseTableSource` as a source type, but **does not natively support Warehouse as a Lookup source**. Attempting to use a Warehouse connection in a Lookup returns "Failed to open resource" errors.
+
+**Workaround**: The Lookup activity connects to the SupplyChain_Lakehouse SQL endpoint, then uses cross-database 3-part naming to query Warehouse tables:
+
+```sql
+-- Executed on Lakehouse SQL endpoint, reads from Warehouse
+SELECT sp_name
+FROM SupplyChain_Warehouse.meta.sp_registry
+WHERE layer IN ('BRZ', 'REF')
+  AND is_active = 1
+```
+
+This works because Fabric's SQL endpoint supports cross-database queries between artifacts in the same workspace.
+
+### 4.3 Connection Details per Activity Type
+
+| Activity Type | Source Config | Connection ID | Target |
+|---------------|-------------|---------------|--------|
+| Lookup | LakehouseTableSource + connectionSettings | b4311980 (Lakehouse) | Lakehouse SQL endpoint -> cross-DB to Warehouse |
+| SqlServerStoredProcedure | linkedService (DataWarehouse) | e146ffe2 (Warehouse) | Warehouse engine directly |
+| InvokePipeline | externalReferences.connection | 3bee8b0e (Pipeline) | Target pipeline by ID |
+
+---
+
+## 5. 3-File-Per-Table Pattern
+
+### 5.1 Pattern Diagram
+
+```mermaid
+flowchart LR
+    V["VIEW\n\nThe Recipe\n\nSELECT FROM source\nJOINs, CTEs, CAST\nColumn mapping\nFilters, transforms\n\nPure SQL, no side effects"]
+
+    SP["STORED PROCEDURE\n\nThe Robot\n\n1. Generate run_id (NEWID)\n2. Log 'running' to sp_run_history\n3. DROP TABLE IF EXISTS\n4. CTAS from view\n5. COUNT rows\n6. Log 'success' to sp_run_history\n7. Update sp_registry\n\nError handling via TRY/CATCH"]
+
+    T["TABLE\n\nThe Product\n\nMaterialized Parquet on disk\nIncludes _load_dt column\nQueried by downstream\nviews and Power BI"]
+
+    V -->|"SP reads view"| SP
+    SP -->|"CTAS creates"| T
+```
+
+### 5.2 Why This Pattern?
+
+- **Separation of concerns**: View holds logic, SP handles execution/logging, table stores data.
+- **Testability**: You can `SELECT * FROM vw_xxx` to preview results without materializing.
+- **Reusability**: Every SP follows the same template -- only the schema/table names change.
+- **Observability**: Every execution is logged with run_id, start/end time, row count, status, error message.
+
+### 5.3 SP Template -- Overwrite Pattern (17 bronze + 8 silver + 2 gold = 27 SPs)
+
+```sql
+CREATE OR ALTER PROCEDURE {schema}.usp_load_{table} AS
+BEGIN
+    DECLARE @run_id VARCHAR(36) = CONVERT(VARCHAR(36), NEWID());
+    DECLARE @rows BIGINT;
+
+    -- Step 1: Log start
+    EXEC meta.usp_log_run @run_id, '{schema}.usp_load_{table}', 'running',
+         @load_type = 'overwrite';
+
+    BEGIN TRY
+        -- Step 2: Drop and recreate from view
+        DROP TABLE IF EXISTS {schema}.{table};
+        CREATE TABLE {schema}.{table} AS
+        SELECT *, CAST(GETUTCDATE() AS DATETIME2(6)) AS _load_dt
+        FROM {schema}.vw_{table};
+
+        -- Step 3: Count rows
+        SELECT @rows = COUNT(*) FROM {schema}.{table};
+
+        -- Step 4: Log success
+        EXEC meta.usp_log_run @run_id, '{schema}.usp_load_{table}', 'success',
+             @rows_affected = @rows, @load_type = 'overwrite';
+    END TRY
+    BEGIN CATCH
+        DECLARE @err VARCHAR(4000) = ERROR_MESSAGE();
+        EXEC meta.usp_log_run @run_id, '{schema}.usp_load_{table}', 'failed',
+             @error_message = @err, @load_type = 'overwrite';
+        THROW;
+    END CATCH
+END
+```
+
+### 5.4 SP Template -- Incremental Pattern (1 SP: brz_demandforecast only)
+
+```sql
+CREATE OR ALTER PROCEDURE {schema}.usp_load_{table} AS
+BEGIN
+    DECLARE @run_id VARCHAR(36) = CONVERT(VARCHAR(36), NEWID());
+    DECLARE @rows BIGINT;
+    DECLARE @last_wm VARCHAR(200);
+    DECLARE @new_wm VARCHAR(200);
+    DECLARE @table_exists INT = 0;
+
+    EXEC meta.usp_log_run @run_id, '{schema}.usp_load_{table}', 'running',
+         @load_type = 'incremental';
+
+    BEGIN TRY
+        -- Check if table already exists
+        SELECT @table_exists = COUNT(*) FROM sys.tables t
+        JOIN sys.schemas s ON t.schema_id = s.schema_id
+        WHERE s.name = '{schema}' AND t.name = '{table}';
+
+        -- Get last watermark
+        SELECT @last_wm = last_watermark_value FROM meta.sp_registry
+        WHERE sp_name = '{schema}.usp_load_{table}';
+
+        IF @table_exists = 0 OR @last_wm IS NULL
+        BEGIN
+            -- First run: full load with cutoff date
+            DROP TABLE IF EXISTS {schema}.{table};
+            CREATE TABLE {schema}.{table} AS
+            SELECT *, CAST(GETUTCDATE() AS DATETIME2(6)) AS _load_dt
+            FROM {schema}.vw_{table}
+            WHERE {watermark_column} >= CAST('2023-01-01' AS DATETIME2(6));
+            SELECT @rows = COUNT(*) FROM {schema}.{table};
+        END
+        ELSE
+        BEGIN
+            -- Subsequent: append only new rows
+            INSERT INTO {schema}.{table}
+            SELECT *, CAST(GETUTCDATE() AS DATETIME2(6)) AS _load_dt
+            FROM {schema}.vw_{table}
+            WHERE {watermark_column} > CAST(@last_wm AS DATETIME2(6));
+            SELECT @rows = @@ROWCOUNT;
+        END
+
+        -- Update watermark
+        SELECT @new_wm = CAST(MAX({watermark_column}) AS VARCHAR(200))
+        FROM {schema}.{table};
+        UPDATE meta.sp_registry SET last_watermark_value = @new_wm
+        WHERE sp_name = '{schema}.usp_load_{table}';
+
+        EXEC meta.usp_log_run @run_id, '{schema}.usp_load_{table}', 'success',
+             @rows_affected = @rows, @load_type = 'incremental';
+    END TRY
+    BEGIN CATCH
+        DECLARE @err VARCHAR(4000) = ERROR_MESSAGE();
+        EXEC meta.usp_log_run @run_id, '{schema}.usp_load_{table}', 'failed',
+             @error_message = @err, @load_type = 'incremental';
+        THROW;
+    END CATCH
+END
+```
+
+---
+
+## 6. Silver DAG System
+
+### 6.1 How It Works
+
+The Silver layer uses a Directed Acyclic Graph (DAG) to determine execution order. Each silver SP declares its dependencies via the `depends_on` column in `meta.sp_registry`. The system then computes execution "waves" -- groups of SPs that can run in parallel because all their dependencies have been satisfied in prior waves.
+
+### 6.2 depends_on Column
+
+The `depends_on` column in `meta.sp_registry` stores a JSON array of SP names that this SP depends on. Only silver-to-silver dependencies matter for wave computation. Dependencies on bronze tables are ignored (bronze always runs first as a complete layer).
+
+Example:
+```sql
+-- slv_actual_demand_monthly depends on 2 silver tables
+depends_on = '["silver.usp_load_slv_invoice_detail_line_level", "silver.usp_load_slv_open_order_line_level"]'
+```
+
+### 6.3 meta.usp_compute_slv_waves -- Iterative Wave Computation
+
+Fabric Warehouse does not support recursive CTEs. The wave computation uses an iterative WHILE loop instead:
+
+```sql
+CREATE OR ALTER PROCEDURE meta.usp_compute_slv_waves AS
+BEGIN
+    DELETE FROM meta.slv_dag_waves_runtime;
+    DECLARE @wave INT = 0, @assigned INT = 0, @new_count INT = 1;
+    DECLARE @total INT, @max_waves INT = 30;
+
+    SELECT @total = COUNT(*) FROM meta.sp_registry
+    WHERE layer = 'SLV' AND is_active = 1;
+
+    -- Wave 0: SPs with no silver dependencies
+    INSERT INTO meta.slv_dag_waves_runtime (sp_name, wave)
+    SELECT sp_name, 0 FROM meta.sp_registry
+    WHERE layer = 'SLV' AND is_active = 1
+    AND (depends_on IS NULL OR depends_on NOT LIKE '%silver.usp_%');
+
+    SELECT @assigned = COUNT(*) FROM meta.slv_dag_waves_runtime;
+    SET @wave = 1;
+
+    -- Iterate: assign next wave when ALL deps are already assigned
+    WHILE @assigned < @total AND @wave < @max_waves AND @new_count > 0
+    BEGIN
+        INSERT INTO meta.slv_dag_waves_runtime (sp_name, wave)
+        SELECT r.sp_name, @wave FROM meta.sp_registry r
+        WHERE r.layer = 'SLV' AND r.is_active = 1
+        AND r.sp_name NOT IN (SELECT sp_name FROM meta.slv_dag_waves_runtime)
+        AND NOT EXISTS (
+            SELECT 1 FROM meta.sp_registry dep
+            WHERE dep.layer = 'SLV' AND dep.is_active = 1
+            AND r.depends_on LIKE '%' + dep.sp_name + '%'
+            AND dep.sp_name NOT IN (SELECT sp_name FROM meta.slv_dag_waves_runtime)
+        );
+        SET @new_count = @@ROWCOUNT;
+        SET @assigned = @assigned + @new_count;
+        SET @wave = @wave + 1;
+    END
+END
+```
+
+### 6.4 Current Wave Assignment (3 Waves, 8 SPs)
+
+```mermaid
+flowchart TD
+    subgraph W0["Wave 0 -- No silver dependencies (PARALLEL)"]
+        A["slv_invoice_detail_line_level\n35.8M rows\n\nDepends on: brz_invoicedetail\n+ brz_invoiceheader\n+ ref_customer_account_group"]
+        B["slv_forecast_demand_monthly\n13.9M rows\n\nDepends on: brz_demandforecast\n+ ref_forecast_cycle\n+ ref_calendar"]
+        C["slv_open_order_line_level\n258K rows\n\nDepends on: brz_codatan + comast\n+ extord + extorit\n+ ref_item_master + ref_order_type"]
+    end
+
+    subgraph W1["Wave 1 -- Depends on Wave 0 (PARALLEL)"]
+        D["slv_actual_demand_monthly\n572K rows\n\nDepends on: slv_invoice_detail\n+ slv_open_order + ref_calendar"]
+        E["slv_actual_demand_weekly\n1.1M rows\n\nDepends on: slv_invoice_detail\n+ slv_open_order + ref_calendar"]
+        F["slv_invoice_weekly\n15.6M rows\n\nDepends on: slv_invoice_detail\n+ ref_calendar"]
+        G["slv_open_order_monthly\n120K rows\n\nDepends on: slv_open_order\n+ ref_calendar"]
+    end
+
+    subgraph W2["Wave 2 -- Depends on Wave 1"]
+        H["slv_naive_forecast_monthly\n347K rows\n\nDepends on: slv_actual_demand_monthly\n+ ref_calendar"]
+    end
+
+    A --> D
+    A --> E
+    A --> F
+    C --> D
+    C --> E
+    C --> G
+    D --> H
+```
+
+### 6.5 Parent-Child Pipeline Pattern
+
+The silver pipeline uses a parent-child pattern to handle DAG waves. This is the Microsoft-recommended approach because Fabric Pipeline does not allow nesting ForEach inside Until, nor ForEach inside another ForEach.
+
+**In the current implementation**, the parent pipeline (`pl_sc_silver`) has 10 pre-built sequential Lookup+ForEach stages (wave 0 through wave 9). Waves with no SPs simply skip (empty ForEach). This avoids the need for Until loops entirely.
+
+**Alternative (parent-child invocation)**: The parent pipeline could use InvokeFabricPipeline to call `pl_sc_silver_wave` with a `wave_number` parameter for each wave. The child pipeline then runs the Lookup+ForEach for that specific wave. This is cleaner but adds latency from cross-pipeline invocation.
+
+---
+
+## 7. Meta Schema Detail
+
+### 7.1 Tables (7)
+
+#### meta.sp_registry (28 rows)
+
+| Aspect | Detail |
+|--------|--------|
+| **Purpose** | The central registry -- defines every data SP in the system: what to run, how, when, and what it depends on. |
+| **Auto-populated** | `last_load_date`, `rows_loaded`, `next_run_time` (updated by usp_log_run after each SP execution) |
+| **Manual input** | All other columns (INSERT when adding a new table) |
+| **Key columns** | `sp_name` (PK equivalent), `layer` (BRZ/REF/SLV/GLD), `depends_on` (JSON), `source_objects` (JSON), `is_active` (0/1), `load_type` (overwrite/incremental), `watermark_column`, `last_watermark_value` |
+| **Written when** | Manual INSERT for each new table. Auto-UPDATE after each SP run. |
+
+```sql
+CREATE TABLE meta.sp_registry (
+    sp_name             VARCHAR(200)    NOT NULL,
+    view_name           VARCHAR(200)    NULL,
+    target_schema       VARCHAR(50)     NOT NULL,
+    target_table        VARCHAR(200)    NOT NULL,
+    layer               VARCHAR(10)     NOT NULL,     -- BRZ / REF / SLV / GLD
+    load_type           VARCHAR(20)     NOT NULL,     -- overwrite / incremental
+    frequency           VARCHAR(20)     NOT NULL,     -- daily / hourly / weekly / monthly
+    scheduled_hour      INT             NULL,
+    execution_order     INT             NOT NULL,     -- 1=BRZ/REF, 2-4=SLV, 5=GLD
+    parallel_group      INT             NULL,
+    depends_on          VARCHAR(500)    NULL,         -- JSON: ["silver.usp_load_slv_xxx"]
+    source_objects      VARCHAR(2000)   NULL,         -- JSON: ["Enterprise_Lakehouse.schema.table"]
+    watermark_column    VARCHAR(100)    NULL,
+    primary_key         VARCHAR(500)    NULL,
+    is_active           INT             NOT NULL,     -- 0/1 (no BIT in Fabric WH)
+    last_load_date      DATETIME2(6)    NULL,
+    last_watermark_value VARCHAR(200)   NULL,
+    next_run_time       DATETIME2(6)    NULL,
+    rows_loaded         BIGINT          NULL,
+    project             VARCHAR(50)     NULL
+);
+```
+
+#### meta.sp_run_history (129 rows)
+
+| Aspect | Detail |
+|--------|--------|
+| **Purpose** | Execution journal -- every SP execution creates one row with start/end time, row count, status, and errors. |
+| **Auto-populated** | Yes, entirely by `usp_log_run`. |
+| **Manual input** | None. |
+| **Key columns** | `run_id` (NEWID per execution), `sp_name`, `start_time`, `end_time`, `duration_seconds`, `rows_affected`, `status` (running/success/failed), `error_message` |
+| **Written when** | Twice per SP execution: INSERT on start (status='running'), UPDATE on end (status='success' or 'failed'). |
+
+```sql
+CREATE TABLE meta.sp_run_history (
+    run_id              VARCHAR(36)     NOT NULL,
+    pipeline_run_id     VARCHAR(36)     NULL,
+    sp_name             VARCHAR(200)    NOT NULL,
+    start_time          DATETIME2(6)    NOT NULL,
+    end_time            DATETIME2(6)    NULL,
+    duration_seconds    INT             NULL,
+    rows_affected       BIGINT          NULL,
+    status              VARCHAR(20)     NOT NULL,
+    error_message       VARCHAR(4000)   NULL,
+    load_type           VARCHAR(20)     NULL
+);
+```
+
+#### meta.dq_rules (30 rows)
+
+| Aspect | Detail |
+|--------|--------|
+| **Purpose** | Configuration table for data quality checks -- defines what to check, on which table/column, severity, and thresholds. |
+| **Auto-populated** | No. |
+| **Manual input** | Yes, INSERT when adding DQ rules for new or existing tables. |
+| **Key columns** | `rule_id` (manually assigned INT), `check_type` (completeness/uniqueness/row_count/freshness/referential_integrity/validity/custom_sql), `target_schema`, `target_table`, `column_name`, `severity` (CRITICAL/WARNING/INFO), `threshold`, `params` (JSON) |
+| **Written when** | Manual INSERT during setup or when adding new tables. |
+
+```sql
+CREATE TABLE meta.dq_rules (
+    rule_id             INT             NOT NULL,
+    rule_name           VARCHAR(200)    NOT NULL,
+    target_schema       VARCHAR(50)     NOT NULL,
+    target_table        VARCHAR(200)    NOT NULL,
+    check_type          VARCHAR(30)     NOT NULL,
+    column_name         VARCHAR(100)    NULL,
+    severity            VARCHAR(10)     NOT NULL,
+    threshold           DECIMAL(18,2)   NULL,
+    params              VARCHAR(1000)   NULL,
+    is_active           INT             NOT NULL,
+    layer               VARCHAR(10)     NOT NULL
+);
+```
+
+#### meta.dq_results (30 rows)
+
+| Aspect | Detail |
+|--------|--------|
+| **Purpose** | Stores the outcome of each DQ check execution -- pass/fail, actual value vs expected. |
+| **Auto-populated** | Yes, by `usp_check_dq`. |
+| **Manual input** | None. |
+| **Key columns** | `result_id`, `rule_id`, `check_time`, `status` (PASS/FAIL), `actual_value`, `expected_value`, `error_detail` |
+| **Written when** | Each time DQ checks are executed (currently via Python workaround). |
+
+```sql
+CREATE TABLE meta.dq_results (
+    result_id           INT             NOT NULL,
+    pipeline_run_id     VARCHAR(36)     NULL,
+    rule_id             INT             NOT NULL,
+    check_time          DATETIME2(6)    NOT NULL,
+    status              VARCHAR(10)     NOT NULL,
+    actual_value        VARCHAR(500)    NULL,
+    expected_value      VARCHAR(500)    NULL,
+    error_detail        VARCHAR(4000)   NULL
+);
+```
+
+#### meta.sp_lineage (52 rows)
+
+| Aspect | Detail |
+|--------|--------|
+| **Purpose** | Data lineage graph -- source-to-target edges auto-generated from sp_registry's source_objects JSON. |
+| **Auto-populated** | Yes, by `usp_build_lineage`. |
+| **Manual input** | None (but usp_build_lineage must be run manually or scheduled). |
+| **Key columns** | `lineage_id`, `source_schema`, `source_table`, `target_schema`, `target_table`, `relationship_type` (direct/join/union/lookup), `sp_name` |
+| **Written when** | Each time `usp_build_lineage` is executed. Deletes and rebuilds all rows. |
+
+```sql
+CREATE TABLE meta.sp_lineage (
+    lineage_id          INT             NOT NULL,
+    source_schema       VARCHAR(100)    NOT NULL,
+    source_table        VARCHAR(200)    NOT NULL,
+    target_schema       VARCHAR(100)    NOT NULL,
+    target_table        VARCHAR(200)    NOT NULL,
+    relationship_type   VARCHAR(20)     NULL,
+    sp_name             VARCHAR(200)    NULL
+);
+```
+
+#### meta.pipeline_run_log (0 rows)
+
+| Aspect | Detail |
+|--------|--------|
+| **Purpose** | Top-level pipeline run tracking -- intended for logging master pipeline start/end and aggregate statistics. |
+| **Auto-populated** | Not yet implemented. |
+| **Manual input** | Future: will be populated by pipeline activities or a wrapper SP. |
+| **Key columns** | `pipeline_run_id`, `pipeline_name`, `status`, `start_time`, `end_time`, `tables_succeeded`, `tables_failed`, `dq_failures_critical`, `notes` |
+| **Written when** | Not currently written (0 rows). Placeholder for future use. |
+
+```sql
+CREATE TABLE meta.pipeline_run_log (
+    pipeline_run_id     VARCHAR(36)     NOT NULL,
+    pipeline_name       VARCHAR(100)    NOT NULL,
+    status              VARCHAR(20)     NOT NULL,
+    start_time          DATETIME2(6)    NOT NULL,
+    end_time            DATETIME2(6)    NULL,
+    tables_succeeded    INT             NULL,
+    tables_failed       INT             NULL,
+    dq_failures_critical INT            NULL,
+    notes               VARCHAR(2000)   NULL
+);
+```
+
+#### meta.slv_dag_waves_runtime (8 rows)
+
+| Aspect | Detail |
+|--------|--------|
+| **Purpose** | Stores the computed wave assignment for each silver SP. Refreshed each time `usp_compute_slv_waves` runs. |
+| **Auto-populated** | Yes, by `usp_compute_slv_waves`. DELETE + INSERT on each run. |
+| **Manual input** | None. |
+| **Key columns** | `sp_name`, `wave` (INT, 0-based) |
+| **Written when** | Every time the silver pipeline runs (Step 1 of pl_sc_silver). |
+
+```sql
+CREATE TABLE meta.slv_dag_waves_runtime (
+    sp_name             VARCHAR(200)    NOT NULL,
+    wave                INT             NOT NULL
+);
+```
+
+### 7.2 Stored Procedures (6)
+
+#### meta.usp_log_run
+
+| Aspect | Detail |
+|--------|--------|
+| **What it does** | Logs SP execution start and end to `sp_run_history`. On completion, also updates `sp_registry` with last_load_date, rows_loaded, and next_run_time. |
+| **When called** | Twice per SP execution: once with status='running' (INSERT), once with status='success' or 'failed' (UPDATE). |
+| **Key logic** | If status='running': INSERT new row. Else: UPDATE existing row (matched by run_id) with end_time, duration_seconds, rows_affected. Also UPDATE sp_registry to set next_run_time based on frequency (daily -> +1 day, hourly -> +1 hour, etc.). |
+
+```sql
+CREATE OR ALTER PROCEDURE meta.usp_log_run
+    @run_id VARCHAR(36), @sp_name VARCHAR(200), @status VARCHAR(20),
+    @rows_affected BIGINT = NULL, @error_message VARCHAR(4000) = NULL,
+    @pipeline_run_id VARCHAR(36) = NULL, @load_type VARCHAR(20) = NULL
+AS
+BEGIN
+    IF @status = 'running'
+        INSERT INTO meta.sp_run_history (run_id, pipeline_run_id, sp_name, start_time, status, load_type)
+        VALUES (@run_id, @pipeline_run_id, @sp_name, CAST(GETUTCDATE() AS DATETIME2(6)), 'running', @load_type);
+    ELSE
+    BEGIN
+        UPDATE meta.sp_run_history
+        SET end_time = CAST(GETUTCDATE() AS DATETIME2(6)),
+            duration_seconds = DATEDIFF(SECOND, start_time, GETUTCDATE()),
+            rows_affected = @rows_affected, status = @status, error_message = @error_message
+        WHERE run_id = @run_id;
+
+        UPDATE meta.sp_registry
+        SET last_load_date = CAST(GETUTCDATE() AS DATETIME2(6)), rows_loaded = @rows_affected,
+            next_run_time = CASE
+                WHEN frequency = 'daily'   THEN DATEADD(DAY, 1, CAST(GETUTCDATE() AS DATE))
+                WHEN frequency = 'hourly'  THEN DATEADD(HOUR, 1, GETUTCDATE())
+                WHEN frequency = 'weekly'  THEN DATEADD(WEEK, 1, CAST(GETUTCDATE() AS DATE))
+                WHEN frequency = 'monthly' THEN DATEADD(MONTH, 1, CAST(GETUTCDATE() AS DATE))
+                ELSE DATEADD(DAY, 1, CAST(GETUTCDATE() AS DATE)) END
+        WHERE sp_name = @sp_name;
+    END
+END
+```
+
+#### meta.usp_check_dq
+
+| Aspect | Detail |
+|--------|--------|
+| **What it does** | DQ engine: reads `dq_rules`, dynamically generates and executes SQL for each rule, writes results to `dq_results`. |
+| **When called** | After data load completes (currently run manually via Python due to the WHILE loop bug). |
+| **Key logic** | WHILE loop iterates over dq_rules rows. For each rule, generates a SQL check based on check_type (completeness -> COUNT NULL, uniqueness -> COUNT DISTINCT vs COUNT, etc.), executes via sp_executesql, compares result to threshold, writes PASS/FAIL to dq_results. |
+| **Known bug** | The WHILE loop only executes 1 iteration in Fabric Warehouse. Root cause unknown (possibly a Fabric WH limitation with sp_executesql inside WHILE). Workaround: run DQ checks from Python/Pipeline instead of the SP. |
+
+#### meta.usp_build_lineage
+
+| Aspect | Detail |
+|--------|--------|
+| **What it does** | Parses the `source_objects` JSON column from `sp_registry` and generates source-to-target lineage edges in `sp_lineage`. |
+| **When called** | Manually, or after adding new tables to sp_registry. |
+| **Key logic** | Deletes all existing lineage rows, then for each sp_registry row, parses the source_objects JSON array and creates one lineage edge per source object. Handles 3-part names (External.Schema.Table) by extracting schema and table. |
+
+#### meta.usp_compute_slv_waves
+
+| Aspect | Detail |
+|--------|--------|
+| **What it does** | Computes execution waves for silver SPs based on their depends_on declarations. |
+| **When called** | As the first step of pl_sc_silver pipeline, every time silver runs. |
+| **Key logic** | See Section 6.3 for full SQL. Iterative WHILE loop assigns wave 0 (no silver deps), wave 1 (all deps in wave 0), etc., up to max 30 waves. Results stored in slv_dag_waves_runtime. |
+
+#### meta.usp_run_silver_dag
+
+| Aspect | Detail |
+|--------|--------|
+| **What it does** | Backup orchestrator: computes waves, then sequentially executes all silver SPs wave by wave. |
+| **When called** | Not used in production pipeline (replaced by the Lookup+ForEach pattern). Available as a manual fallback. |
+| **Key logic** | Calls usp_compute_slv_waves, then loops through waves 0..N, and within each wave loops through SPs, calling EXEC for each. All execution is sequential (no parallelism). |
+
+#### meta.usp_debug_loop
+
+| Aspect | Detail |
+|--------|--------|
+| **What it does** | Debugging utility to test WHILE loop behavior in Fabric Warehouse. |
+| **When called** | Ad-hoc debugging only. |
+| **Key logic** | Simple WHILE loop that inserts rows into a temp table to verify loop iteration count. Used to diagnose the usp_check_dq WHILE loop bug. |
+
+### 7.3 Function (1)
+
+#### meta.ufn_should_run
+
+| Aspect | Detail |
+|--------|--------|
+| **What it does** | Returns 1 if a given SP should run now (is_active=1 AND (next_run_time IS NULL OR next_run_time <= GETUTCDATE())). Returns 0 otherwise. |
+| **When called** | In pipeline Lookup queries as a filter: `WHERE meta.ufn_should_run(sp_name) = 1`. |
+| **Key logic** | Simple scalar function. Reads is_active and next_run_time from sp_registry. |
+
+### 7.4 View (1)
+
+#### meta.vw_slv_dag_waves
+
+| Aspect | Detail |
+|--------|--------|
+| **What it does** | Legacy view that computes silver waves using 3 hardcoded CTEs (max 3 waves). |
+| **Status** | Replaced by `usp_compute_slv_waves` (iterative SP, supports up to 30 waves). Kept for reference. |
+
+---
+
+## 8. DQ System
+
+### 8.1 Overview
+
+The Data Quality system is **config-driven**. Rules are stored in `meta.dq_rules`. Adding a new check = INSERT 1 row. The DQ engine reads rules, generates SQL dynamically, executes it, and writes results to `meta.dq_results`.
+
+### 8.2 Seven Check Types
+
+| Check Type | What It Checks | SQL Pattern Generated |
+|------------|---------------|----------------------|
+| `completeness` | Column NOT NULL percentage >= threshold | `SELECT CAST(SUM(CASE WHEN {col} IS NULL THEN 0 ELSE 1 END) * 100.0 / COUNT(*) AS DECIMAL(18,2))` |
+| `uniqueness` | Column has no duplicate values | `SELECT COUNT(*) - COUNT(DISTINCT {col})` (expects 0) |
+| `referential_integrity` | FK value exists in parent table | `SELECT COUNT(*) FROM child LEFT JOIN parent WHERE parent.key IS NULL` |
+| `row_count` | Table row count within min/max range | `SELECT COUNT(*) FROM {table}` (compare to threshold) |
+| `validity` | Values within expected set | `SELECT COUNT(*) WHERE {col} NOT IN ({valid_values})` |
+| `freshness` | Most recent _load_dt within N hours | `SELECT DATEDIFF(HOUR, MAX(_load_dt), GETUTCDATE())` (compare to threshold) |
+| `custom_sql` | Any arbitrary SQL check | Executes SQL from `params` column, expects 0 = pass |
+
+### 8.3 Current Rule Distribution
+
+| Layer | Rules | Examples |
+|-------|-------|---------|
+| Bronze | 18 | completeness on key columns, row_count minimums |
+| Silver | 8 | uniqueness on composite keys, referential integrity |
+| Gold | 4 | row_count ranges, freshness checks |
+| **Total** | **30** | **30/30 PASS as of last run** |
+
+### 8.4 Known Bug: WHILE Loop in usp_check_dq
+
+The `meta.usp_check_dq` stored procedure uses a WHILE loop to iterate over DQ rules and execute each one via `sp_executesql`. In Fabric Warehouse, this WHILE loop only executes **1 iteration** and then exits, regardless of the loop condition.
+
+**Root cause**: Unknown. Possibly a Fabric Warehouse limitation with `sp_executesql` inside WHILE loops, or a variable scoping issue specific to the Fabric engine.
+
+**Impact**: The SP only checks the first DQ rule instead of all 30.
+
+**Workaround**: Run DQ checks from Python using pyodbc. For each rule, generate the SQL client-side and execute it against the warehouse.
+
+**Future fix options**:
+1. Rewrite usp_check_dq to use CURSOR-less iteration (WHILE + MIN(id) WHERE id > @current)
+2. Integrate DQ into the pipeline as individual SP calls (one SP per check type)
+3. Use an external orchestrator (Python/Pipeline ForEach) to call individual DQ checks
+
+---
+
+## 9. Lineage System
+
+### 9.1 Overview
+
+The lineage system automatically generates a source-to-target data flow graph. It parses the `source_objects` JSON column in `meta.sp_registry` and creates edges in `meta.sp_lineage`.
+
+### 9.2 Current State: 52 Edges
+
+```mermaid
+flowchart LR
+    EL["Enterprise_Lakehouse\n(18 source tables)"]
+    BRZ["bronze\n(18 tables)"]
+    SLV["silver\n(8 tables)"]
+    GLD["gold\n(2 tables)"]
+
+    EL -->|"18 edges\n(1:1 source mapping)"| BRZ
+    BRZ -->|"22 edges\n(many:1 JOINs)"| SLV
+    SLV -->|"8 edges\n(cross-silver deps)"| SLV
+    SLV -->|"4 edges"| GLD
+    BRZ -->|"0 edges direct"| GLD
+```
+
+**Edge breakdown**:
+- Enterprise_Lakehouse -> bronze: 18 edges (each bronze table reads from 1 source)
+- bronze -> silver: 22 edges (silver tables JOIN multiple bronze tables)
+- silver -> silver: 8 edges (wave 1+ silver tables depend on wave 0 silver tables)
+- silver -> gold: 4 edges (gold tables read from silver tables)
+- **Total**: 52 edges
+
+### 9.3 usp_build_lineage Logic
+
+1. DELETE FROM meta.sp_lineage (full rebuild)
+2. For each row in sp_registry where source_objects is not NULL:
+   - Parse source_objects JSON array
+   - For each source object, extract schema and table name
+   - INSERT into sp_lineage (source_schema, source_table, target_schema, target_table, sp_name)
+3. Assign lineage_id as ROW_NUMBER()
+
+---
+
+## 10. Naming Convention
+
+### 10.1 Object Names
+
+| Schema | Table Pattern | View Pattern | SP Pattern |
+|--------|--------------|--------------|------------|
+| bronze | `brz_{source_system}__{entity}` | `vw_brz_{source_system}__{entity}` | `usp_load_brz_{source_system}__{entity}` |
+| bronze (ref) | `ref_{entity}` | `vw_ref_{entity}` | `usp_load_ref_{entity}` |
+| silver | `slv_{business_concept}` | `vw_slv_{business_concept}` | `usp_load_slv_{business_concept}` |
+| gold | `gld_{fact\|dim}_{subject}` | `vw_gld_{fact\|dim}_{subject}` | `usp_load_gld_{fact\|dim}_{subject}` |
+| meta | descriptive (e.g., `sp_registry`) | `vw_*` (e.g., `vw_slv_dag_waves`) | `usp_*` / `ufn_*` |
+
+### 10.2 Column Prefixes
+
+| Prefix | Meaning | Example |
+|--------|---------|---------|
+| `id_` | Identifiers / keys | `id_customer`, `id_product` |
+| `code_` | Codes / categories | `code_warehouse`, `code_order_type` |
+| `name_` | Descriptive names | `name_customer`, `name_product` |
+| `qty_` | Quantities | `qty_ordered`, `qty_shipped` |
+| `amt_` | Monetary amounts | `amt_sales`, `amt_revenue` |
+| `dt_` | Dates | `dt_invoice`, `dt_forecast` |
+| `num_` | Numeric values | `num_line_item`, `num_invoice` |
+| `ts_` | Timestamps | `ts_snapshot`, `ts_created` |
+| `pct_` | Percentages | `pct_accuracy`, `pct_fill_rate` |
+| `val_` | Calculated values | `val_forecast`, `val_naive` |
+| `is_` | Boolean flags (INT 0/1) | `is_active`, `is_deleted` |
+| `sk_` | Surrogate keys | `sk_customer`, `sk_product` |
+| `_load_dt` | System column (load timestamp) | Always DATETIME2(6), added by SP |
+
+### 10.3 Special Naming Notes
+
+- **Bronze double underscore** (`__`): Separates source system from entity name. Example: `brz_saleshistory_afi__invoicedetail` = source system `saleshistory_afi`, entity `invoicedetail`.
+- **Gold `gld_` prefix**: Required to avoid name collisions with v8 tables in `dbo` and `test_sp` schemas that use plain `fact_*` / `dim_*` naming.
+- **Meta naming**: Uses descriptive names without layer prefix (e.g., `sp_registry` not `meta_sp_registry`) because the schema name already provides context.
+
+---
+
+## 11. Object Count Summary
+
+| Schema | Tables | Views | SPs | Functions | Total |
+|--------|--------|-------|-----|-----------|-------|
+| bronze | 18 | 17 | 18 | -- | 53 |
+| silver | 8 | 8 | 8 | -- | 24 |
+| gold | 2 | 2 | 2 | -- | 6 |
+| meta | 7 | 1 | 6 | 1 | 15 |
+| **Total** | **35** | **28** | **34** | **1** | **98** |
+
+**Pipelines**: 5 (`pl_sc_master`, `pl_sc_bronze`, `pl_sc_silver`, `pl_sc_silver_wave`, `pl_sc_gold`)
+
+**Grand total**: 98 warehouse objects + 5 pipelines = **103 managed artifacts**
+
+### Row Count Summary
+
+| Layer | Tables | Total Rows |
+|-------|--------|------------|
+| Bronze | 18 | ~1,349,457,255 (~1.35 billion) |
+| Silver | 8 | ~67,644,817 (~67.6 million) |
+| Gold | 2 | ~55,850,611 (~55.9 million) |
+| Meta | 7 | ~277 |
+| **Total** | **35** | **~1,472,952,960 (~1.47 billion)** |
+
+---
+
+## 12. Bronze Source Mapping (Complete)
+
+| v9 Table | Source (3-part name) | Rows | Load Type |
+|----------|---------------------|------|-----------|
+| brz_saleshistory_afi__invoicedetail | Enterprise_Lakehouse.SalesHistory_AFI.InvoiceDetail | 35,798,317 | overwrite |
+| brz_saleshistory_afi__invoiceheader | Enterprise_Lakehouse.SalesHistory_AFI.InvoiceHeader | 4,044,847 | overwrite |
+| brz_supplychain_enh_1__demandforecastsnapshotdaily | Enterprise_Lakehouse.SupplyChain_Enh_1.DemandForecastSnapshotDaily | 1,306,460,284 | **incremental** |
+| brz_wholesale_codis_afi__codatan | Enterprise_Lakehouse.Wholesale_Codis_AFI.codatan | 918,213 | overwrite |
+| brz_wholesale_codis_afi__comast | Enterprise_Lakehouse.Wholesale_Codis_AFI.COMAST | 229,461 | overwrite |
+| brz_wholesale_codis_afi__extord | Enterprise_Lakehouse.Wholesale_Codis_AFI.EXTORD | 229,736 | overwrite |
+| brz_wholesale_codis_afi__extorit | Enterprise_Lakehouse.Wholesale_Codis_AFI.EXTORIT | 912,132 | overwrite |
+| ref_calendar | Enterprise_Lakehouse.MasterData_DW.DimDate | 21,551 | overwrite |
+| ref_customer_account | Enterprise_Lakehouse.Customers.AccountMaster | 35,581 | overwrite |
+| ref_customer_account_group | Enterprise_Lakehouse.Wholesale_ProductSourcing_AFI.CustomerGrouping | 35,454 | overwrite |
+| ref_customer_grouping | Enterprise_Lakehouse.Wholesale_ProductSourcing_AFI.CustomerGrouping | 9 | overwrite |
+| ref_customer_shipping_location | Enterprise_Lakehouse.Customers.ShippingLocations | 127,515 | overwrite |
+| ref_forecast_cycle | SupplyChain_Lakehouse.dbo.ref_forecast_cycle | 43 | overwrite |
+| ref_forecast_horizon | Hardcoded INSERT (8 rows) | 8 | overwrite |
+| ref_item_master | Enterprise_Lakehouse.MasterData_DW.DimItemMaster | 379,331 | overwrite |
+| ref_order_type | Enterprise_Lakehouse.Wholesale_Codis_AFI.AAORDTYP | 29 | overwrite |
+| ref_product | Enterprise_Lakehouse.SupplyChain_DW.DimCurrentProductDetails | 373,326 | overwrite |
+| ref_warehouse | Enterprise_Lakehouse.SupplyChain_DW.DimAFIWarehouses | 55 | overwrite |
+
+**Notes**:
+- 16 tables read from Enterprise_Lakehouse (US team source of truth) via 3-part naming
+- 1 table (ref_forecast_cycle) reads from SupplyChain_Lakehouse.dbo (existing v8 reference)
+- 1 table (ref_forecast_horizon) uses hardcoded INSERT of 8 rows (no view)
+- Source schema in 3-part name = folder name in Lakehouse (not dbo)
+
+---
+
+## 13. Spark SQL to T-SQL Conversion Reference
+
+| Spark SQL | T-SQL Equivalent |
+|-----------|-----------------|
+| `CAST(x AS STRING)` | `CAST(x AS VARCHAR(200))` |
+| `to_date(CAST(x AS STRING), 'yyyyMMdd')` | `TRY_CONVERT(DATE, CAST(x AS VARCHAR(20)))` |
+| `CAST(x AS TIMESTAMP)` | `TRY_CAST(x AS DATETIME2(6))` |
+| `CAST(x AS DOUBLE)` | `CAST(x AS FLOAT)` |
+| `true` / `false` | `1` / `0` (INT, not BIT) |
+| `` `column` `` (backtick) | `[column]` (square bracket) |
+| `"string"` (double quote) | `'string'` (single quote) |
+| `GETUTCDATE()` | `CAST(GETUTCDATE() AS DATETIME2(6))` (required in CTAS) |
+| `CURRENT_DATE()` | `CAST(GETDATE() AS DATE)` |
+| `DATE_FORMAT(col, 'yyyy.MM')` | `FORMAT(col, 'yyyy.MM')` |
+| `ADD_MONTHS(date, n)` | `DATEADD(MONTH, n, date)` |
+| `DATE_TRUNC('year', date)` | `DATETRUNC(YEAR, date)` |
+| `MAKE_DATE(y, m, d)` | `DATEFROMPARTS(y, m, d)` |
+| `LIMIT 1` | `TOP 1` |
+
+---
+
+## 14. Fabric Warehouse Constraints (Comprehensive)
+
+| Feature Not Supported | Impact | Workaround Used |
+|----------------------|--------|-----------------|
+| DEFAULT constraint | Cannot set default values in DDL | Set values explicitly in SP INSERT/CTAS |
+| IDENTITY column | No auto-increment | ROW_NUMBER() OVER (...) or MAX(id)+1 |
+| PRIMARY KEY / UNIQUE constraint | No enforced uniqueness | DQ uniqueness check in dq_rules |
+| CURSOR / @@FETCH_STATUS | Cannot use cursors for iteration | WHILE + MIN(id) WHERE id > @current pattern |
+| Temp tables (#temp) | No temporary tables | CTE or real table + DROP after use |
+| Recursive CTE | No WITH RECURSIVE | SP with iterative WHILE loop (usp_compute_slv_waves) |
+| DATETIME2 without precision | Implicit precision causes errors | Always specify DATETIME2(6) |
+| datetime type in CTAS | GETUTCDATE() returns datetime, CTAS rejects | CAST(GETUTCDATE() AS DATETIME2(6)) |
+| BIT data type | Unstable behavior in Fabric WH | Use INT (0/1) instead |
+| TRIM(numeric_column) | TRIM on non-string errors | Remove TRIM or CAST to VARCHAR first |
+| NVARCHAR(4000) in CTAS | Default NVARCHAR columns cause CTAS issues | CAST to VARCHAR(n) explicitly |
+| NVARCHAR default length | CAST AS NVARCHAR defaults to 30 chars, truncates | CAST AS NVARCHAR(200) or use VARCHAR |
+| SetVariable self-reference | `x = x + 1` causes "self-referencing" error | Use 2 variables: `next_wave = current + 1`, then `current = next_wave` |
+| Warehouse as Lookup source | Pipeline Lookup does not support Warehouse natively | LakehouseTableSource + cross-DB 3-part naming |
+| Until activity in Pipeline | Until loop fails with BadRequest in Fabric Pipeline | 10 pre-built sequential Lookup+ForEach stages |
+| Nested dynamic EXEC from Pipeline | SP calling sp_executesql called from Pipeline SP activity fails | Pipeline directly calls individual SPs via ForEach |
+| DECIMAL(10,4) for large numbers | Overflow on values like 1000000 | Use DECIMAL(18,2) |
+| sp_executesql in WHILE loop | Only 1 iteration executes | Run dynamic SQL from external client (Python) |
+
+---
+
+## 15. Alternatives Considered
+
+| Problem | Approach Tried | Result | Final Solution |
+|---------|---------------|--------|---------------|
+| Bronze source | Read from SupplyChain_Lakehouse (v8 tables) | Creates dependency on v8 | **Read from Enterprise_Lakehouse** (independent) |
+| Enterprise_Lakehouse access | 3-part name with dbo schema | 404 error | **3-part name with folder schema** (e.g., SalesHistory_AFI.InvoiceDetail) |
+| Silver DAG | Static execution_order integer | Does not scale | **depends_on + iterative wave computation** |
+| Wave computation | Recursive CTE | Not supported in Fabric WH | **SP iterative WHILE loop** (usp_compute_slv_waves) |
+| Wave view | 3 hardcoded CTEs | Max 3 waves | **SP + runtime table** (max 30 waves) |
+| Silver pipeline | SP orchestrator (usp_run_silver_dag) | All sequential, no parallelism | **Lookup+ForEach pattern** (parallel within wave) |
+| Silver pipeline loop | Until + SetVariable loop | BadRequest error in Fabric Pipeline | **10 pre-built sequential Lookup+ForEach stages** |
+| SetVariable increment | current_wave = current_wave + 1 | Self-reference error | **2 variables** (next_wave + current_wave) |
+| Pipeline Lookup source | WarehouseSource + connectionSettings | "Failed to open resource" | **LakehouseTableSource + cross-DB query** |
+| Pipeline SP activity | Script activity type | "ReferenceName null" error | **SqlServerStoredProcedure + linkedService** |
+| Gold table naming | fact_* / dim_* (plain) | Name collision with v8 dbo/test_sp | **gld_fact_* / gld_dim_*** |
+| DQ engine SP | WHILE + sp_executesql loop | Only 1 iteration executes | **Python-side DQ execution** (workaround) |
+| DQ threshold column | DECIMAL(10,4) | Overflow on 1000000 | **DECIMAL(18,2)** |
+| Dynamic SQL variable | VARCHAR @sql | sp_executesql rejects VARCHAR | **NVARCHAR(4000)** |
+| NVARCHAR cast | CAST AS NVARCHAR (no length) | Defaults to 30 chars, truncates | **CAST AS NVARCHAR(200)** |
+
+---
+
+## 16. Pipeline Run History
+
+### Run #3 -- SUCCESS (2026-04-14)
+
+| Metric | Value |
+|--------|-------|
+| Run ID | c41c1240-ae81-4377-8835-f0644ac4681c |
+| Status | COMPLETED |
+| Start | 2026-04-14 14:18:18 UTC |
+| End | 2026-04-14 14:34:40 UTC |
+| Duration | ~16 minutes |
+| Tables refreshed | 28/28 |
+| Total rows | ~1,472,804,014 (~1.47 billion) |
+
+| Layer | Tables | Rows | Duration | Parallelism |
+|-------|--------|------|----------|-------------|
+| Bronze | 18/18 | 1,349,457,255 | ~3 min | batch=8 |
+| Silver | 8/8 | 67,490,512 | ~6 min | wave 0-2, batch=8/wave |
+| Gold | 2/2 | 55,856,247 | ~1 min | batch=2 |
+
+**Retries**: 3 bronze SPs retried once due to snapshot isolation conflicts (auto-handled by retry policy, 30s interval).
+
+### Run #2 -- FAILED (2026-04-14 14:07)
+
+| Status | FAILED at pl_sc_silver |
+|--------|----------------------|
+| Error | BadRequest -- Until activity not supported in Fabric Pipeline |
+| Fix | Replaced Until loop with 10 sequential Lookup+ForEach wave stages |
+
+### Run #1 -- FAILED (2026-04-14 13:56)
+
+| Status | FAILED at pl_sc_silver |
+|--------|----------------------|
+| Error | BadRequest -- SqlServerStoredProcedure calling usp_run_silver_dag (nested dynamic EXEC) |
+| Fix | Changed silver pipeline from single SP orchestrator to Lookup+ForEach pattern |
+
+---
+
+*This document was generated on 2026-04-14. It reflects the production state of SupplyChain_Warehouse v9 running on Microsoft Fabric F256.*
