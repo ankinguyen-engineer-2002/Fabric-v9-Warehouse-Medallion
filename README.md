@@ -9,7 +9,7 @@ A complete architecture template for building **enterprise data warehouses** on 
 
 ```mermaid
 flowchart LR
-    SRC[Source Lakehouse\nexternal data via shortcuts]
+    SRC["Source Lakehouse\nexternal data via shortcuts"]
 
     subgraph WH["Fabric Warehouse"]
         direction LR
@@ -37,13 +37,13 @@ flowchart LR
 
 ## Key Features
 
-- **3-file-per-table pattern** — every data table has exactly 3 objects: VIEW (ETL logic) + SP (execution) + TABLE (materialized data)
-- **Metadata-driven orchestration** — adding a new table = INSERT 1 row into `meta.sp_registry`, no pipeline changes
-- **DAG-based silver execution** — `depends_on` column defines dependencies, SP auto-computes execution waves, pipeline runs each wave in parallel
-- **Auto-scale to N waves** — iterative wave computation (max 30), no recursive CTE needed (Fabric WH limitation)
-- **Config-driven DQ** — rules stored in table, supports 7 check types, severity-based pipeline gating
-- **Auto-built lineage** — `source_objects` JSON in registry auto-generates lineage map (source → target edges)
-- **Parallel within wave, sequential between waves** — ForEach batch execution per DAG wave via Pipeline Until loop
+- **3-file-per-table** — VIEW (ETL logic) + SP (execution) + TABLE (materialized data)
+- **Metadata-driven** — adding a new table = INSERT 1 row into `meta.sp_registry`, no pipeline changes
+- **DAG-based silver** — `depends_on` column defines dependencies, SP auto-computes execution waves
+- **Parent-child pipeline** — sequential between waves, parallel within each wave (Microsoft recommended pattern)
+- **Auto-scale to N waves** — iterative wave computation (max 30), no recursive CTE needed
+- **Config-driven DQ** — rules in table, 7 check types, severity-based gating
+- **Auto-built lineage** — `source_objects` JSON generates source→target edge map
 
 ---
 
@@ -51,49 +51,27 @@ flowchart LR
 
 ```
 {Warehouse}/
-│
 ├── bronze/
-│   ├── Tables/
-│   │   ├── brz_{source_system}__{entity}        ← raw mirror
-│   │   └── ref_{entity}                          ← reference/dimension
-│   ├── Views/
-│   │   └── vw_{table_name}                       ← ETL: SELECT FROM source via 3-part naming
-│   └── Stored Procedures/
-│       └── usp_load_{table_name}                 ← DROP + CTAS from view + log
+│   ├── Tables/    brz_{source}__{entity}, ref_{entity}
+│   ├── Views/     vw_{table_name} → SELECT FROM source (3-part naming)
+│   └── SPs/       usp_load_{table_name} → DROP + CTAS
 │
 ├── silver/
-│   ├── Tables/
-│   │   └── slv_{business_concept}                ← cleaned, joined, transformed
-│   ├── Views/
-│   │   └── vw_slv_{concept}                      ← ETL: JOINs, CTEs, aggregations
-│   └── Stored Procedures/
-│       └── usp_load_slv_{concept}                ← DROP + CTAS, with depends_on
+│   ├── Tables/    slv_{concept}
+│   ├── Views/     vw_slv_{concept} → JOINs, CTEs, transforms
+│   └── SPs/       usp_load_slv_{concept} → DROP + CTAS (with depends_on)
 │
 ├── gold/
-│   ├── Tables/
-│   │   └── gld_{fact|dim}_{subject}              ← BI-ready tables
-│   ├── Views/
-│   │   └── vw_gld_{fact|dim}_{subject}           ← ETL: final aggregation, UNION
-│   └── Stored Procedures/
-│       └── usp_load_gld_{fact|dim}_{subject}     ← DROP + CTAS
+│   ├── Tables/    gld_{fact|dim}_{subject}
+│   ├── Views/     vw_gld_{subject} → aggregation, UNION
+│   └── SPs/       usp_load_gld_{subject} → DROP + CTAS
 │
 └── meta/
-    ├── Tables/
-    │   ├── sp_registry                ← config: what SP, how, when, depends on what
-    │   ├── sp_run_history             ← log: every SP execution (start, end, rows, status)
-    │   ├── dq_rules                   ← config: DQ check definitions
-    │   ├── dq_results                 ← log: DQ check outcomes (pass/fail)
-    │   ├── sp_lineage                 ← map: source → target edges (auto-built)
-    │   ├── pipeline_run_log           ← log: pipeline-level run tracking
-    │   └── slv_dag_waves_runtime      ← runtime: wave computation results
-    ├── Stored Procedures/
-    │   ├── usp_log_run                ← log SP start/end/rows/status to sp_run_history
-    │   ├── usp_check_dq               ← DQ engine: read rules → execute → log results
-    │   ├── usp_build_lineage          ← parse source_objects → build lineage edges
-    │   ├── usp_compute_slv_waves      ← iterative DAG wave computation (max 30 waves)
-    │   └── usp_run_silver_dag         ← orchestrator: compute waves + run SPs sequentially
-    └── Functions/
-        └── ufn_should_run             ← schedule gate: returns 1 if SP should run now
+    ├── Tables/    sp_registry, sp_run_history, dq_rules, dq_results,
+    │              sp_lineage, pipeline_run_log, slv_dag_waves_runtime
+    ├── SPs/       usp_log_run, usp_check_dq, usp_build_lineage,
+    │              usp_compute_slv_waves, usp_run_silver_dag
+    └── Functions/ ufn_should_run
 ```
 
 ---
@@ -104,8 +82,8 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    M["pl_master\n(sequential)"] --> B["pl_bronze\nLookup + ForEach"]
-    B --> S["pl_silver\nHybrid DAG"]
+    M["pl_master"] --> B["pl_bronze\nLookup + ForEach"]
+    B --> S["pl_silver\nParent-Child DAG"]
     S --> G["pl_gold\nLookup + ForEach"]
 ```
 
@@ -113,52 +91,53 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    L["Lookup\nSELECT sp_name\nFROM meta.sp_registry\nWHERE layer = @layer\nAND is_active = 1"]
-    F["ForEach (batch=N)\nPARALLEL"]
+    L["Lookup\nmeta.sp_registry\nWHERE layer = @layer"]
+    F["ForEach batch=N\nPARALLEL"]
     SP["EXEC @item.sp_name"]
 
     L -->|"N SPs"| F --> SP
 ```
 
-### Silver — Hybrid DAG with Auto-scale Waves
+### Silver — Parent-Child DAG (parallel within wave, sequential between waves)
 
 ```mermaid
 flowchart TD
-    CW["Step 1: Stored Procedure\nusp_compute_slv_waves\n\nReads depends_on from sp_registry\nIteratively assigns wave 0, 1, 2...N\nStores results in runtime table"]
-
-    MX["Step 2: Lookup\nSELECT MAX(wave)\n→ determines loop count"]
-
-    subgraph UNTIL["Step 3: Until Loop (current_wave > max_wave)"]
-        direction TD
-        LK["Lookup\nSELECT sp_name\nWHERE wave = @current_wave"]
-        FE["ForEach (batch=N)\nPARALLEL execution\nwithin this wave"]
-        SV1["SetVariable\nnext_wave = current_wave + 1"]
-        SV2["SetVariable\ncurrent_wave = next_wave"]
-        LK --> FE --> SV1 --> SV2
+    subgraph PARENT["pl_silver (parent)"]
+        CW["SP: compute_waves\nreads depends_on\nassigns wave 0,1,2...N"]
+        LK["Lookup: SELECT DISTINCT wave"]
+        FE["ForEach wave\nisSequential = true"]
+        CW --> LK --> FE
     end
 
-    CW --> MX --> UNTIL
+    subgraph CHILD["pl_silver_wave (child, per wave)"]
+        LK2["Lookup: SPs for this wave"]
+        FE2["ForEach batch=8\nPARALLEL"]
+        SP2["EXEC @item.sp_name"]
+        LK2 --> FE2 --> SP2
+    end
+
+    FE -->|"InvokePipeline\nwave_number = @item.wave"| CHILD
 ```
 
-> **Why 2 variables?** Fabric Pipeline does not allow `SetVariable` to reference itself (`x = x + 1` errors with "self-referencing variable"). The workaround: `next_wave = current_wave + 1`, then `current_wave = next_wave`.
+> **Why parent-child?** Microsoft docs state: *"You can't nest a ForEach loop inside another ForEach loop (or an Until loop)."* The recommended workaround is Execute Pipeline inside ForEach.
 
 ### DAG Wave Example
 
 ```mermaid
 flowchart TD
-    subgraph W0["Wave 0 — no dependencies (parallel)"]
+    subgraph W0["Wave 0 — no deps (parallel)"]
         A["table_A"]
         B["table_B"]
         C["table_C"]
     end
 
-    subgraph W1["Wave 1 — depends on Wave 0 (parallel)"]
+    subgraph W1["Wave 1 — deps on Wave 0 (parallel)"]
         D["table_D"]
         E["table_E"]
         F["table_F"]
     end
 
-    subgraph W2["Wave 2 — depends on Wave 1"]
+    subgraph W2["Wave 2 — deps on Wave 1"]
         G["table_G"]
     end
 
@@ -175,20 +154,20 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    subgraph Pipeline["Fabric Pipeline"]
+    subgraph Pipeline
         LK["Lookup Activity"]
         SP["SP Activity"]
     end
 
-    LH["Lakehouse SQL Endpoint\nLakehouseTableSource\n+ connectionSettings"]
-    WH["Warehouse\nDataWarehouse\n+ linkedService"]
+    LH["Lakehouse SQL Endpoint\nLakehouseTableSource\ncross-DB query"]
+    WH["Warehouse\nDataWarehouse\nlinkedService"]
 
-    LK -->|"cross-DB query:\nSELECT FROM Warehouse.meta.*"| LH
+    LK -->|"SELECT FROM\nWarehouse.meta.*"| LH
     LH -.->|"3-part naming"| WH
-    SP -->|"EXEC SP directly"| WH
+    SP -->|"EXEC SP"| WH
 ```
 
-> **Why Lakehouse for Lookup?** Fabric Pipeline Lookup natively supports `LakehouseTableSource` but not Warehouse. The workaround: Lookup connects to Lakehouse SQL endpoint, then uses cross-database 3-part naming to query Warehouse tables.
+> **Why Lakehouse for Lookup?** Fabric Pipeline Lookup natively supports `LakehouseTableSource` but not Warehouse. Workaround: cross-DB 3-part naming.
 
 ---
 
@@ -196,35 +175,26 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    V["VIEW\n\nETL logic\nSELECT FROM source\nJOINs, CTEs, transforms\n\n(the recipe)"]
-    SP["STORED PROCEDURE\n\nDROP + CTAS from view\nLog to meta.sp_run_history\nError handling\n\n(the robot)"]
-    T["TABLE\n\nMaterialized data\nParquet on disk\n_load_dt column\n\n(the product)"]
+    V["VIEW\nETL logic\nSELECT FROM source\n(the recipe)"]
+    SP["STORED PROCEDURE\nDROP + CTAS\nLog to meta\n(the robot)"]
+    T["TABLE\nMaterialized data\nParquet on disk\n(the product)"]
 
-    V -->|"SP reads view"| SP
-    SP -->|"CTAS creates table"| T
+    V -->|"SP reads"| SP -->|"CTAS creates"| T
 ```
 
-### SP Template — Overwrite Pattern
-
+### SP Template — Overwrite
 ```sql
 CREATE OR ALTER PROCEDURE {schema}.usp_load_{table} AS
 BEGIN
     DECLARE @run_id VARCHAR(36) = CONVERT(VARCHAR(36), NEWID());
     DECLARE @rows BIGINT;
-
-    -- Log start
     EXEC meta.usp_log_run @run_id, '{schema}.usp_load_{table}', 'running';
-
     BEGIN TRY
-        -- Drop + recreate from view
         DROP TABLE IF EXISTS {schema}.{table};
         CREATE TABLE {schema}.{table} AS
         SELECT *, CAST(GETUTCDATE() AS DATETIME2(6)) AS _load_dt
         FROM {schema}.vw_{table};
-
         SELECT @rows = COUNT(*) FROM {schema}.{table};
-
-        -- Log success
         EXEC meta.usp_log_run @run_id, '{schema}.usp_load_{table}', 'success',
              @rows_affected = @rows;
     END TRY
@@ -237,94 +207,26 @@ BEGIN
 END
 ```
 
-### SP Template — Incremental Pattern
-
-```sql
--- First run (watermark IS NULL): full load with cutoff date
-DROP TABLE IF EXISTS {schema}.{table};
-CREATE TABLE {schema}.{table} AS
-SELECT ... FROM {schema}.vw_{table}
-WHERE {watermark_col} >= CAST(@cutoff AS DATETIME2(6));
-
--- Subsequent runs: append only new rows
-INSERT INTO {schema}.{table}
-SELECT ... FROM {schema}.vw_{table}
-WHERE {watermark_col} > CAST(@last_watermark AS DATETIME2(6));
-
--- Update watermark
-UPDATE meta.sp_registry SET last_watermark_value = @new_watermark
-WHERE sp_name = '{schema}.usp_load_{table}';
-```
-
----
-
-## Meta Schema — Control Plane
-
-### sp_registry (config)
-
-| Column | Purpose |
-|--------|---------|
-| `sp_name` | Full SP name: `schema.usp_load_xxx` |
-| `view_name` | Corresponding view name |
-| `layer` | BRZ / REF / SLV / GLD |
-| `load_type` | overwrite / incremental / upsert / scd2 |
-| `frequency` | daily / hourly / weekly / monthly |
-| `depends_on` | JSON array: `["silver.usp_load_slv_xxx"]` |
-| `source_objects` | JSON array: `["Enterprise_Lakehouse.schema.table"]` |
-| `watermark_column` | Column name for incremental loads |
-| `is_active` | 0/1 — toggle SP on/off |
-
-### DQ System (config-driven)
-
-| Check Type | What it does |
-|------------|-------------|
-| `completeness` | Column NOT NULL percentage >= threshold |
-| `uniqueness` | Primary key has no duplicates |
-| `referential_integrity` | Foreign key exists in parent table |
-| `row_count` | COUNT(*) within min/max range |
-| `validity` | Values within expected set |
-| `freshness` | Data loaded within N hours |
-| `custom_sql` | Any SQL returning 0 (pass) or >0 (fail) |
-
-### DAG Wave Computation (iterative)
-
-```sql
--- Wave 0: SPs with no silver dependencies
--- Wave 1: SPs whose ALL silver deps are in wave 0
--- Wave 2: SPs whose ALL silver deps are in wave 0+1
--- ... continues until all assigned (max 30 waves)
-```
-
-> Replaces recursive CTE (not supported in Fabric Warehouse) with iterative WHILE loop.
-
 ---
 
 ## Adding a New Table
 
 ### Bronze
 ```sql
--- 1. Create view (ETL logic)
-CREATE OR ALTER VIEW bronze.vw_brz_new_table AS
-SELECT col1, col2, ... FROM {Source_Lakehouse}.{schema}.{source_table};
-
--- 2. Create SP (copy overwrite template, change names)
-
--- 3. Register in metadata
-INSERT INTO meta.sp_registry (sp_name, view_name, target_schema, target_table,
-    layer, load_type, frequency, execution_order, is_active, source_objects, project)
-VALUES ('bronze.usp_load_brz_new_table', 'bronze.vw_brz_new_table',
-    'bronze', 'brz_new_table', 'BRZ', 'overwrite', 'daily', 1, 1,
-    '["Source_Lakehouse.schema.source_table"]', 'my_project');
+-- 1. Create view
+CREATE OR ALTER VIEW bronze.vw_brz_{name} AS
+SELECT ... FROM {Source_Lakehouse}.{schema}.{source_table};
+-- 2. Create SP (copy overwrite template)
+-- 3. Register
+INSERT INTO meta.sp_registry (sp_name, layer, load_type, ...) VALUES (...);
 ```
 
-### Silver (with DAG dependency)
+### Silver (with DAG)
 ```sql
--- 1. Create view (reads from bronze/silver)
--- 2. Create SP
--- 3. Register with depends_on
-INSERT INTO meta.sp_registry (..., depends_on, ...)
-VALUES (..., '["silver.usp_load_slv_table_a", "silver.usp_load_slv_table_b"]', ...);
--- Pipeline auto picks up → SP computes wave → ForEach runs parallel
+-- Same as bronze, plus depends_on:
+INSERT INTO meta.sp_registry (..., depends_on)
+VALUES (..., '["silver.usp_load_slv_table_a"]');
+-- Pipeline auto picks up → wave auto-computed → parallel execution
 ```
 
 ---
@@ -333,14 +235,12 @@ VALUES (..., '["silver.usp_load_slv_table_a", "silver.usp_load_slv_table_b"]', .
 
 | Schema | Tables | Views | SPs |
 |--------|--------|-------|-----|
-| bronze | `brz_{source}__{table}` / `ref_{entity}` | `vw_brz_*` / `vw_ref_*` | `usp_load_brz_*` / `usp_load_ref_*` |
+| bronze | `brz_{src}__{tbl}` / `ref_{entity}` | `vw_brz_*` / `vw_ref_*` | `usp_load_brz_*` / `usp_load_ref_*` |
 | silver | `slv_{concept}` | `vw_slv_*` | `usp_load_slv_*` |
 | gold | `gld_{fact\|dim}_{subject}` | `vw_gld_*` | `usp_load_gld_*` |
 | meta | descriptive | `vw_*` | `usp_*` / `ufn_*` |
 
-### Column Prefixes
-
-`id_` keys · `code_` categories · `name_` descriptions · `qty_` quantities · `amt_` amounts · `dt_` dates · `num_` numbers · `ts_` timestamps · `pct_` percentages · `is_` boolean flags (INT 0/1)
+Column prefixes: `id_` keys · `code_` categories · `name_` descriptions · `qty_` quantities · `amt_` amounts · `dt_` dates · `num_` numbers · `ts_` timestamps · `pct_` percentages · `is_` flags (0/1)
 
 ---
 
@@ -348,19 +248,15 @@ VALUES (..., '["silver.usp_load_slv_table_a", "silver.usp_load_slv_table_b"]', .
 
 | Not Supported | Workaround |
 |---------------|------------|
-| DEFAULT constraint | Set values in SP logic |
-| IDENTITY columns | ROW_NUMBER() or MAX(id)+1 |
+| DEFAULT constraint | Set values in SP |
+| IDENTITY | ROW_NUMBER() or MAX(id)+1 |
 | PRIMARY KEY / UNIQUE | DQ uniqueness check |
-| CURSOR / @@FETCH_STATUS | WHILE + MIN(id) pattern |
-| Temp tables (#) | CTE or real table + DROP |
 | Recursive CTE | SP iterative WHILE loop |
-| `DATETIME2` without precision | Always use `DATETIME2(6)` |
-| `datetime` type in CTAS | `CAST(GETUTCDATE() AS DATETIME2(6))` |
-| `BIT` type | Use `INT` (0/1) |
-| `TRIM(numeric)` | Cast to VARCHAR first |
-| `nvarchar(4000)` in CTAS | Cast to `VARCHAR(n)` |
-| SetVariable self-reference | Use 2 variables (next + current) |
-| Warehouse Lookup in Pipeline | LakehouseTableSource + cross-DB query |
+| ForEach inside Until | Parent-child pipeline pattern |
+| Variables in distributed queries | sp_executesql with parameters |
+| `DATETIME2` without precision | Always `DATETIME2(6)` |
+| `datetime` in CTAS | `CAST(GETUTCDATE() AS DATETIME2(6))` |
+| Warehouse Lookup in Pipeline | LakehouseTableSource + cross-DB |
 
 ---
 
@@ -368,21 +264,20 @@ VALUES (..., '["silver.usp_load_slv_table_a", "silver.usp_load_slv_table_b"]', .
 
 | File | Description |
 |------|-------------|
-| [v9_architecture_overview.md](v9_architecture_overview.md) | Full warehouse structure with tree view, pipeline diagrams, row counts, DAG flow |
-| [v9_technical_detail.md](v9_technical_detail.md) | Complete technical spec: every table, SP, conversion, bug, alternative considered |
-| [v9_template.md](v9_template.md) | Generic reusable template: DDL, SP templates, pipeline patterns, checklists |
+| [v9_architecture_complete.md](v9_architecture_complete.md) | Definitive reference: all objects, pipelines, DAG, meta schema, DQ, lineage, constraints |
+| [v9_pipeline_deep_dive.md](v9_pipeline_deep_dive.md) | Step-by-step execution trace when pipeline triggers, meta auto-population, adding new tables |
+| [v9_setup_guide.md](v9_setup_guide.md) | Phase-by-phase setup with Fabric UI and REST API approaches, DDL, SP templates, JSON definitions |
 
 ---
 
 ## Tech Stack
 
-- **Platform**: Microsoft Fabric F256
-- **Warehouse**: Fabric Warehouse (Synapse DW)
+- **Platform**: Microsoft Fabric (Synapse Data Warehouse)
 - **Language**: T-SQL (pure, no PySpark/Notebooks)
-- **Orchestration**: Fabric Data Pipelines
+- **Orchestration**: Fabric Data Pipelines (parent-child pattern)
 - **BI**: Power BI Direct Lake
-- **Version Control**: Azure DevOps / GitHub
-- **Deployment**: DacFx (.sqlproj) / manual via pyodbc
+- **Version Control**: GitHub / Azure DevOps
+- **Deployment**: Fabric REST API + Claude Code / DacFx (.sqlproj)
 
 ---
 
