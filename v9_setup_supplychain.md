@@ -900,7 +900,13 @@ Same pattern as pl_sc_bronze but with:
    - Name: `finalize`
    - Stored procedure: `meta.usp_finalize_pipeline`
    - Parameters: `@pipeline_run_id = @pipeline().RunId`
-5. Connect: log_start -> invoke_bronze -> invoke_silver -> invoke_gold -> finalize
+5. Add **PBISemanticModelRefresh** activity (after finalize):
+   - Name: `refresh_sm`
+   - Connection: `0f1e7cd1-737b-44f3-a630-29c73a5e40cd` (Semantic Model connection)
+   - groupId: workspace_id
+   - datasetId: `a52841ee-d853-46df-b2f7-2a2cc4493d60`
+   - objects: 7 table names (5 dims + 2 facts)
+6. Connect: log_start -> invoke_bronze -> invoke_silver -> invoke_gold -> finalize -> refresh_sm
 
 ### Approach B: Create via REST API
 
@@ -1164,7 +1170,164 @@ EXEC meta.usp_compute_slv_waves;
 SELECT * FROM meta.slv_dag_waves_runtime ORDER BY wave, sp_name;
 ```
 
-Then trigger `pl_sc_master` from Fabric UI and monitor execution. Expected: ~16 minutes for full refresh of 28 tables, ~1.47 billion rows.
+Then trigger `pl_sc_master` from Fabric UI and monitor execution. Expected: ~16 minutes for full refresh of 28 tables, ~1.47 billion rows, plus SM refresh.
+
+---
+
+## Phase 6: Semantic Model
+
+### Step 6.1: Create the Semantic Model via API
+
+The Semantic Model `SC_Control_Tower` is deployed via the Fabric REST API using TMDL (Tabular Model Definition Language) format.
+
+```python
+import requests
+import json
+import base64
+
+# Get Fabric token
+token = subprocess.run(
+    ["az", "account", "get-access-token", "--resource", "https://api.fabric.microsoft.com"],
+    capture_output=True, text=True
+)
+access_token = json.loads(token.stdout)["accessToken"]
+headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
+
+workspace_id = "<your-workspace-id>"
+
+# Create SM with TMDL definition parts
+payload = {
+    "displayName": "SC_Control_Tower",
+    "description": "Supply Chain Control Tower - Direct Lake on SupplyChain_Warehouse",
+    "definition": {
+        "parts": [
+            {
+                "path": "model.tmdl",
+                "payload": base64.b64encode(model_tmdl_content.encode()).decode(),
+                "payloadType": "InlineBase64"
+            },
+            # Additional TMDL parts for tables, relationships, measures...
+        ]
+    }
+}
+
+resp = requests.post(
+    f"https://api.fabric.microsoft.com/v1/workspaces/{workspace_id}/semanticModels",
+    headers=headers, json=payload
+)
+print(resp.json())
+# Response includes SM id: a52841ee-d853-46df-b2f7-2a2cc4493d60
+```
+
+### Step 6.2: Source Remapping Technique
+
+The SM uses the same **table display names** as the v8 SM so that existing Power BI reports can switch source without breaking. The TMDL source references are remapped to point to v9 warehouse schemas:
+
+| TMDL Property | v8 Value | v9 Value |
+|---------------|---------|---------|
+| sourceLineageTag | `[dbo].[dim_calendar]` | `[bronze].[ref_calendar]` |
+| partition entityName | `dim_calendar` | `ref_calendar` |
+| partition schemaName | `dbo` | `bronze` |
+
+**Why this works**: Relationships and DAX measures reference display names (e.g., `dim_calendar[dt_date]`), not source table names. Since the display names are unchanged, all DAX and relationships continue to work after remapping.
+
+**Tables remapped** (8 total):
+
+| Display Name | Source Schema | Source Table |
+|-------------|--------------|-------------|
+| dim_calendar | bronze | ref_calendar |
+| dim_customer | bronze | ref_customer_account |
+| dim_customer_group | bronze | ref_customer_grouping |
+| dim_product | bronze | ref_product |
+| dim_warehouse | bronze | ref_warehouse |
+| fact_flat_forecast_actual | gold | gld_fact_flat_forecast_actual |
+| fact_forecast_kpi | gold | gld_fact_forecast_kpi |
+| _Measure | (no source) | DAX measures container |
+| para_metric_table | (no source) | Parameter table |
+
+### Step 6.3: Gold View Fixes for SM Column Compatibility
+
+Before the SM could point to v9 gold tables, two views needed column renaming to match v8 column names expected by the SM:
+
+**vw_gld_fact_flat_forecast_actual**:
+```sql
+-- Changes:
+-- qty_demand -> qty (match SM expected column)
+-- Removed: amt_demand, dt_snapshot (not in SM)
+```
+
+**vw_gld_fact_forecast_kpi**:
+```sql
+-- Changes:
+-- qty_naive -> qty_naive_forecast (match SM expected column)
+-- qty_forecast_error -> qty_fcst_error
+-- Added: ABS() columns for absolute error values
+-- Added: dt_snapshot column
+-- Removed: code_customer_group from JOIN
+```
+
+### Step 6.4: Refresh the Semantic Model via Power BI API
+
+The SM refresh uses the **Power BI API** (not the Fabric API). This is called by the `refresh_sm` activity in the master pipeline.
+
+```python
+# Power BI API token
+token = subprocess.run(
+    ["az", "account", "get-access-token", "--resource", "https://analysis.windows.net/powerbi/api"],
+    capture_output=True, text=True
+)
+pbi_token = json.loads(token.stdout)["accessToken"]
+pbi_headers = {"Authorization": f"Bearer {pbi_token}", "Content-Type": "application/json"}
+
+workspace_id = "<your-workspace-id>"
+dataset_id = "a52841ee-d853-46df-b2f7-2a2cc4493d60"
+
+# Refresh SM
+refresh_payload = {
+    "type": "Full",
+    "objects": [
+        {"table": "dim_calendar"},
+        {"table": "dim_customer"},
+        {"table": "dim_customer_group"},
+        {"table": "dim_product"},
+        {"table": "dim_warehouse"},
+        {"table": "fact_flat_forecast_actual"},
+        {"table": "fact_forecast_kpi"}
+    ]
+}
+
+resp = requests.post(
+    f"https://api.powerbi.com/v1.0/myorg/groups/{workspace_id}/datasets/{dataset_id}/refreshes",
+    headers=pbi_headers, json=refresh_payload
+)
+print(resp.status_code)  # 202 = accepted
+```
+
+### Step 6.5: SM API Methods Reference
+
+| Operation | Method | Endpoint |
+|-----------|--------|----------|
+| Create SM | POST | `https://api.fabric.microsoft.com/v1/workspaces/{id}/semanticModels` |
+| Get SM definition | POST | `https://api.fabric.microsoft.com/v1/workspaces/{id}/semanticModels/{id}/getDefinition` (async 202) |
+| Refresh SM | POST | `https://api.powerbi.com/v1.0/myorg/groups/{ws}/datasets/{id}/refreshes` |
+| Delete SM | DELETE | `https://api.fabric.microsoft.com/v1/workspaces/{id}/semanticModels/{id}` |
+| List SMs | GET | `https://api.fabric.microsoft.com/v1/workspaces/{id}/semanticModels` |
+
+### Step 6.6: Add refresh_sm to Master Pipeline
+
+Update `pl_sc_master` to add a 6th step after finalize:
+
+1. Open `pl_sc_master` in Fabric UI
+2. Add **PBISemanticModelRefresh** activity after `finalize`:
+   - Name: `refresh_sm`
+   - Connection: `0f1e7cd1-737b-44f3-a630-29c73a5e40cd` (Semantic Model connection)
+   - groupId: workspace_id
+   - datasetId: `a52841ee-d853-46df-b2f7-2a2cc4493d60`
+   - objects: list of 7 table names to refresh
+3. Connect: finalize -> refresh_sm (on success)
+
+The master pipeline now has **7 activities** (was 5):
+`[1] log_start -> [2] pl_sc_bronze -> [3] pl_sc_silver -> [4] pl_sc_gold -> [5] finalize -> [6] refresh_sm`
 
 ---
 

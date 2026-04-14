@@ -7,7 +7,7 @@
 
 ## Trigger: pl_{prefix}_master Starts
 
-When `pl_{prefix}_master` is triggered (manually or on schedule), it executes 5 steps sequentially:
+When `pl_{prefix}_master` is triggered (manually or on schedule), it executes 7 steps sequentially:
 
 ```mermaid
 flowchart LR
@@ -17,11 +17,12 @@ flowchart LR
     S["Step 2: pl_{prefix}_silver"]
     G["Step 3: pl_{prefix}_gold"]
     FN["Step 4: finalize\nbuild_lineage +\nupdate pipeline_run_log"]
+    SM["Step 5: refresh_sm\n(PBISemanticModelRefresh)\nDirect Lake metadata sync"]
 
-    T --> LS -->|"on success"| B -->|"on success"| S -->|"on success"| G -->|"on success"| FN
+    T --> LS -->|"on success"| B -->|"on success"| S -->|"on success"| G -->|"on success"| FN -->|"on success"| SM
 ```
 
-If any child pipeline fails, execution stops. Silver does not run if bronze fails. Gold does not run if silver fails.
+If any child pipeline fails, execution stops. Silver does not run if bronze fails. Gold does not run if silver fails. The Semantic Model refresh runs only after all data layers and finalize succeed.
 
 ---
 
@@ -276,6 +277,36 @@ This SP does:
 
 ---
 
+## Step 5: Semantic Model Refresh
+
+After finalize completes, the master pipeline refreshes the Direct Lake Semantic Model via a `PBISemanticModelRefresh` activity.
+
+### What happens during SM refresh
+
+1. The pipeline sends a POST request to the Power BI refresh API
+2. Direct Lake metadata is synced with the latest Parquet files in the warehouse
+3. The SM picks up any new data written by the gold layer SPs
+4. Power BI reports connected to this SM will see updated data on next query
+
+### Activity configuration
+
+| Property | Value |
+|----------|-------|
+| Activity type | PBISemanticModelRefresh |
+| Connection | externalReferences.connection: `{sm_connection_id}` |
+| groupId | workspace_id |
+| datasetId | Semantic Model id |
+| objects | List of table display names to refresh (dims + facts) |
+
+### Why this is the last step
+
+The SM refresh must run after finalize because:
+- Gold tables must be fully materialized before the SM reads them
+- The finalize step ensures lineage and run logs are updated first
+- If finalize fails, we do not want a partial SM refresh
+
+---
+
 ## Meta Tables: What Gets Written During a Pipeline Run
 
 ### Auto-Populated Tables
@@ -309,6 +340,7 @@ flowchart TD
 | slv_dag_waves_runtime | 1 DELETE + {N_silver_sps} INSERTs | usp_compute_slv_waves |
 | sp_lineage | 1 DELETE + {N_lineage_edges} INSERTs | usp_build_lineage |
 | dq_results | {N_dq_rules} INSERTs (if DQ runs) | usp_check_dq |
+| Semantic Model | 1 refresh (all tables) | refresh_sm activity (PBISemanticModelRefresh) |
 
 ### Tables Requiring Manual Input
 
@@ -387,6 +419,7 @@ T+{xx}   -> pl_{prefix}_silver completes, master invokes pl_{prefix}_gold
 T+{xx}     -> Lookup gold SPs -> ForEach PARALLEL
 T+{xx}     -> All gold SPs complete
 T+{xx}   -> SP: finalize (build_lineage + update pipeline_run_log)
+T+{xx}   -> PBISemanticModelRefresh: refresh_sm (Direct Lake metadata sync)
 T+{xx}   pl_{prefix}_master completes successfully
 ```
 

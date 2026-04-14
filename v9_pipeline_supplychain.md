@@ -8,7 +8,7 @@ This document is a complete execution walkthrough of the master pipeline. It tra
 
 ## Trigger: pl_sc_master Starts
 
-When `pl_sc_master` (ID: 319a8160) is triggered (manually or on schedule), it executes 5 activities sequentially: log_start, then 3 child pipelines, then finalize:
+When `pl_sc_master` (ID: 319a8160) is triggered (manually or on schedule), it executes 7 activities sequentially: log_start, 3 child pipelines, finalize, and Semantic Model refresh:
 
 ```mermaid
 flowchart LR
@@ -18,11 +18,12 @@ flowchart LR
     S["Step 3: pl_sc_silver\n(46437ae6)"]
     G["Step 4: pl_sc_gold\n(94fc130e)"]
     FN["Step 5: finalize\n(SqlServerStoredProcedure)\nEXEC meta.usp_finalize_pipeline\nbuilds lineage + updates\npipeline_run_log to 'success'"]
+    SM["Step 6: refresh_sm\n(PBISemanticModelRefresh)\nRefresh SC_Control_Tower\nDirect Lake metadata sync\n7 tables refreshed"]
 
-    T --> LS -->|"on success"| B -->|"on success"| S -->|"on success"| G -->|"on success"| FN
+    T --> LS -->|"on success"| B -->|"on success"| S -->|"on success"| G -->|"on success"| FN -->|"on success"| SM
 ```
 
-If any child pipeline fails, execution stops. Silver does not run if bronze fails. Gold does not run if silver fails. The `log_start` activity records the pipeline run at the beginning, and the `finalize` activity rebuilds lineage and updates the run log with final status.
+If any child pipeline fails, execution stops. Silver does not run if bronze fails. Gold does not run if silver fails. The `log_start` activity records the pipeline run at the beginning, the `finalize` activity rebuilds lineage and updates the run log with final status, and the `refresh_sm` activity syncs the Semantic Model's Direct Lake metadata with the latest gold tables.
 
 ---
 
@@ -386,6 +387,7 @@ flowchart TD
 | sp_registry | 28 (1 update per SP) | usp_log_run |
 | slv_dag_waves_runtime | 1 DELETE + 8 INSERTs | usp_compute_slv_waves |
 | sp_lineage | 1 DELETE + 52 INSERTs | usp_build_lineage (called by usp_finalize_pipeline) |
+| SC_Control_Tower (SM) | 1 refresh (7 tables) | refresh_sm activity (PBISemanticModelRefresh) |
 
 ### Tables Requiring Manual Input
 
@@ -484,9 +486,13 @@ T+09:45  -> finalize: EXEC meta.usp_finalize_pipeline
              -> EXEC meta.usp_build_lineage (rebuild 52 lineage edges)
              -> Count success/failed SPs from sp_run_history
              -> UPDATE pipeline_run_log SET status='success', end_time, tables_succeeded, tables_failed
+T+09:46  -> refresh_sm: PBISemanticModelRefresh
+             -> POST https://api.powerbi.com/v1.0/myorg/groups/{ws}/datasets/{id}/refreshes
+             -> Refreshes 7 tables in SC_Control_Tower (5 dims + 2 facts)
+             -> Direct Lake metadata sync with latest Parquet files
 T+10:00  pl_sc_master completes successfully
 
-Total: ~16 minutes for 1.47 billion rows across 28 tables
+Total: ~16 minutes for 1.47 billion rows across 28 tables + SM refresh
 ```
 
 ---

@@ -21,7 +21,8 @@ flowchart LR
     end
 
     SRC --> B
-    G --> PBI["Power BI\nDirect Lake"]
+    G --> SM["Semantic Model\nDirect Lake\nSC_Control_Tower"]
+    SM --> PBI["Power BI\nReports + Dashboards"]
 ```
 
 ### 4 Schemas
@@ -82,9 +83,12 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    M["pl_master"] --> B["pl_bronze\nLookup + ForEach"]
+    M["pl_master"] --> LS["log_start"]
+    LS --> B["pl_bronze\nLookup + ForEach"]
     B --> S["pl_silver\nParent-Child DAG"]
     S --> G["pl_gold\nLookup + ForEach"]
+    G --> FN["finalize"]
+    FN --> SM["refresh_sm\nSemantic Model Refresh"]
 ```
 
 ### Bronze & Gold — Lookup + Parallel ForEach
@@ -274,9 +278,32 @@ Column prefixes: `id_` keys · `code_` categories · `name_` descriptions · `qt
 
 | File | Description |
 |------|-------------|
-| [v9_architecture_supplychain.md](v9_architecture_supplychain.md) | All 98 objects with names, row counts, pipeline IDs, source mappings |
+| [v9_architecture_supplychain.md](v9_architecture_supplychain.md) | All 98+ objects with names, row counts, pipeline IDs, source mappings, Semantic Model |
 | [v9_pipeline_supplychain.md](v9_pipeline_supplychain.md) | Execution trace with actual SP names, durations, wave assignments |
 | [v9_setup_supplychain.md](v9_setup_supplychain.md) | Implementation log: Spark→T-SQL conversions, bugs encountered, fixes applied |
+
+---
+
+## Semantic Model
+
+The architecture includes a **Direct Lake Semantic Model** that sits on top of the gold layer and is automatically refreshed at the end of every pipeline run.
+
+| Aspect | Detail |
+|--------|--------|
+| **Mode** | Direct Lake (reads Parquet from Warehouse) |
+| **Deployment** | Fabric REST API with TMDL definition |
+| **Refresh** | Power BI API (`PBISemanticModelRefresh` pipeline activity) |
+| **Source remapping** | Table display names match v8 (dim_calendar, fact_forecast_kpi, etc.) so reports switch source without breaking. Source references (sourceLineageTag, partition entityName/schemaName) point to warehouse schemas (bronze/silver/gold). |
+
+### SM API Methods
+
+| Operation | Method |
+|-----------|--------|
+| Create SM | `POST /v1/workspaces/{id}/semanticModels` (TMDL definition parts) |
+| Get SM definition | `POST /v1/workspaces/{id}/semanticModels/{id}/getDefinition` (async 202, TMDL format) |
+| Refresh SM | `POST https://api.powerbi.com/v1.0/myorg/groups/{ws}/datasets/{id}/refreshes` (Power BI API) |
+| Delete SM | `DELETE /v1/workspaces/{id}/semanticModels/{id}` |
+| List SMs | `GET /v1/workspaces/{id}/semanticModels` |
 
 ---
 
@@ -285,6 +312,7 @@ Column prefixes: `id_` keys · `code_` categories · `name_` descriptions · `qt
 - **Platform**: Microsoft Fabric (Synapse Data Warehouse)
 - **Language**: T-SQL (pure, no PySpark/Notebooks)
 - **Orchestration**: Fabric Data Pipelines (parent-child pattern)
+- **Semantic Model**: Direct Lake (TMDL via Fabric REST API)
 - **BI**: Power BI Direct Lake
 - **Version Control**: GitHub / Azure DevOps
 - **Deployment**: Fabric REST API + Claude Code / DacFx (.sqlproj)

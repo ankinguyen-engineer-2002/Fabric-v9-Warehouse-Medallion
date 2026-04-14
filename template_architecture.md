@@ -22,7 +22,8 @@ flowchart LR
     end
 
     SRC -->|"3-part naming\nvia bronze views"| B
-    G -->|"Direct Lake"| PBI["Power BI\nReports + Dashboards"]
+    G -->|"Direct Lake"| SM["Semantic Model\nDirect Lake\nTMDL via API"]
+    SM --> PBI["Power BI\nReports + Dashboards"]
 ```
 
 ### 1.2 Four Schemas
@@ -137,7 +138,7 @@ flowchart LR
 
 | Pipeline | Purpose | Activities |
 |----------|---------|------------|
-| pl_{prefix}_master | Orchestrate log_start -> bronze -> silver -> gold -> finalize sequentially | SP + 3 InvokePipeline + SP |
+| pl_{prefix}_master | Orchestrate log_start -> bronze -> silver -> gold -> finalize -> refresh_sm | SP + 3 InvokePipeline + SP + PBISemanticModelRefresh |
 | pl_{prefix}_bronze | Load all bronze/ref tables in parallel | 1 Lookup + 1 ForEach(SP) |
 | pl_{prefix}_silver | Parent: compute waves, iterate wave-by-wave | 1 SP + 10 Lookup + 10 ForEach = 21 activities |
 | pl_{prefix}_silver_wave | Child: run all SPs for a given wave in parallel | 1 Lookup + 1 ForEach(SP) |
@@ -153,13 +154,16 @@ flowchart LR
     G["pl_{prefix}_gold"]
     FN["SP: finalize\nEXEC meta.usp_finalize_pipeline\n(build_lineage + update log)"]
 
+    SM["PBISemanticModelRefresh\nrefresh_sm\nDirect Lake metadata sync"]
+
     LS -->|"on success"| B
     B -->|"on success"| S
     S -->|"on success"| G
     G -->|"on success"| FN
+    FN -->|"on success"| SM
 ```
 
-The master pipeline invokes each child pipeline sequentially using InvokePipeline activities. If any child fails, the master stops (no subsequent layers run). The `log_start` SP inserts a row into `pipeline_run_log` with status='running'. The `finalize` SP calls `usp_build_lineage` and updates the pipeline_run_log row with final status, counts, and end_time.
+The master pipeline invokes each child pipeline sequentially using InvokePipeline activities, runs finalize to rebuild lineage and update the run log, then refreshes the Semantic Model. If any child fails, the master stops (no subsequent layers run). The `log_start` SP inserts a row into `pipeline_run_log` with status='running'. The `finalize` SP calls `usp_build_lineage` and updates the pipeline_run_log row with final status, counts, and end_time. The `refresh_sm` activity syncs the Direct Lake Semantic Model with the latest gold table data.
 
 ### 3.3 pl_{prefix}_bronze
 
@@ -677,7 +681,56 @@ flowchart TD
 
 ---
 
-## 11. Object Count Summary
+## 11. Semantic Model
+
+### 11.1 Overview
+
+The architecture includes a **Direct Lake Semantic Model** deployed via the Fabric REST API using TMDL format. The SM sits on top of the gold layer and is automatically refreshed at the end of every pipeline run.
+
+| Aspect | Detail |
+|--------|--------|
+| **Mode** | Direct Lake (reads Parquet from {Project_Warehouse}) |
+| **Deployment** | Fabric REST API: `POST /v1/workspaces/{id}/semanticModels` with TMDL definition parts |
+| **Refresh** | Power BI API: `POST https://api.powerbi.com/v1.0/myorg/groups/{ws}/datasets/{id}/refreshes` |
+| **Pipeline activity** | PBISemanticModelRefresh (last step in pl_{prefix}_master) |
+
+### 11.2 Source Remapping Pattern
+
+When migrating an existing SM to point at the new warehouse, keep table **display names** the same so reports can switch source without breaking:
+
+| TMDL Property | What to Change |
+|---------------|---------------|
+| sourceLineageTag | `[old_schema].[old_table]` to `[new_schema].[new_table]` |
+| partition entityName | Old entity name to new table name |
+| partition schemaName | Old schema to new schema (e.g., `dbo` to `bronze`) |
+
+Relationships and DAX measures reference display names, not source table names, so they require **no changes** during remapping.
+
+### 11.3 SM API Methods
+
+| Operation | Method | Endpoint |
+|-----------|--------|----------|
+| Create SM | POST | `/v1/workspaces/{id}/semanticModels` (TMDL definition parts) |
+| Get SM definition | POST | `/v1/workspaces/{id}/semanticModels/{id}/getDefinition` (async 202, TMDL) |
+| Refresh SM | POST | `https://api.powerbi.com/v1.0/myorg/groups/{ws}/datasets/{id}/refreshes` (Power BI API) |
+| Delete SM | DELETE | `/v1/workspaces/{id}/semanticModels/{id}` |
+| List SMs | GET | `/v1/workspaces/{id}/semanticModels` |
+
+### 11.4 Pipeline Integration
+
+The `refresh_sm` activity in pl_{prefix}_master:
+
+| Aspect | Detail |
+|--------|--------|
+| Activity type | PBISemanticModelRefresh |
+| Connection | externalReferences.connection: `{sm_connection_id}` |
+| groupId | workspace_id |
+| datasetId | SM id |
+| objects | List of table names to refresh (dims + facts) |
+
+---
+
+## 12. Object Count Summary
 
 | Schema | Tables | Views | SPs | Functions | Total |
 |--------|--------|-------|-----|-----------|-------|
@@ -689,9 +742,11 @@ flowchart TD
 
 **Pipelines**: 5 (`pl_{prefix}_master`, `pl_{prefix}_bronze`, `pl_{prefix}_silver`, `pl_{prefix}_silver_wave`, `pl_{prefix}_gold`)
 
+**Semantic Model**: 1 (Direct Lake, refreshed by pl_{prefix}_master)
+
 ---
 
-## 12. Fabric Warehouse Constraints
+## 13. Fabric Warehouse Constraints
 
 | # | Constraint | Error / Behavior | Workaround |
 |---|-----------|-----------------|------------|

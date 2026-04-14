@@ -23,7 +23,8 @@ flowchart LR
     end
 
     EL -->|"3-part naming\nvia bronze views"| B
-    G -->|"Direct Lake"| PBI["Power BI\nReports + Dashboards"]
+    G -->|"Direct Lake"| SM["SC_Control_Tower\nSemantic Model\n8 tables · 9 relationships · ~30 DAX"]
+    SM --> PBI["Power BI\nReports + Dashboards"]
 ```
 
 ### 1.2 Four Schemas
@@ -205,7 +206,7 @@ SupplyChain_Warehouse/
 
 | Pipeline | ID | Purpose | Activities |
 |----------|----|---------|------------|
-| pl_sc_master | 319a8160 | Orchestrate log_start -> bronze -> silver -> gold -> finalize | 1 SP + 3 InvokePipeline + 1 SP |
+| pl_sc_master | 319a8160 | Orchestrate log_start -> bronze -> silver -> gold -> finalize -> refresh_sm | 1 SP + 3 InvokePipeline + 1 SP + 1 PBISemanticModelRefresh |
 | pl_sc_bronze | 1bdbaebb | Load all bronze/ref tables in parallel | 1 Lookup + 1 ForEach(SP) |
 | pl_sc_silver | 46437ae6 | Parent: compute waves, iterate wave-by-wave via child pipeline | 1 SP + 1 Lookup + 1 ForEach(InvokePipeline) |
 | pl_sc_silver_wave | 57a09720 | Child: run all SPs for a given wave in parallel | 1 Lookup + 1 ForEach(SP) batch=8 |
@@ -220,14 +221,16 @@ flowchart LR
     S["[3] pl_sc_silver\n46437ae6"]
     G["[4] pl_sc_gold\n94fc130e"]
     FN["[5] finalize\n(SqlServerStoredProcedure)\nEXEC meta.usp_finalize_pipeline\nbuilds lineage + updates\npipeline_run_log to 'success'"]
+    SM["[6] refresh_sm\n(PBISemanticModelRefresh)\nRefresh SC_Control_Tower\nDirect Lake metadata sync"]
 
     LS -->|"on success"| B
     B -->|"on success"| S
     S -->|"on success"| G
     G -->|"on success"| FN
+    FN -->|"on success"| SM
 ```
 
-The master pipeline starts with a `log_start` activity that inserts a row into `pipeline_run_log` (status='running'), then invokes each child pipeline sequentially using InvokePipeline activities, and ends with a `finalize` activity that rebuilds lineage and updates `pipeline_run_log` with final status. If any child fails, the master stops (no subsequent layers run).
+The master pipeline starts with a `log_start` activity that inserts a row into `pipeline_run_log` (status='running'), then invokes each child pipeline sequentially using InvokePipeline activities, runs `finalize` to rebuild lineage and update the run log, and finally refreshes the Semantic Model. The pipeline now has **7 activities** (was 5 before SM refresh was added). If any child fails, the master stops (no subsequent layers run).
 
 ### 3.3 pl_sc_bronze (1bdbaebb)
 
@@ -601,9 +604,92 @@ The silver pipeline uses a **parent-child pattern** to handle DAG waves. This is
 
 ---
 
-## 7. Meta Schema Detail
+## 7. Semantic Model: SC_Control_Tower
 
-### 7.1 Tables (7)
+### 7.1 Overview
+
+| Aspect | Detail |
+|--------|--------|
+| **Name** | SC_Control_Tower |
+| **ID** | a52841ee-d853-46df-b2f7-2a2cc4493d60 |
+| **Mode** | Direct Lake (reads Parquet from SupplyChain_Warehouse) |
+| **Tables** | 8 (5 dims + 2 facts + _Measure + para_metric_table) |
+| **Relationships** | 9 (copied from v8 SM) |
+| **DAX measures** | ~30 (copied from v8 SM) |
+| **Removed from v8** | dq_forecast_accuracy table (not needed in v9) |
+
+### 7.2 Tables
+
+| Table (Display Name) | Warehouse Source | Type |
+|----------------------|-----------------|------|
+| dim_calendar | bronze.ref_calendar | Dimension |
+| dim_customer | bronze.ref_customer_account | Dimension |
+| dim_customer_group | bronze.ref_customer_grouping | Dimension |
+| dim_product | bronze.ref_product | Dimension |
+| dim_warehouse | bronze.ref_warehouse | Dimension |
+| fact_flat_forecast_actual | gold.gld_fact_flat_forecast_actual | Fact |
+| fact_forecast_kpi | gold.gld_fact_forecast_kpi | Fact |
+| _Measure | (DAX measures container) | Utility |
+| para_metric_table | (parameter table) | Utility |
+
+### 7.3 Source Remapping Technique
+
+The SM uses the same **display names** as the v8 Semantic Model (dim_calendar, fact_forecast_kpi, etc.) so that Power BI reports can switch data source without breaking visuals, slicers, or DAX references.
+
+Under the hood, the TMDL source references were remapped:
+
+| TMDL Property | v8 Value | v9 Value |
+|---------------|---------|---------|
+| sourceLineageTag | `[dbo].[dim_calendar]` | `[bronze].[ref_calendar]` |
+| partition entityName | `dim_calendar` | `ref_calendar` |
+| partition schemaName | `dbo` | `bronze` |
+
+Relationships and DAX measures reference display names only, so they required **no changes** during remapping.
+
+### 7.4 Gold View Fixes for SM Compatibility
+
+Two gold views were updated to match the column names expected by the SM:
+
+**vw_gld_fact_flat_forecast_actual**:
+- Renamed `qty_demand` to `qty`
+- Removed `amt_demand` and `dt_snapshot` from output
+
+**vw_gld_fact_forecast_kpi**:
+- Renamed `qty_naive` to `qty_naive_forecast`
+- Renamed `qty_forecast_error` to `qty_fcst_error`
+- Added ABS columns for absolute error values
+- Added `dt_snapshot` column
+- Removed `code_customer_group` from join
+
+### 7.5 SM API Methods
+
+| Operation | Method | Endpoint |
+|-----------|--------|----------|
+| Create SM | POST | `/v1/workspaces/{id}/semanticModels` (with TMDL definition parts) |
+| Get SM definition | POST | `/v1/workspaces/{id}/semanticModels/{id}/getDefinition` (async 202, returns TMDL) |
+| Refresh SM | POST | `https://api.powerbi.com/v1.0/myorg/groups/{ws}/datasets/{id}/refreshes` (Power BI API) |
+| Delete SM | DELETE | `/v1/workspaces/{id}/semanticModels/{id}` |
+| List SMs | GET | `/v1/workspaces/{id}/semanticModels` |
+
+### 7.6 SM Refresh in Pipeline
+
+The master pipeline includes a `refresh_sm` activity (step [6]) that refreshes the Semantic Model after finalize:
+
+| Aspect | Detail |
+|--------|--------|
+| Activity type | PBISemanticModelRefresh |
+| Connection | externalReferences.connection: `0f1e7cd1-737b-44f3-a630-29c73a5e40cd` |
+| groupId | workspace_id |
+| datasetId | a52841ee-d853-46df-b2f7-2a2cc4493d60 |
+| objects | 7 tables (5 dims + 2 facts, excluding _Measure and para_metric_table) |
+
+The refresh syncs Direct Lake metadata with the latest Parquet files written by the gold layer SPs.
+
+---
+
+## 8. Meta Schema Detail
+
+### 8.1 Tables (7)
 
 #### meta.sp_registry (28 rows)
 
@@ -777,7 +863,7 @@ CREATE TABLE meta.slv_dag_waves_runtime (
 );
 ```
 
-### 7.2 Stored Procedures (8)
+### 8.2 Stored Procedures (8)
 
 #### meta.usp_log_run
 
@@ -875,7 +961,7 @@ END
 | **When called** | By the `finalize` activity (SqlServerStoredProcedure) as the last step of `pl_sc_master`. |
 | **Key logic** | EXEC meta.usp_build_lineage; count success/failed from sp_run_history; UPDATE pipeline_run_log SET status='success', end_time, tables_succeeded, tables_failed. |
 
-### 7.3 Function (1)
+### 8.3 Function (1)
 
 #### meta.ufn_should_run
 
@@ -885,7 +971,7 @@ END
 | **When called** | In pipeline Lookup queries as a filter: `WHERE meta.ufn_should_run(sp_name) = 1`. |
 | **Key logic** | Simple scalar function. Reads is_active and next_run_time from sp_registry. |
 
-### 7.4 View (1)
+### 8.4 View (1)
 
 #### meta.vw_slv_dag_waves
 
@@ -896,13 +982,13 @@ END
 
 ---
 
-## 8. DQ System
+## 9. DQ System
 
-### 8.1 Overview
+### 9.1 Overview
 
 The Data Quality system is **config-driven**. Rules are stored in `meta.dq_rules`. Adding a new check = INSERT 1 row. The DQ engine reads rules, generates SQL dynamically, executes it, and writes results to `meta.dq_results`.
 
-### 8.2 Seven Check Types
+### 9.2 Seven Check Types
 
 | Check Type | What It Checks | SQL Pattern Generated |
 |------------|---------------|----------------------|
@@ -914,7 +1000,7 @@ The Data Quality system is **config-driven**. Rules are stored in `meta.dq_rules
 | `freshness` | Most recent _load_dt within N hours | `SELECT DATEDIFF(HOUR, MAX(_load_dt), GETUTCDATE())` (compare to threshold) |
 | `custom_sql` | Any arbitrary SQL check | Executes SQL from `params` column, expects 0 = pass |
 
-### 8.3 Current Rule Distribution
+### 9.3 Current Rule Distribution
 
 | Layer | Rules | Examples |
 |-------|-------|---------|
@@ -923,7 +1009,7 @@ The Data Quality system is **config-driven**. Rules are stored in `meta.dq_rules
 | Gold | 4 | row_count ranges, freshness checks |
 | **Total** | **30** | **30/30 PASS as of last run** |
 
-### 8.4 Known Bug: WHILE Loop in usp_check_dq
+### 9.4 Known Bug: WHILE Loop in usp_check_dq
 
 The `meta.usp_check_dq` stored procedure uses a WHILE loop to iterate over DQ rules and execute each one via `sp_executesql`. In Fabric Warehouse, this WHILE loop only executes **1 iteration** and then exits, regardless of the loop condition.
 
@@ -940,13 +1026,13 @@ The `meta.usp_check_dq` stored procedure uses a WHILE loop to iterate over DQ ru
 
 ---
 
-## 9. Lineage System
+## 10. Lineage System
 
-### 9.1 Overview
+### 10.1 Overview
 
 The lineage system automatically generates a source-to-target data flow graph. It parses the `source_objects` JSON column in `meta.sp_registry` and creates edges in `meta.sp_lineage`.
 
-### 9.2 Current State: 52 Edges
+### 10.2 Current State: 52 Edges
 
 ```mermaid
 flowchart LR
@@ -969,7 +1055,7 @@ flowchart LR
 - silver -> gold: 4 edges (gold tables read from silver tables)
 - **Total**: 52 edges
 
-### 9.3 usp_build_lineage Logic
+### 10.3 usp_build_lineage Logic
 
 1. DELETE FROM meta.sp_lineage (full rebuild)
 2. For each row in sp_registry where source_objects is not NULL:
@@ -980,9 +1066,9 @@ flowchart LR
 
 ---
 
-## 10. Naming Convention
+## 11. Naming Convention
 
-### 10.1 Object Names
+### 11.1 Object Names
 
 | Schema | Table Pattern | View Pattern | SP Pattern |
 |--------|--------------|--------------|------------|
@@ -992,7 +1078,7 @@ flowchart LR
 | gold | `gld_{fact\|dim}_{subject}` | `vw_gld_{fact\|dim}_{subject}` | `usp_load_gld_{fact\|dim}_{subject}` |
 | meta | descriptive (e.g., `sp_registry`) | `vw_*` (e.g., `vw_slv_dag_waves`) | `usp_*` / `ufn_*` |
 
-### 10.2 Column Prefixes
+### 11.2 Column Prefixes
 
 | Prefix | Meaning | Example |
 |--------|---------|---------|
@@ -1010,7 +1096,7 @@ flowchart LR
 | `sk_` | Surrogate keys | `sk_customer`, `sk_product` |
 | `_load_dt` | System column (load timestamp) | Always DATETIME2(6), added by SP |
 
-### 10.3 Special Naming Notes
+### 11.3 Special Naming Notes
 
 - **Bronze double underscore** (`__`): Separates source system from entity name. Example: `brz_saleshistory_afi__invoicedetail` = source system `saleshistory_afi`, entity `invoicedetail`.
 - **Gold `gld_` prefix**: Required to avoid name collisions with v8 tables in `dbo` and `test_sp` schemas that use plain `fact_*` / `dim_*` naming.
@@ -1018,7 +1104,7 @@ flowchart LR
 
 ---
 
-## 11. Object Count Summary
+## 12. Object Count Summary
 
 | Schema | Tables | Views | SPs | Functions | Total |
 |--------|--------|-------|-----|-----------|-------|
@@ -1044,7 +1130,7 @@ flowchart LR
 
 ---
 
-## 12. Bronze Source Mapping (Complete)
+## 13. Bronze Source Mapping (Complete)
 
 | v9 Table | Source (3-part name) | Rows | Load Type |
 |----------|---------------------|------|-----------|
@@ -1075,7 +1161,7 @@ flowchart LR
 
 ---
 
-## 13. Spark SQL to T-SQL Conversion Reference
+## 14. Spark SQL to T-SQL Conversion Reference
 
 | Spark SQL | T-SQL Equivalent |
 |-----------|-----------------|
@@ -1096,7 +1182,7 @@ flowchart LR
 
 ---
 
-## 14. Fabric Warehouse Constraints (Comprehensive)
+## 15. Fabric Warehouse Constraints (Comprehensive)
 
 | Feature Not Supported | Impact | Workaround Used |
 |----------------------|--------|-----------------|
@@ -1121,7 +1207,7 @@ flowchart LR
 
 ---
 
-## 15. Alternatives Considered
+## 16. Alternatives Considered
 
 | Problem | Approach Tried | Result | Final Solution |
 |---------|---------------|--------|---------------|
@@ -1143,7 +1229,7 @@ flowchart LR
 
 ---
 
-## 16. Pipeline Run History
+## 17. Pipeline Run History
 
 ### Run #3 -- SUCCESS (2026-04-14)
 
