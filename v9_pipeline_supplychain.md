@@ -8,19 +8,21 @@ This document is a complete execution walkthrough of the master pipeline. It tra
 
 ## Trigger: pl_sc_master Starts
 
-When `pl_sc_master` (ID: 319a8160) is triggered (manually or on schedule), it executes 3 child pipelines sequentially:
+When `pl_sc_master` (ID: 319a8160) is triggered (manually or on schedule), it executes 5 activities sequentially: log_start, then 3 child pipelines, then finalize:
 
 ```mermaid
 flowchart LR
     T["Trigger\n(manual or schedule)"]
-    B["Step 1: pl_sc_bronze\n(1bdbaebb)"]
-    S["Step 2: pl_sc_silver\n(46437ae6)"]
-    G["Step 3: pl_sc_gold\n(94fc130e)"]
+    LS["Step 1: log_start\n(SqlServerStoredProcedure)\nEXEC meta.usp_log_pipeline_run\nINSERT pipeline_run_log\nstatus='running'"]
+    B["Step 2: pl_sc_bronze\n(1bdbaebb)"]
+    S["Step 3: pl_sc_silver\n(46437ae6)"]
+    G["Step 4: pl_sc_gold\n(94fc130e)"]
+    FN["Step 5: finalize\n(SqlServerStoredProcedure)\nEXEC meta.usp_finalize_pipeline\nbuilds lineage + updates\npipeline_run_log to 'success'"]
 
-    T --> B -->|"on success"| S -->|"on success"| G
+    T --> LS -->|"on success"| B -->|"on success"| S -->|"on success"| G -->|"on success"| FN
 ```
 
-If any child pipeline fails, execution stops. Silver does not run if bronze fails. Gold does not run if silver fails.
+If any child pipeline fails, execution stops. Silver does not run if bronze fails. Gold does not run if silver fails. The `log_start` activity records the pipeline run at the beginning, and the `finalize` activity rebuilds lineage and updates the run log with final status.
 
 ---
 
@@ -208,19 +210,21 @@ This SP does the following:
 | silver.usp_load_slv_open_order_monthly | 1 |
 | silver.usp_load_slv_naive_forecast_monthly | 2 |
 
-### 2.2 Steps 2-11 of Silver: Sequential Wave Execution
+### 2.2 Steps 2-3 of Silver: Parent-Child Wave Execution
 
-The silver pipeline has 10 pre-built Lookup+ForEach stages (wave 0 through wave 9), connected sequentially. Each stage:
+The silver pipeline uses a **parent-child pattern**. After computing waves, the parent pipeline:
 
-1. **Lookup**: Queries the Lakehouse SQL endpoint with cross-DB:
+1. **Lookup** (Step 2): Queries the Lakehouse SQL endpoint with cross-DB:
    ```sql
-   SELECT sp_name
+   SELECT DISTINCT wave
    FROM SupplyChain_Warehouse.meta.slv_dag_waves_runtime
-   WHERE wave = {N}
+   ORDER BY wave
    ```
-2. **ForEach** (batch=8, PARALLEL): Executes each returned SP via SqlServerStoredProcedure.
+2. **ForEach** (Step 3, isSequential=**true**): For each wave, invokes child pipeline `pl_sc_silver_wave` (57a09720) with parameter `wave_number = @item().wave`.
 
-For waves where the Lookup returns no rows (waves 3-9 in current state), the ForEach receives an empty array and skips execution entirely. No error, no delay.
+The child pipeline (`pl_sc_silver_wave`) then:
+1. **Lookup**: `SELECT sp_name FROM SupplyChain_Warehouse.meta.slv_dag_waves_runtime WHERE wave = @pipeline().parameters.wave_number`
+2. **ForEach** (batch=8, PARALLEL): Executes each returned SP via SqlServerStoredProcedure.
 
 ### 2.3 Wave 0 Execution (3 SPs in Parallel)
 
@@ -282,9 +286,9 @@ flowchart LR
 
 This SP depends on `slv_actual_demand_monthly` (wave 1), which is why it runs in wave 2.
 
-### 2.6 Waves 3-9: Skip
+### 2.6 Only 3 Waves in Current State
 
-Lookups for waves 3 through 9 return empty result sets. The ForEach activities receive empty arrays and complete immediately (no-op).
+The Lookup returns only 3 distinct waves (0, 1, 2), so the ForEach invokes `pl_sc_silver_wave` exactly 3 times. If future silver tables create deeper dependency chains, additional waves are handled automatically without pipeline changes.
 
 ### 2.7 Silver Execution Results (Run #3)
 
@@ -356,6 +360,10 @@ flowchart LR
 
 ```mermaid
 flowchart TD
+    subgraph AtStart["At Pipeline Start (log_start activity)"]
+        PRL_S["meta.pipeline_run_log\n\nINSERT (status='running')\n\nWritten by: usp_log_pipeline_run\nFrequency: 1 INSERT per pipeline run"]
+    end
+
     subgraph During["During Each SP Execution"]
         RH["meta.sp_run_history\n\nINSERT at start (status='running')\nUPDATE at end (status, rows, duration)\n\nWritten by: usp_log_run\nFrequency: 2 writes per SP (56 writes for 28 SPs)"]
         SR["meta.sp_registry\n\nUPDATE last_load_date\nUPDATE rows_loaded\nUPDATE next_run_time\n\nWritten by: usp_log_run\nFrequency: 1 update per SP (28 updates)"]
@@ -364,13 +372,20 @@ flowchart TD
     subgraph BeforeSilver["Before Silver Wave Execution"]
         DW["meta.slv_dag_waves_runtime\n\nDELETE all rows\nINSERT 8 rows (1 per silver SP)\n\nWritten by: usp_compute_slv_waves\nFrequency: 1 full refresh per pipeline run"]
     end
+
+    subgraph AtEnd["At Pipeline End (finalize activity)"]
+        LIN["meta.sp_lineage\n\nDELETE + INSERT 52 rows\n\nWritten by: usp_build_lineage\n(called by usp_finalize_pipeline)\nFrequency: 1 full rebuild per pipeline run"]
+        PRL_E["meta.pipeline_run_log\n\nUPDATE status='success'\n+ end_time + SP counts\n\nWritten by: usp_finalize_pipeline\nFrequency: 1 UPDATE per pipeline run"]
+    end
 ```
 
 | Table | Writes per Pipeline Run | Written by |
 |-------|------------------------|------------|
+| pipeline_run_log | 1 INSERT (start) + 1 UPDATE (end) | usp_log_pipeline_run (start) + usp_finalize_pipeline (end) |
 | sp_run_history | 56 (2 per SP x 28 SPs) | usp_log_run |
 | sp_registry | 28 (1 update per SP) | usp_log_run |
 | slv_dag_waves_runtime | 1 DELETE + 8 INSERTs | usp_compute_slv_waves |
+| sp_lineage | 1 DELETE + 52 INSERTs | usp_build_lineage (called by usp_finalize_pipeline) |
 
 ### Tables Requiring Manual Input
 
@@ -378,16 +393,13 @@ flowchart TD
 |-------|--------------|---------------|
 | sp_registry | When adding a new table | INSERT 1 row with sp_name, layer, load_type, depends_on, source_objects, etc. |
 | dq_rules | When adding DQ checks | INSERT 1 row per rule with check_type, target table, threshold, severity |
-| sp_lineage | After adding tables | Run `EXEC meta.usp_build_lineage` to auto-rebuild (or INSERT manually) |
 
 ### Tables Not Written During Pipeline Run
 
 | Table | Status | Notes |
 |-------|--------|-------|
-| pipeline_run_log | 0 rows | Placeholder for future pipeline-level logging |
 | dq_rules | Read-only during run | Config table, manual maintenance |
-| dq_results | Not written by pipeline | Written by DQ engine (run separately) |
-| sp_lineage | Not written by pipeline | Written by usp_build_lineage (run separately) |
+| dq_results | Not written by pipeline | Written by DQ engine (run separately from Python) |
 
 ---
 
@@ -415,15 +427,15 @@ flowchart TD
     A["1. CREATE VIEW silver.vw_slv_new_table\n   SELECT ... FROM bronze/silver tables"]
     B["2. CREATE PROCEDURE silver.usp_load_slv_new_table\n   (copy overwrite template)"]
     C["3. INSERT INTO meta.sp_registry\n   layer='SLV', depends_on='[\"silver.usp_load_slv_xxx\"]'"]
-    D["4. Next pipeline run:\n   usp_compute_slv_waves recalculates\n   New SP auto-assigned to correct wave\n   If new wave needed, pipeline already has\n   stages 0-9 pre-built"]
+    D["4. Next pipeline run:\n   usp_compute_slv_waves recalculates\n   New SP auto-assigned to correct wave\n   Parent-child pattern handles\n   any number of waves dynamically"]
     E["5. ForEach for that wave\n   includes the new SP\n   No pipeline change needed"]
 
     A --> B --> C --> D --> E
 ```
 
-**What changes in the pipeline**: Nothing. The wave computation is dynamic. The 10 pre-built wave stages handle up to 10 waves. The new SP is automatically placed in the correct wave based on its `depends_on` declaration.
+**What changes in the pipeline**: Nothing. The wave computation is dynamic. The parent-child pattern supports any number of waves. The new SP is automatically placed in the correct wave based on its `depends_on` declaration.
 
-**Example**: If you add `slv_new_table` with `depends_on = '["silver.usp_load_slv_naive_forecast_monthly"]'`, it would be auto-assigned to wave 3 (because slv_naive_forecast_monthly is in wave 2). The wave 3 Lookup+ForEach stage, which previously returned empty results, would now pick up this SP.
+**Example**: If you add `slv_new_table` with `depends_on = '["silver.usp_load_slv_naive_forecast_monthly"]'`, it would be auto-assigned to wave 3 (because slv_naive_forecast_monthly is in wave 2). The parent pipeline's ForEach would invoke `pl_sc_silver_wave` for wave 3 with the new SP included.
 
 ### Adding a Gold Table
 
@@ -445,6 +457,7 @@ flowchart TD
 
 ```
 T+00:00  pl_sc_master triggers
+T+00:00  -> log_start: EXEC meta.usp_log_pipeline_run (INSERT pipeline_run_log, status='running')
 T+00:00  -> Invokes pl_sc_bronze (1bdbaebb)
 T+00:01    -> Lookup: SELECT 18 sp_names from sp_registry (via Lakehouse cross-DB)
 T+00:02    -> ForEach batch=8: first 8 SPs start in parallel
@@ -462,11 +475,15 @@ T+07:17    -> Wave 1 completes (slowest: invoice_weekly at 144s)
 T+07:18    -> Lookup wave 2: returns 1 SP
 T+07:18    -> ForEach wave 2: 1 SP runs
 T+07:23    -> Wave 2 completes (naive_forecast_monthly at 5s)
-T+07:24    -> Lookups wave 3-9: all return empty, ForEach skips
+T+07:24    -> No more waves (Lookup returned only 3 distinct waves)
 T+09:00    -> pl_sc_silver completes, master invokes pl_sc_gold (94fc130e)
 T+09:01    -> Lookup: returns 2 sp_names
 T+09:01    -> ForEach batch=2: both SPs start in parallel
 T+09:44    -> Both gold SPs complete (slowest: forecast_kpi at 43s)
+T+09:45  -> finalize: EXEC meta.usp_finalize_pipeline
+             -> EXEC meta.usp_build_lineage (rebuild 52 lineage edges)
+             -> Count success/failed SPs from sp_run_history
+             -> UPDATE pipeline_run_log SET status='success', end_time, tables_succeeded, tables_failed
 T+10:00  pl_sc_master completes successfully
 
 Total: ~16 minutes for 1.47 billion rows across 28 tables

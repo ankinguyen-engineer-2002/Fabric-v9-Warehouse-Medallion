@@ -172,7 +172,7 @@ CREATE TABLE meta.slv_dag_waves_runtime (
 );
 ```
 
-### Step 0.3: Create Utility Stored Procedures (5 SPs)
+### Step 0.3: Create Utility Stored Procedures (8 SPs)
 
 ```sql
 -- SP 1: usp_log_run (log SP start/end)
@@ -351,6 +351,45 @@ BEGIN
         INSERT INTO meta.dq_results (result_id, rule_id, check_time, status, actual_value, expected_value)
         VALUES (@result_id, @rule_id, CAST(GETUTCDATE() AS DATETIME2(6)), @status, @actual, @expected);
     END
+END;
+
+-- SP 6: usp_debug_loop (debugging utility for WHILE loop behavior)
+-- (See architecture doc Section 7.2 for details)
+
+-- SP 7: usp_log_pipeline_run (log pipeline start/end to pipeline_run_log)
+CREATE OR ALTER PROCEDURE meta.usp_log_pipeline_run
+    @pipeline_run_id VARCHAR(36),
+    @pipeline_name VARCHAR(100),
+    @status VARCHAR(20)
+AS
+BEGIN
+    IF @status = 'running'
+        INSERT INTO meta.pipeline_run_log (pipeline_run_id, pipeline_name, status, start_time)
+        VALUES (@pipeline_run_id, @pipeline_name, 'running', CAST(GETUTCDATE() AS DATETIME2(6)));
+END;
+
+-- SP 8: usp_finalize_pipeline (rebuild lineage + update pipeline_run_log with final status)
+CREATE OR ALTER PROCEDURE meta.usp_finalize_pipeline
+    @pipeline_run_id VARCHAR(36)
+AS
+BEGIN
+    -- Step 1: Rebuild lineage
+    EXEC meta.usp_build_lineage;
+
+    -- Step 2: Count success/failed SPs
+    DECLARE @succeeded INT, @failed INT;
+    SELECT @succeeded = COUNT(CASE WHEN status = 'success' THEN 1 END),
+           @failed = COUNT(CASE WHEN status = 'failed' THEN 1 END)
+    FROM meta.sp_run_history
+    WHERE pipeline_run_id = @pipeline_run_id;
+
+    -- Step 3: Update pipeline_run_log with final status
+    UPDATE meta.pipeline_run_log
+    SET status = 'success',
+        end_time = CAST(GETUTCDATE() AS DATETIME2(6)),
+        tables_succeeded = @succeeded,
+        tables_failed = @failed
+    WHERE pipeline_run_id = @pipeline_run_id;
 END;
 ```
 
@@ -804,20 +843,42 @@ SELECT * FROM meta.sp_lineage ORDER BY lineage_id;
    - Stored procedure name: `@item().sp_name`
    - Retry: **2**, Retry interval: **30** seconds
 
-#### Pipeline 2: pl_sc_silver
+#### Pipeline 2: pl_sc_silver (PARENT)
 
 1. Create pipeline: `pl_sc_silver`
 2. Add **Stored Procedure** activity (first):
    - Name: `compute_waves`
    - Stored procedure: `meta.usp_compute_slv_waves`
-3. For each wave 0-9, add **Lookup** + **ForEach** pair:
-   - Lookup name: `get_wave_N_sps`
-   - Query: `SELECT sp_name FROM SupplyChain_Warehouse.meta.slv_dag_waves_runtime WHERE wave = N`
-   - ForEach name: `run_wave_N`
-   - Items: `@activity('get_wave_N_sps').output.value`
-   - Inside ForEach: Stored Procedure activity, `@item().sp_name`
-4. Connect sequentially: compute_waves -> wave_0_lookup -> wave_0_foreach -> wave_1_lookup -> ...
-5. Total: 1 SP + 10 Lookup + 10 ForEach = 21 activities
+3. Add **Lookup** activity:
+   - Name: `get_distinct_waves`
+   - Source: Lakehouse (cross-DB)
+   - Query: `SELECT DISTINCT wave FROM SupplyChain_Warehouse.meta.slv_dag_waves_runtime ORDER BY wave`
+   - First row only: **No**
+4. Add **ForEach** activity:
+   - Name: `run_each_wave`
+   - Sequential: **Yes** (isSequential=true -- waves must run in order)
+   - Items: `@activity('get_distinct_waves').output.value`
+5. Inside ForEach, add **Invoke Pipeline** activity:
+   - Name: `invoke_silver_wave`
+   - Pipeline: `pl_sc_silver_wave`
+   - Parameter: `wave_number` = `@item().wave`
+6. Connect sequentially: compute_waves -> get_distinct_waves -> run_each_wave
+
+#### Pipeline 2b: pl_sc_silver_wave (CHILD)
+
+1. Create pipeline: `pl_sc_silver_wave`
+2. Add **Parameter**: `wave_number` (INT)
+3. Add **Lookup** activity:
+   - Name: `get_wave_sps`
+   - Query: `SELECT sp_name FROM SupplyChain_Warehouse.meta.slv_dag_waves_runtime WHERE wave = @pipeline().parameters.wave_number`
+   - First row only: **No**
+4. Add **ForEach** activity:
+   - Name: `run_wave_sps`
+   - Sequential: **No** (parallel)
+   - Batch count: **8**
+   - Items: `@activity('get_wave_sps').output.value`
+5. Inside ForEach, add **Stored Procedure** activity:
+   - Stored procedure name: `@item().sp_name`
 
 #### Pipeline 3: pl_sc_gold
 
@@ -828,9 +889,18 @@ Same pattern as pl_sc_bronze but with:
 #### Pipeline 4: pl_sc_master
 
 1. Create pipeline: `pl_sc_master`
-2. Add 3 **Invoke Pipeline** activities, connected sequentially:
+2. Add **Stored Procedure** activity (first):
+   - Name: `log_start`
+   - Stored procedure: `meta.usp_log_pipeline_run`
+   - Parameters: `@pipeline_run_id = @pipeline().RunId`, `@pipeline_name = 'pl_sc_master'`, `@status = 'running'`
+3. Add 3 **Invoke Pipeline** activities, connected sequentially after log_start:
    - `invoke_bronze` -> `invoke_silver` -> `invoke_gold`
    - Each invokes the corresponding child pipeline
+4. Add **Stored Procedure** activity (last, after invoke_gold):
+   - Name: `finalize`
+   - Stored procedure: `meta.usp_finalize_pipeline`
+   - Parameters: `@pipeline_run_id = @pipeline().RunId`
+5. Connect: log_start -> invoke_bronze -> invoke_silver -> invoke_gold -> finalize
 
 ### Approach B: Create via REST API
 
@@ -1058,7 +1128,7 @@ GROUP BY s.name ORDER BY s.name;
 SELECT s.name AS schema_name, COUNT(*) AS sp_count
 FROM sys.procedures p JOIN sys.schemas s ON p.schema_id = s.schema_id
 GROUP BY s.name ORDER BY s.name;
--- Expected: bronze=18, gold=2, meta=6, silver=8
+-- Expected: bronze=18, gold=2, meta=8, silver=8
 ```
 
 ### Metadata
