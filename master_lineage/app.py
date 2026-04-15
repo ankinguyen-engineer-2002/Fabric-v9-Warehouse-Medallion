@@ -209,20 +209,20 @@ with tab2:
                 layer_map = {"BRZ": "brz", "REF": "ref", "SLV": "slv", "GLD": "gld"}
                 sp_layer = layer_map.get(sp_row.get("layer", "").upper(), "other")
 
+                # Force horizontal layout: sources = "other" (layer 0), target = "gld" (layer 4)
+                # This ensures DAG layout puts sources LEFT, target RIGHT
                 for r in sp_edges:
                     src_s = r.get("source_schema", "").strip()
                     src_t = r.get("source_table", "").strip()
                     src_id = f"{src_s}.{src_t}" if src_s else src_t
-                    src_layer = "other" if "Enterprise" in src_s or "Lakehouse" in src_s else (
-                        "brz" if "brz" in src_t or "ref" in src_t else ("slv" if "slv" in src_t else "other"))
 
                     if src_id not in mini_seen:
                         mini_seen.add(src_id)
-                        mini_nodes.append({"id": src_id, "layer": src_layer, "load_type": "", "status": "", "last_load_date": "", "rows_loaded": 0})
+                        mini_nodes.append({"id": src_id, "layer": "other", "load_type": "", "status": "", "last_load_date": "", "rows_loaded": 0})
 
                     if tgt not in mini_seen:
                         mini_seen.add(tgt)
-                        mini_nodes.append({"id": tgt, "layer": sp_layer, "load_type": sp_row.get("load_type", ""), "status": "", "last_load_date": "", "rows_loaded": 0})
+                        mini_nodes.append({"id": tgt, "layer": "gld", "load_type": sp_row.get("load_type", ""), "status": "", "last_load_date": "", "rows_loaded": 0})
 
                     mini_edges.append({"source": src_id, "target": tgt})
 
