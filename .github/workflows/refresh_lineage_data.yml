@@ -1,0 +1,121 @@
+name: Refresh Lineage Data
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'  # Every 10 minutes
+  workflow_dispatch:          # Manual trigger
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install pyodbc
+
+      - name: Install ODBC Driver
+        run: |
+          curl https://packages.microsoft.com/keys/microsoft.asc | sudo tee /etc/apt/trusted.gpg.d/microsoft.asc
+          curl https://packages.microsoft.com/config/ubuntu/22.04/prod.list | sudo tee /etc/apt/sources.list.d/mssql-release.list
+          sudo apt-get update
+          sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
+
+      - name: Get Azure Token & Export CSVs
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          FABRIC_SERVER: ${{ secrets.FABRIC_SERVER }}
+        run: |
+          python << 'EOF'
+          import pyodbc, struct, csv, os, json
+          from urllib.request import Request, urlopen
+
+          # Get token via Service Principal
+          tenant = os.environ["AZURE_TENANT_ID"]
+          client_id = os.environ["AZURE_CLIENT_ID"]
+          client_secret = os.environ["AZURE_CLIENT_SECRET"]
+          server = os.environ["FABRIC_SERVER"]
+
+          token_url = f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
+          data = f"grant_type=client_credentials&client_id={client_id}&client_secret={client_secret}&scope=https://database.windows.net/.default"
+          req = Request(token_url, data=data.encode(), method="POST",
+                        headers={"Content-Type": "application/x-www-form-urlencoded"})
+          token = json.loads(urlopen(req).read().decode())["access_token"]
+          token_bytes = token.encode("UTF-16-LE")
+          token_struct = struct.pack(f"<I{len(token_bytes)}s", len(token_bytes), token_bytes)
+
+          conn = pyodbc.connect(
+              f"DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={server};"
+              f"DATABASE=SupplyChain_Warehouse;Encrypt=yes;TrustServerCertificate=no;",
+              attrs_before={1256: token_struct})
+          cursor = conn.cursor()
+
+          data_dir = "Fabric_Architect/master_lineage/data"
+
+          # Export lineage
+          cursor.execute("SELECT lineage_id, source_schema, source_table, target_schema, target_table, relationship_type, sp_name FROM meta.sp_lineage")
+          cols = [d[0] for d in cursor.description]
+          rows = cursor.fetchall()
+          with open(f"{data_dir}/lineage.csv", "w", newline="") as f:
+              w = csv.writer(f)
+              w.writerow(cols)
+              for r in rows:
+                  cleaned = list(r)
+                  cleaned[1] = str(cleaned[1]).replace('"', '').strip()
+                  cleaned[2] = str(cleaned[2]).replace('"', '').strip()
+                  w.writerow(cleaned)
+
+          # Export registry
+          cursor.execute("SELECT sp_name, view_name, target_schema, target_table, layer, load_type, frequency, execution_order, depends_on, source_objects, is_active FROM meta.sp_registry")
+          cols = [d[0] for d in cursor.description]
+          rows = cursor.fetchall()
+          with open(f"{data_dir}/registry.csv", "w", newline="") as f:
+              w = csv.writer(f)
+              w.writerow(cols)
+              w.writerows(rows)
+
+          # Export views
+          cursor.execute("""
+              SELECT s.name AS [schema], o.name AS view_name, m.definition
+              FROM sys.sql_modules m
+              JOIN sys.objects o ON m.object_id = o.object_id
+              JOIN sys.schemas s ON o.schema_id = s.schema_id
+              WHERE o.type = 'V' AND s.name IN ('bronze','silver','gold')
+              ORDER BY s.name, o.name
+          """)
+          cols = [d[0] for d in cursor.description]
+          rows = cursor.fetchall()
+          with open(f"{data_dir}/views.csv", "w", newline="") as f:
+              w = csv.writer(f)
+              w.writerow(cols)
+              w.writerows(rows)
+
+          # Export run history
+          cursor.execute("""
+              SELECT TOP 50 sp_name, status, rows_affected, duration_seconds, start_time, load_type
+              FROM meta.sp_run_history WHERE status = 'success'
+              ORDER BY start_time DESC
+          """)
+          cols = [d[0] for d in cursor.description]
+          rows = cursor.fetchall()
+          with open(f"{data_dir}/run_history.csv", "w", newline="") as f:
+              w = csv.writer(f)
+              w.writerow(cols)
+              w.writerows(rows)
+
+          conn.close()
+          print("CSVs exported successfully")
+          EOF
+
+      - name: Commit & Push
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add Fabric_Architect/master_lineage/data/
+          git diff --cached --quiet || (git commit -m "Auto-refresh lineage data [skip ci]" && git push)

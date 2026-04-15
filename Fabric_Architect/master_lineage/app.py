@@ -2,7 +2,7 @@
 Supply Chain Warehouse v9 — Lineage Explorer
 =============================================
 Tab 1: Interactive DAG (React SVG)
-Tab 2: Stored Procedure Lineage
+Tab 2: ETL Flow by Table
 Tab 3: View Definitions
 """
 
@@ -22,23 +22,15 @@ DEFAULT_PASS = "admin123"
 def check_login():
     if st.session_state.get("authenticated"):
         return True
-
-    st.markdown("""
-    <style>
-    [data-testid="stAppViewContainer"] {background: #0a0f1a;}
-    </style>
-    """, unsafe_allow_html=True)
-
+    st.markdown("""<style>[data-testid="stAppViewContainer"] {background: #0a0f1a;}</style>""", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
         st.markdown("<h2 style='text-align:center; margin-top:20vh; color:#e2e8f0;'>🔗 Lineage Explorer</h2>", unsafe_allow_html=True)
         st.markdown("<p style='text-align:center; color:#64748b; margin-bottom:2rem;'>Supply Chain Warehouse v9</p>", unsafe_allow_html=True)
-
         with st.form("login_form"):
             username = st.text_input("Username")
             password = st.text_input("Password", type="password")
             submitted = st.form_submit_button("Login", use_container_width=True)
-
         if submitted:
             valid_user = st.secrets.get("LOGIN_USER", DEFAULT_USER)
             valid_pass = st.secrets.get("LOGIN_PASS", DEFAULT_PASS)
@@ -54,7 +46,6 @@ if not check_login():
 
 DATA_DIR = Path(__file__).parent / "data"
 
-
 @st.cache_data(ttl=600)
 def load_csv(filename):
     path = DATA_DIR / filename
@@ -63,37 +54,29 @@ def load_csv(filename):
     with open(path, newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
 
-
 @st.cache_data(ttl=600)
 def build_dag_data():
-    """Build {nodes, edges} for React DAG from lineage CSV."""
     rows = load_csv("lineage.csv")
     registry = {r.get("target_table", ""): r for r in load_csv("registry.csv")}
-
     nodes, edges, seen = [], [], set()
 
-    # Build SLV wave map from depends_on (simple topological assignment)
     slv_waves = {}
     slv_regs = [r for r in registry.values() if r.get("layer", "").upper() == "SLV"]
-    # Wave 0: no silver deps
     for r in slv_regs:
         deps = r.get("depends_on", "") or ""
         if not deps or deps in ("nan", "None") or "silver" not in deps:
             slv_waves[r.get("target_table", "")] = 0
-    # Wave 1+: deps all in previous waves
     for wave in range(1, 10):
         for r in slv_regs:
             tbl = r.get("target_table", "")
-            if tbl in slv_waves:
-                continue
+            if tbl in slv_waves: continue
             deps = r.get("depends_on", "") or ""
             try:
                 dep_list = json.loads(deps)
-                dep_tables = [d.split(".")[-1].replace("usp_load_", "") for d in dep_list if "silver" in d]
+                dep_tables = [d.split(".")[-1] for d in dep_list if "silver" in d or "slv" in d]
                 if all(dt in slv_waves for dt in dep_tables):
                     slv_waves[tbl] = wave
-            except:
-                pass
+            except: pass
 
     for row in rows:
         src_schema = row.get("source_schema", "").strip()
@@ -106,255 +89,123 @@ def build_dag_data():
             src_layer = "other"
         else:
             src_id = src_table
-            # Determine source layer with wave
-            src_layer = src_schema
-            if src_table in slv_waves:
-                src_layer = f"slv{slv_waves[src_table]}"
-            elif "brz" in src_table or "ref" in src_table:
-                src_layer = "brz"
+            src_layer = f"slv{slv_waves[src_table]}" if src_table in slv_waves else ("brz" if "brz" in src_table or "ref" in src_table else "other")
 
         tgt_id = tgt_table
-
         if src_id not in seen:
             seen.add(src_id)
             nodes.append({"id": src_id, "layer": src_layer, "load_type": "", "status": "", "last_load_date": "", "rows_loaded": 0})
-
         if tgt_id not in seen:
             seen.add(tgt_id)
             reg = registry.get(tgt_table, {})
             layer_raw = (reg.get("layer", tgt_schema) or tgt_schema).upper()
-            if layer_raw == "SLV" and tgt_table in slv_waves:
-                layer = f"slv{slv_waves[tgt_table]}"
-            elif layer_raw == "BRZ" or layer_raw == "REF":
-                layer = "brz"
-            elif layer_raw == "GLD":
-                layer = "gld"
-            else:
-                layer = "other"
+            if layer_raw == "SLV" and tgt_table in slv_waves: layer = f"slv{slv_waves[tgt_table]}"
+            elif layer_raw in ("BRZ", "REF"): layer = "brz"
+            elif layer_raw == "GLD": layer = "gld"
+            else: layer = "other"
             nodes.append({"id": tgt_id, "layer": layer, "load_type": reg.get("load_type", ""), "status": "", "last_load_date": "", "rows_loaded": 0})
-
         edges.append({"source": src_id, "target": tgt_id})
-
     return {"nodes": nodes, "edges": edges}
 
-
-@st.cache_data(ttl=600)
-def build_sp_dag_data():
-    """Build {nodes, edges} for SP/View ETL flow from registry + lineage.
-
-    Flow: source_tables → [VIEW] → [SP] → target_table
-    Uses sp_lineage edges + sp_registry metadata to build full ETL DAG.
-    """
-    registry = load_csv("registry.csv")
-    lineage = load_csv("lineage.csv")
-
-    nodes, edges = [], []
-    seen = set()
-    layer_map = {"BRZ": "brz", "REF": "ref", "SLV": "slv", "GLD": "gld"}
-
-    # Build nodes from registry: each SP as a node, each target table as a node
-    for r in registry:
-        sp = r.get("sp_name", "")
-        view = r.get("view_name", "")
-        target = r.get("target_table", "")
-        layer = r.get("layer", "")
-        layer_code = layer_map.get(layer.upper(), "other")
-
-        # SP node
-        if sp and sp not in seen:
-            seen.add(sp)
-            # Short name for display
-            short = sp.split(".")[-1] if "." in sp else sp
-            nodes.append({"id": sp, "layer": layer_code, "load_type": r.get("load_type", ""),
-                          "status": "", "last_load_date": "", "rows_loaded": 0})
-
-        # Target table node
-        tgt_full = f"{r.get('target_schema','')}.{target}" if r.get('target_schema') else target
-        if tgt_full and tgt_full not in seen:
-            seen.add(tgt_full)
-            nodes.append({"id": tgt_full, "layer": layer_code, "load_type": "",
-                          "status": "", "last_load_date": "", "rows_loaded": 0})
-
-        # Edge: SP → target table
-        if sp and tgt_full:
-            edges.append({"source": sp, "target": tgt_full})
-
-        # Edges from source_objects → SP
-        src = r.get("source_objects", "")
-        if src and src not in ("nan", "None", ""):
-            try:
-                src_list = json.loads(src)
-                for s in src_list:
-                    s = s.strip().strip('"')
-                    if not s:
-                        continue
-                    if s not in seen:
-                        seen.add(s)
-                        if "Enterprise" in s or "Lakehouse" in s:
-                            sl = "other"
-                        else:
-                            sl = "brz" if "brz" in s or "ref" in s else ("slv" if "slv" in s else "other")
-                        nodes.append({"id": s, "layer": sl, "load_type": "",
-                                      "status": "", "last_load_date": "", "rows_loaded": 0})
-                    edges.append({"source": s, "target": sp})
-            except:
-                pass
-
-    return {"nodes": nodes, "edges": edges}
-
-
-# ── Shared ──
 html_path = Path(__file__).parent / "templates" / "lineage.html"
 
-# ── Tabs ──
-tab1, tab2, tab3 = st.tabs(["📊 Table Lineage DAG", "⚙️ Stored Procedure Lineage", "👁️ View Definitions"])
+tab1, tab2, tab3 = st.tabs(["📊 Table Lineage DAG", "🔄 ETL Flow by Table", "👁️ View Definitions"])
 
-# ════════════════════════════════════════════════════════════════════════════════
-# TAB 1: Interactive DAG (React SVG)
-# ════════════════════════════════════════════════════════════════════════════════
+# ══ TAB 1: DAG ══
 with tab1:
     dag_data = build_dag_data()
     html_content = html_path.read_text(encoding="utf-8")
-
     if dag_data and dag_data["nodes"]:
-        html_content = html_content.replace(
-            "window.__LINEAGE_API_DATA__ = null;",
-            f"window.__LINEAGE_API_DATA__ = {json.dumps(dag_data)};",
-        )
-
+        html_content = html_content.replace("window.__LINEAGE_API_DATA__ = null;", f"window.__LINEAGE_API_DATA__ = {json.dumps(dag_data)};")
     components.html(html_content, height=700, scrolling=False)
 
-# ════════════════════════════════════════════════════════════════════════════════
-# TAB 2: Stored Procedure Lineage
-# ════════════════════════════════════════════════════════════════════════════════
+# ══ TAB 2: ETL Flow by Table ══
 with tab2:
-    st.header("⚙️ Stored Procedure & View Lineage")
-    st.caption("Select an SP to see its ETL flow: source tables → view → SP → target table")
+    st.header("🔄 ETL Flow by Table")
+    st.caption("Select a table to see: sources → view → load pattern → target")
 
     registry = load_csv("registry.csv")
     lineage = load_csv("lineage.csv")
+    views = load_csv("views.csv")
 
     if registry:
-        sp_list = sorted([r["sp_name"] for r in registry])
-        selected_sp = st.selectbox("Select a Stored Procedure", sp_list)
+        table_list = sorted([f"{r['target_schema']}.{r['target_table']}" for r in registry])
+        selected = st.selectbox("Select a table", table_list)
 
-        if selected_sp:
-            sp_row = next((r for r in registry if r["sp_name"] == selected_sp), {})
+        if selected:
+            schema, table = selected.split(".", 1)
+            row = next((r for r in registry if r["target_schema"] == schema and r["target_table"] == table), {})
 
             col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Layer", sp_row.get("layer", ""))
-            col2.metric("Load Type", sp_row.get("load_type", ""))
-            col3.metric("Frequency", sp_row.get("frequency", ""))
-            col4.metric("Target", f"{sp_row.get('target_schema', '')}.{sp_row.get('target_table', '')}")
+            col1.metric("Layer", row.get("layer", ""))
+            col2.metric("Load Type", row.get("load_type", ""))
+            col3.metric("Frequency", row.get("frequency", ""))
+            col4.metric("View", (row.get("view_name", "") or "—").split(".")[-1])
 
-            # Dependencies
-            deps = sp_row.get("depends_on", "")
-            if deps and deps != "nan" and deps != "" and deps != "None":
+            src = row.get("source_objects", "")
+            if src and src not in ("nan", "None", ""):
+                st.markdown("**Source tables:**")
+                try:
+                    for s in json.loads(src): st.markdown(f"- `{s}`")
+                except: st.code(src)
+
+            deps = row.get("depends_on", "")
+            if deps and deps not in ("nan", "None", ""):
                 st.markdown("**Depends on:**")
                 try:
-                    dep_list = json.loads(deps)
-                    for d in dep_list:
-                        st.markdown(f"- `{d}`")
-                except:
-                    st.code(deps)
+                    for d in json.loads(deps): st.markdown(f"- `{d}`")
+                except: st.code(deps)
 
-            # Source objects
-            src = sp_row.get("source_objects", "")
-            if src and src != "nan" and src != "" and src != "None":
-                st.markdown("**Source objects:**")
-                try:
-                    src_list = json.loads(src)
-                    for s in src_list:
-                        st.markdown(f"- `{s}`")
-                except:
-                    st.code(src)
-
-            # Lineage edges for this SP — show as mini DAG
-            sp_edges = [r for r in lineage if r.get("sp_name", "") == selected_sp]
-            if sp_edges:
-                st.markdown("**ETL Flow (source → SP → target):**")
-
-                # Build mini DAG for this SP only
+            # Mini-DAG
+            table_edges = [r for r in lineage if r.get("target_table", "") == table and r.get("target_schema", "") == schema]
+            if table_edges:
+                st.markdown("**ETL Flow:**")
                 mini_nodes, mini_edges, mini_seen = [], [], set()
-                tgt = f"{sp_row.get('target_schema','')}.{sp_row.get('target_table','')}"
-                layer_map = {"BRZ": "brz", "REF": "ref", "SLV": "slv", "GLD": "gld"}
-                sp_layer = layer_map.get(sp_row.get("layer", "").upper(), "other")
-
-                # Force horizontal layout: sources = "other" (layer 0), target = "gld" (layer 4)
-                # This ensures DAG layout puts sources LEFT, target RIGHT
-                for r in sp_edges:
+                for r in table_edges:
                     src_s = r.get("source_schema", "").strip()
                     src_t = r.get("source_table", "").strip()
                     src_id = f"{src_s}.{src_t}" if src_s else src_t
-
                     if src_id not in mini_seen:
                         mini_seen.add(src_id)
                         mini_nodes.append({"id": src_id, "layer": "other", "load_type": "", "status": "", "last_load_date": "", "rows_loaded": 0})
+                    if selected not in mini_seen:
+                        mini_seen.add(selected)
+                        mini_nodes.append({"id": selected, "layer": "gld", "load_type": row.get("load_type", ""), "status": "", "last_load_date": "", "rows_loaded": 0})
+                    mini_edges.append({"source": src_id, "target": selected})
 
-                    if tgt not in mini_seen:
-                        mini_seen.add(tgt)
-                        mini_nodes.append({"id": tgt, "layer": "gld", "load_type": sp_row.get("load_type", ""), "status": "", "last_load_date": "", "rows_loaded": 0})
-
-                    mini_edges.append({"source": src_id, "target": tgt})
-
-                mini_data = {"nodes": mini_nodes, "edges": mini_edges}
                 html_mini = html_path.read_text(encoding="utf-8")
-                html_mini = html_mini.replace(
-                    "window.__LINEAGE_API_DATA__ = null;",
-                    f"window.__LINEAGE_API_DATA__ = {json.dumps(mini_data)};",
-                )
-                components.html(html_mini, height=350, scrolling=False)
+                html_mini = html_mini.replace("window.__LINEAGE_API_DATA__ = null;", f"window.__LINEAGE_API_DATA__ = {json.dumps({'nodes': mini_nodes, 'edges': mini_edges})};")
+                components.html(html_mini, height=300, scrolling=False)
 
-                import pandas as pd
-                df = pd.DataFrame(sp_edges)[["source_schema", "source_table", "target_schema", "target_table", "relationship_type"]]
-                st.dataframe(df, use_container_width=True)
-
-            # View definition
-            views = load_csv("views.csv")
-            view_name = sp_row.get("view_name", "")
-            if view_name and view_name != "nan" and views:
+            view_name = row.get("view_name", "")
+            if view_name and view_name not in ("nan", "None") and views:
                 vparts = view_name.split(".")
                 if len(vparts) == 2:
-                    vschema, vname = vparts
-                    match = [v for v in views if v.get("schema") == vschema and v.get("view_name") == vname]
+                    match = [v for v in views if v.get("schema") == vparts[0] and v.get("view_name") == vparts[1]]
                     if match:
-                        with st.expander(f"📝 View: {view_name}", expanded=False):
+                        with st.expander(f"📝 View SQL: {view_name}", expanded=False):
                             st.code(match[0].get("definition", ""), language="sql")
 
-        # Full table
         st.markdown("---")
-        with st.expander("📋 All registered SPs", expanded=False):
+        with st.expander("📋 All tables", expanded=False):
             import pandas as pd
-            display_cols = ["sp_name", "layer", "target_schema", "target_table", "load_type", "frequency", "depends_on"]
             df = pd.DataFrame(registry)
-            available = [c for c in display_cols if c in df.columns]
-            st.dataframe(df[available], use_container_width=True)
-    else:
-        st.warning("No SP registry data loaded.")
+            cols = ["target_schema", "target_table", "layer", "load_type", "frequency", "view_name", "depends_on"]
+            st.dataframe(df[[c for c in cols if c in df.columns]], use_container_width=True)
 
-# ════════════════════════════════════════════════════════════════════════════════
-# TAB 3: View Definitions
-# ════════════════════════════════════════════════════════════════════════════════
+# ══ TAB 3: View Definitions ══
 with tab3:
     st.header("👁️ View Definitions")
     st.caption("SQL source code of all ETL views (bronze / silver / gold)")
-
     views = load_csv("views.csv")
     if views:
         schemas = sorted(set(v.get("schema", "") for v in views))
         selected_schema = st.selectbox("Filter by schema", ["All"] + schemas)
-
         filtered = views if selected_schema == "All" else [v for v in views if v.get("schema") == selected_schema]
-
         for v in filtered:
-            full_name = f"{v.get('schema', '')}.{v.get('view_name', '')}"
-            with st.expander(f"📝 {full_name}", expanded=False):
+            with st.expander(f"📝 {v.get('schema','')}.{v.get('view_name','')}", expanded=False):
                 st.code(v.get("definition", ""), language="sql")
-
         st.info(f"Total: {len(filtered)} views")
-    else:
-        st.warning("No view definitions loaded.")
 
-# ── Footer ──
 st.markdown("---")
-st.caption("Supply Chain Warehouse v9 — Lineage Explorer | Auto-refresh: 10 min | Data: meta.sp_lineage + meta.sp_registry")
+st.caption("Supply Chain Warehouse v9 — Lineage Explorer | Data auto-refreshed via GitHub Actions")
