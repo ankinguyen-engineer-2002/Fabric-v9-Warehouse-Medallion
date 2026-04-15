@@ -5,6 +5,16 @@ A complete architecture template for building **enterprise data warehouses** on 
 
 **[🔗 Live Lineage Explorer](https://vn-engineer-lineage.streamlit.app)** — Interactive data lineage visualization (login required)
 
+### Table of Contents
+- [Architecture](#architecture) — Data flow, 4 schemas
+- [Pipeline Architecture](#pipeline-architecture) — Master, bronze, silver DAG, gold
+- [Generic SP Architecture](#generic-sp-architecture) — 8 load patterns, 1 SP for all
+- [Multi Data Mart Scale](#multi-data-mart-scale) — N marts parallel, cross-mart deps
+- [Semantic Model](#semantic-model) — Direct Lake, auto-refresh
+- [Enterprise Compatibility](#enterprise-compatibility) — TableDictionary mapping
+- [Multi-Environment Roadmap](#multi-environment-roadmap) — DEV → TEST → PROD
+- [Documentation](#documentation) — All docs index
+
 ---
 
 ## Architecture
@@ -268,6 +278,43 @@ Column prefixes: `id_` keys · `code_` categories · `name_` descriptions · `qt
 
 ---
 
+## Multi Data Mart Scale
+
+The architecture supports **N data marts running in parallel** under a single master pipeline. Each mart = 1 complete bronze→silver→gold flow for a specific project/domain.
+
+```mermaid
+flowchart TD
+    subgraph MASTER["pl_sc_master"]
+        LS["log_start"]
+        subgraph MARTS["ForEach mart (PARALLEL)"]
+            M1["Mart: SupplyChain\nbronze→silver→gold"]
+            M2["Mart: Forecast\nbronze→silver→gold"]
+            M3["Mart: Inventory\nbronze→silver→gold"]
+            MN["Mart: ...N"]
+        end
+        CROSS["Cross-mart silver\n(if dependencies exist)"]
+        FIN["finalize"]
+        subgraph SMS["SM Refresh (PARALLEL)"]
+            SM1["SC_Control_Tower"]
+            SM2["Forecast SM"]
+        end
+        LS --> MARTS --> CROSS --> FIN --> SMS
+    end
+```
+
+| Aspect | Detail |
+|--------|--------|
+| **Parallel execution** | N marts run simultaneously (ForEach isSequential=false) |
+| **Cross-mart deps** | Silver table in mart B can depend on bronze from mart A via `depends_on` |
+| **Shared components** | bronze schema, meta schema, usp_generic_load, pipelines (parameterized) |
+| **Isolated components** | silver/gold tables per mart, semantic models per mart |
+| **Project filter** | `sp_registry.project` column filters tables per mart |
+| **Cost optimization** | Parallel = total time = max(mart), not sum(marts) |
+
+> See [multi_mart_scale_architecture.md](multi_mart_scale_architecture.md) for full design: pipeline diagrams, cross-mart resolution, cost optimization, implementation roadmap.
+
+---
+
 ## Fabric Warehouse Constraints
 
 | Not Supported | Workaround |
@@ -302,12 +349,14 @@ Column prefixes: `id_` keys · `code_` categories · `name_` descriptions · `qt
 | [v9_pipeline_supplychain.md](Fabric_Architect/v9_pipeline_supplychain.md) | Execution trace with actual SP names, durations, wave assignments |
 | [v9_setup_supplychain.md](Fabric_Architect/v9_setup_supplychain.md) | Implementation log: Spark→T-SQL conversions, bugs encountered, fixes applied |
 
-### Enterprise comparison
+### Scale & Enterprise
 
 | File | Description |
 |------|-------------|
+| [multi_mart_scale_architecture.md](multi_mart_scale_architecture.md) | **Multi Data Mart scale design**: N marts parallel, cross-mart deps, cost optimization, roadmap |
 | [Enterprise_vs_Fabric_comparison.md](Enterprise_vs_Fabric_comparison.md) | Detailed comparison: ETL framework, load patterns, schema, CI/CD, change propagation |
 | [generic_sp_migration_plan.md](generic_sp_migration_plan.md) | Migration plan: 28 per-table SPs → 1 generic SP (8 patterns) |
+| [SESSION_CONTEXT.md](SESSION_CONTEXT.md) | Full session context: connections, decisions, bugs, skills (for AI continuity) |
 
 ---
 
