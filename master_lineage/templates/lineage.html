@@ -124,8 +124,8 @@ function layoutDAG(nodes, edges, collapsed) {
 
   const layers = new Map(), done = new Set();
   const nodeById = new Map(); vis.forEach(n => nodeById.set(n.id, n));
-  /* Fixed layer assignments: external(0) → brz/ref(1) → slv/gld/other(auto) */
-  const FIXED_LAYERS = {other: 0, orphan: 0, brz: 1, ref: 1};
+  /* Fixed layer assignments: external(0) → brz/ref(1) → slv(2) → gld(3) */
+  const FIXED_LAYERS = {other: 0, orphan: 0, brz: 1, ref: 1, slv: 2, gld: 3};
   function assign(id) {
     if (done.has(id)) return layers.get(id) || 0;
     done.add(id);
