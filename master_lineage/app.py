@@ -69,61 +69,63 @@ def build_dag_data():
 
 @st.cache_data(ttl=600)
 def build_sp_dag_data():
-    """Build {nodes, edges} for SP dependency DAG from registry + lineage."""
+    """Build {nodes, edges} for SP/View ETL flow from registry + lineage.
+
+    Flow: source_tables → [VIEW] → [SP] → target_table
+    Uses sp_lineage edges + sp_registry metadata to build full ETL DAG.
+    """
     registry = load_csv("registry.csv")
     lineage = load_csv("lineage.csv")
 
-    nodes, edges, seen = [], [], set()
+    nodes, edges = [], []
+    seen = set()
+    layer_map = {"BRZ": "brz", "REF": "ref", "SLV": "slv", "GLD": "gld"}
 
-    # Build SP nodes from registry
+    # Build nodes from registry: each SP as a node, each target table as a node
     for r in registry:
         sp = r.get("sp_name", "")
-        if not sp or sp in seen:
-            continue
-        seen.add(sp)
+        view = r.get("view_name", "")
+        target = r.get("target_table", "")
         layer = r.get("layer", "")
-        layer_map = {"BRZ": "brz", "REF": "ref", "SLV": "slv", "GLD": "gld"}
         layer_code = layer_map.get(layer.upper(), "other")
 
-        # Node label = short SP name
-        label = sp.replace("bronze.usp_load_", "").replace("silver.usp_load_", "").replace("gold.usp_load_", "")
-        nodes.append({
-            "id": sp,
-            "layer": layer_code,
-            "load_type": r.get("load_type", ""),
-            "status": "",
-            "last_load_date": "",
-            "rows_loaded": 0,
-        })
+        # SP node
+        if sp and sp not in seen:
+            seen.add(sp)
+            # Short name for display
+            short = sp.split(".")[-1] if "." in sp else sp
+            nodes.append({"id": sp, "layer": layer_code, "load_type": r.get("load_type", ""),
+                          "status": "", "last_load_date": "", "rows_loaded": 0})
 
-        # Edges from depends_on (SP → SP dependency)
-        deps = r.get("depends_on", "")
-        if deps and deps != "nan" and deps != "None" and deps != "":
-            try:
-                dep_list = json.loads(deps)
-                for d in dep_list:
-                    d = d.strip()
-                    if d and d not in seen:
-                        seen.add(d)
-                        # Infer layer from name
-                        dl = "slv" if "slv" in d else ("brz" if "brz" in d or "ref" in d else ("gld" if "gld" in d else "other"))
-                        nodes.append({"id": d, "layer": dl, "load_type": "", "status": "", "last_load_date": "", "rows_loaded": 0})
-                    edges.append({"source": d, "target": sp})
-            except:
-                pass
+        # Target table node
+        tgt_full = f"{r.get('target_schema','')}.{target}" if r.get('target_schema') else target
+        if tgt_full and tgt_full not in seen:
+            seen.add(tgt_full)
+            nodes.append({"id": tgt_full, "layer": layer_code, "load_type": "",
+                          "status": "", "last_load_date": "", "rows_loaded": 0})
 
-        # Also add source tables as upstream nodes (from source_objects)
+        # Edge: SP → target table
+        if sp and tgt_full:
+            edges.append({"source": sp, "target": tgt_full})
+
+        # Edges from source_objects → SP
         src = r.get("source_objects", "")
-        if src and src != "nan" and src != "None" and src != "":
+        if src and src not in ("nan", "None", ""):
             try:
                 src_list = json.loads(src)
                 for s in src_list:
                     s = s.strip().strip('"')
-                    if s and s not in seen:
+                    if not s:
+                        continue
+                    if s not in seen:
                         seen.add(s)
-                        sl = "other" if "Enterprise" in s or "Lakehouse" in s else "brz"
-                        nodes.append({"id": s, "layer": sl, "load_type": "", "status": "", "last_load_date": "", "rows_loaded": 0})
-                    # Don't add edge here — we use depends_on for SP flow, source_objects shown in tooltip
+                        if "Enterprise" in s or "Lakehouse" in s:
+                            sl = "other"
+                        else:
+                            sl = "brz" if "brz" in s or "ref" in s else ("slv" if "slv" in s else "other")
+                        nodes.append({"id": s, "layer": sl, "load_type": "",
+                                      "status": "", "last_load_date": "", "rows_loaded": 0})
+                    edges.append({"source": s, "target": sp})
             except:
                 pass
 
