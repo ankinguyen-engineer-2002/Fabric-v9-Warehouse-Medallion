@@ -1,0 +1,13 @@
+CREATE VIEW [Pricing_AFI_Wrk].[v_CommissionClass]
+AS
+SELECT [cclComCls]
+      ,[cclCommDesc]
+      ,[cclDivCode]
+      ,[cclCmrtbl]
+      ,[usra]
+      ,[dtea]
+      ,[usrc]
+      ,[dtec]
+      ,[acrec]
+      ,[cclSalesCategory]
+  FROM [$(Source_Data)].[wholesale_pricing_afi].[CommissionClass]

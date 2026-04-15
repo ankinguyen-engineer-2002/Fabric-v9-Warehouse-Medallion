@@ -1,0 +1,11 @@
+CREATE VIEW [Pricing_AFI_Wrk].[v_DiscountClass]
+AS
+SELECT  [dclDiscls]
+      ,[dclDisDesc]
+      ,[dclDivision]
+      ,[usra]
+      ,[dtea]
+      ,[usrc]
+      ,[dtec]
+      ,[acrec]
+  FROM [$(Source_Data)].[wholesale_pricing_afi].[DiscountClass]

@@ -1,0 +1,1 @@
+CREATE SCHEMA masterdata_hr_ukg;

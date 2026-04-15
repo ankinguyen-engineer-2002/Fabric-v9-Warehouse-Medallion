@@ -1,0 +1,27 @@
+CREATE TABLE [MasterData_HR_UKG_Enh].[HREmployeeHistory] (
+
+	[PeopleID] [int] NULL, 
+	[EmployeeID] [varchar](20) NOT NULL,
+	[EmployeeNumber] varchar(50) NULL, 
+	[SupervisorID] varchar(50) NULL, 
+	[EmployeeFirstName] varchar(50) NULL, 
+	[EmployeeLastName] varchar(50) NULL, 
+	[EmployeeStatus] varchar(5) NULL, 
+	[EmployeeEmail] varchar(50) NULL, 
+	[EmployeeHourlySalary] varchar(5) NULL, 
+	[EmployeeFTPT] varchar(5) NULL, 
+	[HireDate] date NULL, 
+	[Generation] [varchar](100) NULL,
+	[LocationID] int NULL, 
+	[JobID] int NULL, 
+	[DivisionID] int NULL, 
+	[DepartmentID] int NULL, 
+	[RegionID] int NULL, 
+	[EmployeeTypeID] int NULL, 
+	[SeparationCode] varchar(50) NULL, 
+	[SeparationType] varchar(5) NULL, 
+	[SeparationReason] varchar(50) NULL, 
+	[SeparationDate] date NULL, 
+	[TransDate] date NOT NULL, 
+	[DataSource] varchar(5) NOT NULL
+);

@@ -1,0 +1,26 @@
+CREATE TABLE [Retail_OOM_Enh].[OpenOrderSummary] (
+
+	[BODTransDate] date NULL, 
+	[StoreID] varchar(50) NOT NULL, 
+	[ShipLocationID] varchar(50) NULL, 
+	[OrderType] varchar(60) NULL, 
+	[FulfillmentMethod] varchar(10) NULL, 
+	[FulfillmentStatus] varchar(10) NULL, 
+	[ContactStatus] varchar(20) NULL, 
+	[ContactDate] date NULL, 
+	[PastDue] varchar(1) NOT NULL, 
+	[Filled] varchar(1) NOT NULL, 
+	[TotalFulfilment] int NULL, 
+	[TotalPieces] int NULL, 
+	[ReservedPieces] int NULL, 
+	[TotalCost] decimal(38,2) NULL, 
+	[ReservedCost] decimal(38,2) NULL, 
+	[TotalSales] decimal(38,2) NULL, 
+	[ReservedSales] decimal(38,2) NULL, 
+	[TotalVolume] decimal(38,2) NULL, 
+	[ReservedVolume] decimal(38,2) NULL, 
+	[TotalWeight] decimal(38,2) NULL, 
+	[ReservedWeight] decimal(38,2) NULL, 
+	[TotalTaxes] decimal(38,2) NULL, 
+	[TotalDeliveryCharges] decimal(38,2) NULL
+);

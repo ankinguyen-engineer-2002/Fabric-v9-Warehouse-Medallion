@@ -1,0 +1,1 @@
+CREATE SCHEMA Manufacturing_Inventory_AFI_Wrk;

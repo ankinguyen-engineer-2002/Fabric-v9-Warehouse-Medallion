@@ -1,0 +1,14 @@
+CREATE TABLE [Wholesale_Quality_AFI_Wrk].[ReturnAllowanceSerialNumbers] (
+
+	[Rasenterdate] char(8) NULL, 
+	[Rasentertime] char(6) NULL, 
+	[Rasitemno] varchar(17) NULL, 
+	[Rasitemseq] decimal(7,0) NULL, 
+	[Rassernoseq] int NULL, 
+	[Rassernotype] char(1) NULL, 
+	[Rassernumber] varchar(17) NULL, 
+	[Usra] varchar(32) NULL, 
+	[Dtea] datetime2(6) NULL, 
+	[Usrc] varchar(32) NULL, 
+	[Dtec] datetime2(6) NULL
+);

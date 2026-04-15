@@ -1,0 +1,13 @@
+CREATE VIEW [Marketing_Wrk].[v_SalesTeamMaster]
+AS
+SELECT  [Smateam]
+      ,[Smacusno]
+      ,[Smadc_shpno]
+      ,[Smatotcount]
+      ,[Smadivision]
+      ,[Usra]
+      ,[Dtea]
+      ,[Usrc]
+      ,[Dtec]
+      ,[Acrec]
+  FROM [$(Source_Data)].[Wholesale_Marketing].[SalesTeamMaster]

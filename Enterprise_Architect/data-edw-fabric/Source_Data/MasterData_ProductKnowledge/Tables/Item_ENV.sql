@@ -1,0 +1,27 @@
+CREATE TABLE [MasterData_ProductKnowledge].[Item_ENV] (
+
+	[ienItemNumber] varchar(15) NULL, 
+	[ienItemType] char(1) NULL, 
+	[ienItemClass] char(4) NULL, 
+	[ienEnvironmentCode] char(3) NULL, 
+	[usra] varchar(30) NULL, 
+	[dtea] datetime2(6) NULL, 
+	[usrc] varchar(30) NULL, 
+	[dtec] datetime2(6) NULL, 
+	[ienItemLevelCountryOfOrigin] char(3) NULL, 
+	[ienItemLevelCityOfOrigin] varchar(35) NULL, 
+	[ienItemLevelCOOReviewed] datetime2(6) NULL, 
+	[ienFutureStatus] varchar(40) NULL, 
+	[ienHoldBuyCode] varchar(40) NULL, 
+	[ienForecastPlannerID] varchar(40) NULL, 
+	[ienDirectShipItemOnly] char(1) NULL, 
+	[ienHTSCode] varchar(10) NULL, 
+	[ienScheduleBCode] varchar(10) NULL, 
+	[ienExpressShipCode] char(1) NULL, 
+	[ienDeliverInPackage] bit NOT NULL, 
+	[ienVBoard] bit NULL, 
+	[ienCertifiedPackage] bit NOT NULL, 
+	[ienRDCAssemblyRequired] bit NOT NULL, 
+	[ienCustomerAssemblyOnly] bit NOT NULL, 
+	[ienUniqueSerialNumbers] int NOT NULL
+);

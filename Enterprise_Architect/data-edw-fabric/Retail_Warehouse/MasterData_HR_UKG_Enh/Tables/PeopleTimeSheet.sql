@@ -1,0 +1,25 @@
+CREATE TABLE [MasterData_HR_UKG_Enh].[PeopleTimeSheet] (
+
+	[TimeSheetID] [bigint] NOT NULL,
+	[SourceDataID] [varchar](50) NOT NULL,
+	[SourceSystemID] [int] NOT NULL,
+	[PeopleID] [bigint] NULL,
+	[EmployeeNumber] [varchar](100) NULL,
+	[PayPeriod] [int] NULL,
+	[TransDateKey] [int] NULL,
+	[SourceLocationID] [int] NULL,
+	[TimeIn] [datetime2](3) NULL,
+	[TimeOut] [datetime2](3) NULL,
+	[Time] [decimal](18,2) NULL,
+	[SourcePayCodeID] [varchar](10) NULL,
+	[PayCodeID] [int] NULL,
+	[PayCodeName] [varchar](50) NULL,
+	[SourceTaskCodeID] [varchar](10) NULL,
+	[TaskCodeID] [varchar](10) NULL,
+	[TaskCodeName] [varchar](100) NULL,
+	[DateCreated] [datetime2](6) NULL,
+	[Rate] [decimal](18,4) NULL,
+	[ExtCost] [decimal](18,2) NULL,
+	[ApprovedByManager] [bit] NULL,
+	[DataSource] [varchar](5) NOT NULL
+);

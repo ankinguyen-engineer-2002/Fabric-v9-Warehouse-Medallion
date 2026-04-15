@@ -1,0 +1,12 @@
+CREATE VIEW [Marketing_Wrk].[v_SetDetailCustom]
+AS
+SELECT  [Sdccustomer]
+      ,[Sdcsetnumber]
+      ,[Sdcitemnumber]
+      ,[Sdcqty]
+      ,[Sdckey]
+      ,[Usra]
+      ,[Dtea]
+      ,[Usrc]
+      ,[Dtec]
+  FROM [$(Source_Data)].[Wholesale_Marketing].[SetDetailCustom]

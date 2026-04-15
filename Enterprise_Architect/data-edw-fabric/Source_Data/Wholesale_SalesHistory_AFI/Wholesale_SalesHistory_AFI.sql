@@ -1,0 +1,1 @@
+CREATE SCHEMA Wholesale_SalesHistory_AFI;

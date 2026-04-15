@@ -1,0 +1,26 @@
+CREATE TABLE [SupplyChain_Enh].[DemandForecastSnapshot] (
+
+	[dfcItem] varchar(15) NULL, 
+	[dfcWarehouse] char(3) NULL, 
+	[dfcFiscalMonth] numeric(6,0) NULL, 
+	[dfcMainPiece] varchar(40) NULL, 
+	[dfcCollectiveClass] varchar(40) NULL, 
+	[dfcResultantForecast] numeric(9,0) NULL, 
+	[dfcPromotionalLift] numeric(9,0) NULL, 
+	[dfcForcedForecast] numeric(9,0) NULL, 
+	[dfcValidDemandMonths] numeric(3,0) NULL, 
+	[dfcSnapshot] datetime2(6) NULL, 
+	[dfcPermComptQty] numeric(18,0) NULL, 
+	[dfcUsr25Text] varchar(40) NULL, 
+	[dfcUsr32Text] varchar(40) NULL, 
+	[dfcFCSTTypeCode] char(1) NULL, 
+	[dfcDerivedFCSTID] varchar(120) NULL, 
+	[dfcDerivedFCSTFctr] numeric(18,0) NULL, 
+	[dfcOrderFutureQty] numeric(18,0) NULL, 
+	[dfcMgmtCode] char(1) NULL, 
+	[usra] varchar(30) NULL, 
+	[dtea] datetime2(6) NULL, 
+	[usrc] varchar(30) NULL, 
+	[dtec] datetime2(6) NULL, 
+	[dfcCustomergroups] varchar(100) NULL
+);

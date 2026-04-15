@@ -1,0 +1,46 @@
+name: $(Major).$(Minor).$(Patch)
+
+trigger: none
+
+variables:
+  group: 'devops variable group'
+  buildConfiguration: 'Release'
+  Major: '1'
+  Minor: '1'
+  Patch: $[counter(format('{0}.{1}', variables['Major'], variables['Minor']), 0)]
+  VariableGroupName: 'devops variable group'
+  azureBlobSubscription: 'DATAWAREHOUSE DEV'
+  sourcePathBlob: 'SchemaCompareRemote/DevOpsDacpacCache/'
+  vmImageName: 'windows-2022'
+  containerName: 'sandbox-zone'
+
+stages:
+- stage: 'Build'
+  displayName: 'Build the database project'
+  jobs: 
+  - job: BuildDacpac
+    pool: 
+      name: 'Azure Pipelines'
+    steps:
+    # Install a stable .NET SDK version
+    - task: UseDotNet@2
+      displayName: 'Install .NET SDK 8.0.x'
+      inputs:
+        packageType: 'sdk'
+        version: '8.0.x'
+        installationPath: $(Agent.ToolsDirectory)/dotnet
+    
+    # Restore NuGet packages
+    - task: DotNetCoreCLI@2
+      displayName: 'Restore NuGet packages'
+      inputs:
+        command: 'restore'
+        projects: '**/*.sqlproj'
+    
+    # Build the SQL project
+    - task: DotNetCoreCLI@2
+      displayName: 'SQL DB build $(buildConfiguration)'
+      inputs:
+        command: build
+        projects: '**/*.sqlproj'
+        arguments: '--configuration $(buildConfiguration) /p:NetCoreBuild=true --no-restore'

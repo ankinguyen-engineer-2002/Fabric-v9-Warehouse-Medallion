@@ -1,0 +1,1 @@
+CREATE SCHEMA Retail_Shoppertrack_Wrk;

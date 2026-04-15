@@ -1,0 +1,71 @@
+
+Create table CostAccounting_Enh.TradeAgreementDeltas_Analysis
+(
+      [AccountShipto] varchar(30) NULL
+	 ,[CustomerAccountNumber] varchar(20) NULL
+     ,[CustomerShiptoNumber]  VARCHAR(5) NULL  
+	 ,[CustomerName] vARCHAR(100) Null
+	 ,[CustomerAccountStatus] varchar(1) Null
+	 ,[HSOwner] VARCHAR(100) Null
+	 ,[FlagSuspShip] VARCHAR(5) Null
+	 ,[FlagNoFreight] VARCHAR(5) Null
+	 ,[Group] VARCHAR(50) Null
+	 ,[SKU] VARCHAR(20) Null
+     ,[Flag3rdPartySKU] VARCHAR(5) Null
+     ,[DateOrdered] Date Null
+	 ,[DateCompare] Date Null
+	 ,[CompareCategory] VARCHAR(100) Null
+	 ,[CompareReason] VARCHAR(100) Null
+     ,[SalesOrderNumber] varchar(20) NULL
+	 ,[PuchaseID] varchar(20) NULL
+     ,[InvoiceID] varchar(20) NULL
+	 ,[InvoiceDate]    Date Null
+	 ,[FiscalWeekEnding]  Date Null
+	 ,[FiscalMonthEnding]  Date Null
+	 ,[FiscalMonthYearName] Varchar(50) null
+	 ,[FiscalMonthYear] int Null
+     ,[PriceCode] Varchar(10) Null
+     ,[FreightCode] Varchar(5) Null
+     ,[DiscountCode] Varchar(5) Null
+     ,[DiscountCodeDescription] Varchar(50) Null
+     ,[RouteZone] char(5) Null
+     ,[RouteRegion] int NUll
+     ,[FreightCodeDescription] Varchar(100) Null
+     ,[ItemDiscountCode] Char(3) Null
+     ,[FreightClassCodeItem] Char(3) Null
+     ,[WhseDefault] Char(3) Null
+     ,[WhseUse] Char(3) Null
+	 ,[QTYOrdered] Decimal(10,6) Null
+     ,[COGSOrdered] Decimal(10,6) Null
+     ,[BasePrice]  Decimal(10,3) Null
+     ,[PriceLessDisc] Decimal(20,12) Null
+	 ,[FreightPercentage] Decimal(10,4) Null
+     ,[FreightComponent] Decimal(10,6) Null
+     ,[TotalPriceAFI] Decimal(20,12) Null
+	 ,[AltFreightPercentage] Decimal(10,4) Null
+     ,AltFreightComponent Decimal(10,6) Null
+     ,[AltTotalPriceAFI] Decimal(20,12) Null
+	 ,[COGSItemAshcomm] Decimal(10,6) Null
+	 ,[DeltaAFIAshcomm] Decimal(10,6) Null
+	 ,[TotalDelta] Decimal(12,8) Null
+	 ,[OverOrUnder] Varchar(10) Null
+	 ,[AltDeltaAFIAshcomm] Decimal(10,6) Null
+	 ,[AltTotalDelta] Decimal(10,6) Null
+	 ,[AltOverorUnder] Varchar(10) null
+	 ,[Identifier] Varchar(10) null
+	 ,[FlagContainerDirectOnlyItem] Char(10) Null
+	 ,[FlagCMOrder]  Char(10) Null
+	 ,[CMCOGSItem] Decimal(10,6) Null
+	 ,[CMOrigOrdCOGSItem] Decimal(10,6) Null
+	 ,[CMSONumber] varchar(20)
+	 ,[CMOriginalOrderSONumber] varchar(20)
+	 ,[FinalDeltaInvoices] Decimal(10,6) Null
+	 ,[FinalDeltaCMs] Decimal(10,6) Null
+	 ,[NetDue] Decimal(10,6) Null
+	 ,[CMDelta] Decimal(10,6) Null
+     ,[AltCMDelta] Decimal(10,6) Null
+     ,[AltFinalDeltaInvoices] Decimal(10,6) Null
+	 ,[AltFinalDeltaCMs] Decimal(10,6) Null
+     ,[AltNetDue] Decimal(10,6) Null
+      
+);	

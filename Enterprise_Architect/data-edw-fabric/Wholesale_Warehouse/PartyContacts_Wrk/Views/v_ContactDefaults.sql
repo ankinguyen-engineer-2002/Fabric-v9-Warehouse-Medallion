@@ -1,0 +1,20 @@
+create view [PartyContacts_Wrk].[v_ContactDefaults]
+as
+SELECT  [pcbPartyID]
+      ,[pcbLocationID]
+      ,[pcbDepartment]
+      ,[pcbContactType]
+      ,[pcbContactID]
+      ,[pcbIsBuyerDefault]
+      ,[pcbIsReceivingDefault]
+      ,[usra]
+      ,[dtea]
+      ,[usrc]
+      ,[dtec]
+      ,[pcbIsStoreDefault]
+      ,[pcbIsCustomerServiceDefault]
+      ,[pcbIsPrimaryOwnerDefault]
+      ,[pcbIsWarrantyDefault]
+  FROM [$(Source_Data)].[Wholesale_PartyContacts].[ContactDefaults]
+GO
+

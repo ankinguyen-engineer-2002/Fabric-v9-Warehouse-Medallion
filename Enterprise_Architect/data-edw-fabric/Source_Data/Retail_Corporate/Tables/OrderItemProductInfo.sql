@@ -1,0 +1,30 @@
+CREATE TABLE [Retail_Corporate].[OrderItemProductInfo]
+(
+	[Operation] [varchar](15) NULL,
+	[Addon1Cost] [decimal](19,4) NULL,
+	[Addon2Cost] [decimal](19,4) NULL,
+	[Addon3Cost] [decimal](19,4) NULL,
+	[Addon4Cost] [decimal](19,4) NULL,
+	[CompanyID] [varchar](50) NOT NULL,
+	[DateChanged] [datetime2](6) NULL,
+	[DateCreated] [datetime2](6) NULL,
+	[ItemID] [int] NOT NULL,
+	[LandedFreight] [decimal](19,4) NULL,
+	[LineID] [int] NULL,
+	[LocatorNbr] [varchar](50) NULL,
+	[OrderID] [varchar](50) NOT NULL,
+	[PieceID] [int] NOT NULL,
+	[ProductID] [varchar](50) NOT NULL,
+	[PurchaseOrderID] [varchar](50) NULL,
+	[RcvdByBarCode] [varchar](50) NULL,
+	[ReasonCodeID] [varchar](50) NULL,
+	[RecStatus] [char](1) NULL,
+	[RFLabel] [varchar](50) NULL,
+	[RFStatus] [varchar](50) NULL,
+	[SerialNbr] [varchar](50) NULL,
+	[SourceID] [varchar](50) NOT NULL,
+	[TotCost] [decimal](19,4) NULL,
+	[WhseMgmtQtyReceived] [int] NULL,
+	[WhseMgmtQtyShipped] [int] NULL
+)
+Go

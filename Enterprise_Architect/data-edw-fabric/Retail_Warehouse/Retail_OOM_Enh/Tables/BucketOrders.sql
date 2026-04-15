@@ -1,0 +1,27 @@
+CREATE TABLE [Retail_OOM_Enh].[BucketOrders] (
+
+	[OrderID] varchar(50) NOT NULL, 
+	[ItemID] int NOT NULL, 
+	[OrderType] varchar(2) NOT NULL, 
+	[StoreID] varchar(50) NULL, 
+	[LocationID] varchar(50) NULL, 
+	[ProductID] varchar(50) NULL, 
+	[TransDate] datetime2(3) NULL, 
+	[TransCodeID] int NULL, 
+	[Qty] int NULL, 
+	[QtyCommitted] int NULL, 
+	[QtyInStock] int NULL, 
+	[QtyOnOrder] int NULL, 
+	[OffsideCode] varchar(50) NULL, 
+	[BucketID] int NULL, 
+	[PeriodID] datetime2(3) NULL, 
+	[AutoFillDays] int NULL, 
+	[ATPDate] date NULL, 
+	[SpecialOrder] bit NULL, 
+	[PurchaseOrderID] varchar(50) NULL, 
+	[PurchaseOrderItemID] int NULL, 
+	[OrderATPDate] date NULL, 
+	[RequestDate] date NULL, 
+	[RequestPeriodID] bigint NULL, 
+	[TransferATPDate] date NULL
+);

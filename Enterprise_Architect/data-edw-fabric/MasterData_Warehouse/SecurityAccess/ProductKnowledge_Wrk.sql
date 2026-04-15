@@ -1,0 +1,1 @@
+CREATE SCHEMA [ProductKnowledge_Wrk] AUTHORIZATION [dbo];

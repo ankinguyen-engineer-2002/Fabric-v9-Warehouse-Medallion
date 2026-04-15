@@ -1,0 +1,31 @@
+CREATE TABLE [wholesale_productsourcing_afi].[expiredspecials] (
+
+	[ltd_DropTimestamp] datetime2(6) NULL, 
+	[ltd_ID] int NULL, 
+	[ltd_mergeIgnore] bit NULL, 
+	[ltd_count1] bigint NULL, 
+	[exsID] bigint NULL, 
+	[exsOrderNumber] varchar(8000) NULL, 
+	[exsItemNumber] varchar(8000) NULL, 
+	[exsCustomerNumber] varchar(8000) NULL, 
+	[exsShipTo] varchar(8000) NULL, 
+	[exsOrderComment] varchar(8000) NULL, 
+	[exsRequestDate] datetime2(6) NULL, 
+	[exsMustShipByDate] datetime2(6) NULL, 
+	[exsDaysFromMustShip] int NULL, 
+	[exsReasonCode] varchar(8000) NULL, 
+	[exsSpecialCode] varchar(8000) NULL, 
+	[exsDiscount%] decimal(38,18) NULL, 
+	[exsRemoveDate] datetime2(6) NULL, 
+	[exsHistory] varchar(8000) NULL, 
+	[usra] varchar(8000) NULL, 
+	[dtea] datetime2(6) NULL, 
+	[usrc] varchar(8000) NULL, 
+	[dtec] datetime2(6) NULL, 
+	[exsDiscountCode] varchar(8000) NULL, 
+	[exsNotifyDate] datetime2(6) NULL, 
+	[exsItemSeq] int NULL, 
+	[exsExceptionId] int NULL, 
+	[exsISLSN1] int NULL
+);
+

@@ -1,0 +1,1 @@
+CREATE SCHEMA MasterData_Retail_Ent;

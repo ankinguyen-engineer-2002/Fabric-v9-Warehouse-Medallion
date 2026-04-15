@@ -1,0 +1,3 @@
+CREATE USER [SG_AFI_Radar_Finance_Unv] FOR EXTERNAL PROVIDER
+
+

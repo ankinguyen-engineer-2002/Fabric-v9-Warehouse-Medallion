@@ -1,0 +1,26 @@
+CREATE TABLE [Retail_Corporate].[Salesperson] (
+
+	[Operation] varchar(15) NULL, 
+	[Address1] varchar(100) NULL, 
+	[Address2] varchar(100) NULL, 
+	[City] varchar(100) NULL, 
+	[CommissionCategory] varchar(50) NULL, 
+	[CommissionPlan] varchar(100) NULL, 
+	[CommissionRate] numeric(18,2) NULL, 
+	[CompanyID] varchar(50) NULL, 
+	[Custom1] varchar(50) NULL, 
+	[Custom2] varchar(50) NULL, 
+	[Custom3] varchar(50) NULL, 
+	[DateChanged] datetime2(6) NULL, 
+	[DateCreated] datetime2(6) NULL, 
+	[LastBatchID] int NULL, 
+	[Name] varchar(50) NULL, 
+	[Phone] varchar(15) NULL, 
+	[PostalCodeID] varchar(50) NULL, 
+	[RecStatus] char(1) NULL, 
+	[SalesDepartment] varchar(40) NULL, 
+	[SalespersonID] varchar(50) NULL, 
+	[SellingStoreID] varchar(50) NULL, 
+	[SourceID] varchar(50) NULL, 
+	[State] varchar(50) NULL
+);

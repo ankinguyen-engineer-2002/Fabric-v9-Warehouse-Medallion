@@ -1,0 +1,10 @@
+CREATE VIEW [CustomerOrders_AFI_Wrk].[v_OrderArrivalGroup] 
+AS
+SELECT  [oagGroup]
+      ,[oagDescription]
+      ,[oagElectronic]
+      ,[usra]
+      ,[dtea]
+      ,[usrc]
+      ,[dtec]
+  FROM [$(Source_Data)].[Wholesale_Codis_AFI].[OrderArrivalGroup]

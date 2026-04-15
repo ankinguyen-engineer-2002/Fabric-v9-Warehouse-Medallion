@@ -1,0 +1,1 @@
+CREATE SCHEMA wholesale_purchasing_afi;

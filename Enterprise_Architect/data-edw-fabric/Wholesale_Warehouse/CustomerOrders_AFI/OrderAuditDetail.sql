@@ -1,0 +1,31 @@
+CREATE TABLE [CustomerOrders_AFI].[OrderAuditDetail] (
+    [OrderNumber]                     CHAR (7)        NULL,
+    [ItemSKU]                         VARCHAR (15)    NULL,
+    [ItemSequence]                    DECIMAL (7)     NULL,
+    [Quantity]                        DECIMAL (7)     NULL,
+    [NetAmount]                       DECIMAL (13, 2) NULL,
+    [ItemClass]                       CHAR (4)        NULL,
+    [PromiseDate]                     DATE            NULL,
+    [RequestDate]                     DATE            NULL,
+    [QuantityDescreaseReasonCode]     CHAR (2)        NULL,
+    [UserIdChanging]                  VARCHAR (10)    NULL,
+    [ChangeDate]                      DATE            NULL,
+    [ChangeTime]                      DECIMAL (6)     NULL,
+    [CancelledReasonCode]             CHAR (1)        NULL,  --redflag?
+    [OrderTakenDate]                  DATE            NULL,
+    [Freight]                         DECIMAL (10,2)  NULL,
+    [AdditionalFreight]               DECIMAL (10,2)  NULL,
+    [Dicount]                         DECIMAL (10,2)  NULL,
+    [DFIDiscount]                     DECIMAL (10,2)  NULL,
+    [AdvertisingAccrual]              DECIMAL (10,2)  NULL,
+    [Packageid]                       VARCHAR (15)    NULL,
+    [PacakgedIscAllocationPercentage] DECIMAL (4, 3)  NULL,
+    [PackagePrice]                    DECIMAL (8, 2)  NULL,
+    [ItmStatusCodeOrderTime]          CHAR (1)        NULL,
+    [PackageItemPrice]                DECIMAL (8, 2)  NULL,
+    [PackageItemDiscount]             DECIMAL (4, 3)  NULL,
+    [KeyAchorItem]                    VARCHAR (15)    NULL,
+    [PackageDescription]              VARCHAR (30)    NULL,
+    [OrderPriority]                   DECIMAL (2)     NULL
+)
+

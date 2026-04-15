@@ -1,0 +1,26 @@
+CREATE TABLE [MasterData_Retail_Ent].[SalesPerson] (
+
+	[SalesPersonID] varchar(30) NOT NULL, 
+	[StaffID] varchar(30) NULL, 
+	[EmployeeNumber] varchar(20) NULL, 
+	[StaffTypeID] varchar(20) NULL, 
+	[SalesPersonName] varchar(255) NULL, 
+	[SalesPersonTypeID] varchar(20) NULL, 
+	[ActiveStatus] varchar(20) NULL, 
+	[ManagerID] varchar(20) NULL, 
+	[Address1] varchar(100) NULL, 
+	[Address2] varchar(100) NULL, 
+	[City] varchar(50) NULL, 
+	[State] varchar(20) NULL, 
+	[PostalCode] varchar(50) NULL, 
+	[PhoneNumber] varchar(20) NULL, 
+	[HomeStore] varchar(30) NULL, 
+	[CommissionStore] varchar(30) NULL, 
+	[CommissionRate] decimal(19,4) NULL, 
+	[PeopleID] varchar(20) NULL, 
+	[PrimaryID] varchar(30) NULL, 
+	[InitialPrimaryID] varchar(30) NULL, 
+	[DateCreated] datetime2(3) NULL, 
+	[DateChanged] datetime2(3) NULL, 
+	[HireDate] datetime2(3) NULL
+);

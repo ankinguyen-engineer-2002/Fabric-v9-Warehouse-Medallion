@@ -1,0 +1,1 @@
+CREATE SCHEMA AFISales_DW;

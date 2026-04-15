@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build">
+  <Sdk Name="Microsoft.Build.Sql" Version="0.1.12-preview" />
+  <PropertyGroup>
+    <Name>Wholesale_Warehouse</Name>
+    <ProjectGuid>{221120FE-3892-40E7-B573-1523994565BB}</ProjectGuid>
+    <DSP>Microsoft.Data.Tools.Schema.Sql.SqlDwUnifiedDatabaseSchemaProvider</DSP>
+    <ModelCollation>1033, CI</ModelCollation>
+  </PropertyGroup>
+  <ItemGroup>
+    <Folder Include="CustomerOrders_AFI_Wrk" />
+    <Folder Include="Customers_Wrk" />
+    <Folder Include="dbo" />
+    <Folder Include="Marketing_Wrk" />
+    <Folder Include="PartyContacts" />
+    <Folder Include="Placements" />
+    <Folder Include="Placements\Stores Procedures" />
+    <Folder Include="Placements\Table" />
+    <Folder Include="Pricing_AFI" />
+    <Folder Include="Pricing_AFI_Wrk" />
+    <Folder Include="Purchasing_AFI" />
+    <Folder Include="Quality_AFI" />
+    <Folder Include="SalesHistory_AFI_Wrk" />
+    <Folder Include="SecurityAccess" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Wholesale_Warehouse_1.publish.xml" />
+    <None Include="Wholesale_Warehouse_Dev.publish.xml" />
+    <None Include="Wholesale_Warehouse_Dev.publish_1.publish.xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <SqlCmdVariable Include="Databricks">
+      <Value>$(SqlCmdVar__6)</Value>
+      <DefaultValue>Databricks</DefaultValue>
+    </SqlCmdVariable>
+    <SqlCmdVariable Include="ETL_Framework">
+      <Value>$(SqlCmdVar__5)</Value>
+      <DefaultValue>ETL_Framework</DefaultValue>
+    </SqlCmdVariable>
+    <SqlCmdVariable Include="MasterData_Warehouse">
+      <Value>$(SqlCmdVar__2)</Value>
+      <DefaultValue>MasterData_Warehouse</DefaultValue>
+    </SqlCmdVariable>
+    <SqlCmdVariable Include="Source_Data">
+      <Value>$(SqlCmdVar__7)</Value>
+      <DefaultValue>Source_Data</DefaultValue>
+    </SqlCmdVariable>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Databricks\Databricks.sqlproj">
+      <Name>Databricks</Name>
+      <Project>{932FA6DF-2F2D-4496-A408-C1C1257CC95E}</Project>
+      <Private>True</Private>
+      <SuppressMissingDependenciesErrors>False</SuppressMissingDependenciesErrors>
+      <DatabaseSqlCmdVariable>Databricks</DatabaseSqlCmdVariable>
+    </ProjectReference>
+    <ProjectReference Include="..\ETL_Framework\ETL_Framework.sqlproj">
+      <Name>ETL_Framework</Name>
+      <Project>{339cfc5c-5700-42f4-82c3-20c6d6af0ee6}</Project>
+      <Private>True</Private>
+      <SuppressMissingDependenciesErrors>False</SuppressMissingDependenciesErrors>
+      <DatabaseSqlCmdVariable>ETL_Framework</DatabaseSqlCmdVariable>
+    </ProjectReference>
+    <ProjectReference Include="..\MasterData_Warehouse\MasterData_Warehouse.sqlproj">
+      <Name>MasterData_Warehouse</Name>
+      <Project>{0212F551-B765-4E23-AAB4-2EB5C0D50000}</Project>
+      <Private>True</Private>
+      <SuppressMissingDependenciesErrors>False</SuppressMissingDependenciesErrors>
+      <DatabaseSqlCmdVariable>MasterData_Warehouse</DatabaseSqlCmdVariable>
+    </ProjectReference>
+    <ProjectReference Include="..\Source_Data\Source_Data.sqlproj">
+      <Name>Source_Data</Name>
+      <Project>{3DBE2BBF-5B6C-4112-A397-01A504607CD0}</Project>
+      <Private>True</Private>
+      <SuppressMissingDependenciesErrors>False</SuppressMissingDependenciesErrors>
+      <DatabaseSqlCmdVariable>Source_Data</DatabaseSqlCmdVariable>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SqlServer.Dacpacs.Master">
+      <Version>160.0.0</Version>
+      <GeneratePathProperty>True</GeneratePathProperty>
+      <DatabaseVariableLiteralValue>master</DatabaseVariableLiteralValue>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="ProductSourcing_AFI_Wrk" />
+    <Folder Include="Purchasing_AFI_Wrk" />
+  </ItemGroup>
+  <Target Name="BeforeBuild">
+    <Delete Files="$(BaseIntermediateOutputPath)\project.assets.json" />
+  </Target>
+</Project>

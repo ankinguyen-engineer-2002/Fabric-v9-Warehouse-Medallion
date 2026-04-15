@@ -1,0 +1,12 @@
+CREATE VIEW [Marketing_Wrk].[v_MrktSpclstRegion]
+AS
+SELECT  [Msrslsno]
+      ,[Msrrepid]
+      ,[Msrdivision]
+      ,[Msrregcode]
+      ,[Usra]
+      ,[Dtea]
+      ,[Usrc]
+      ,[Dtec]
+      ,[Acrec]
+  FROM [$(Source_Data)].[Wholesale_Marketing].[MrktSpclstRegion]

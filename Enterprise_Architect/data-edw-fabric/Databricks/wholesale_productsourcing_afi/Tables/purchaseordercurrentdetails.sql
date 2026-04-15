@@ -1,0 +1,30 @@
+CREATE TABLE [wholesale_productsourcing_afi].[purchaseordercurrentdetails] (
+
+	[ltd_DropTimestamp] datetime2(6) NULL, 
+	[ltd_ID] int NULL, 
+	[ltd_mergeIgnore] bit NULL, 
+	[ltd_count1] bigint NULL, 
+	[invPONumber] varchar(8000) NULL, 
+	[invItemSKU] varchar(8000) NULL, 
+	[invVendorNumber] varchar(8000) NULL, 
+	[invWarehouseCode] varchar(8000) NULL, 
+	[invPOOrderDate] datetime2(6) NULL, 
+	[invPODueDate] datetime2(6) NULL, 
+	[invPOInitialDueDate] datetime2(6) NULL, 
+	[invPOClosedDate] datetime2(6) NULL, 
+	[invPOStatusCode] varchar(8000) NULL, 
+	[invPOStatusDescription] varchar(8000) NULL, 
+	[invPOType] varchar(8000) NULL, 
+	[invSummaryPO] varchar(8000) NULL, 
+	[invItemOrderDate] datetime2(6) NULL, 
+	[invItemDueDate] datetime2(6) NULL, 
+	[invItemInitialDueDate] datetime2(6) NULL, 
+	[invItemInitialQuantity] decimal(38,18) NULL, 
+	[invItemClosedDate] datetime2(6) NULL, 
+	[invItemInitialReceiptDate] datetime2(6) NULL, 
+	[invItemStatusCode] varchar(8000) NULL, 
+	[invItemStatusDescription] varchar(8000) NULL, 
+	[invInitialItemClass] varchar(8000) NULL, 
+	[ETLFlag] varchar(8000) NULL
+);
+

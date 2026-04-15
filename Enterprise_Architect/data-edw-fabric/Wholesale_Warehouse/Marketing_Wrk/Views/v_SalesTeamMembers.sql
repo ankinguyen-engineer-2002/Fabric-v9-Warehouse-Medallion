@@ -1,0 +1,12 @@
+CREATE VIEW [Marketing_Wrk].[v_SalesTeamMembers]
+AS
+SELECT [Stmteam]
+      ,[Stmslsno]
+      ,[Stmstorecount]
+      ,[Stmdivision]
+      ,[Usra]
+      ,[Dtea]
+      ,[Usrc]
+      ,[Dtec]
+      ,[Acrec]
+  FROM [$(Source_Data)].[Wholesale_Marketing].[SalesTeamMembers]

@@ -1,0 +1,2 @@
+CREATE SCHEMA [SalesHistory_AFI_Wrk]
+    AUTHORIZATION [dbo];

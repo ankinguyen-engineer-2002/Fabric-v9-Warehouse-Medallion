@@ -1,0 +1,18 @@
+CREATE view ProductKnowledge_Wrk.v_SetHeader
+as
+SELECT [sheCustomerNumber]
+      ,[sheSetNumber]
+      ,[sheSetName]
+      ,[sheCost]
+      ,[sheGroupCode]
+      ,[sheActive]
+      ,[sheoption]
+      ,[sheAfterSeries]
+      ,[sheTemplateId]
+      ,[sheSetImage]
+      ,[shePricePointPkg]
+      ,[usra]
+      ,[dtea]
+      ,[usrc]
+      ,[dtec]
+  FROM [$(Databricks)].[masterdata_productknowledge].[setheader]

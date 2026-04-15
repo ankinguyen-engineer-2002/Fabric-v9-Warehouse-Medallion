@@ -1,0 +1,12 @@
+CREATE VIEW [Pricing_AFI_Wrk].[v_CommissionCodes]
+AS
+SELECT [cocCmcode]
+      ,[cocCmdesc]
+      ,[cocCmrtbl]
+      ,[usra]
+      ,[dtea]
+      ,[usrc]
+      ,[dtec]
+      ,[acrec]
+      ,[cocCurrencyCode]
+  FROM [$(Source_Data)].[wholesale_pricing_afi].[CommissionCodes]

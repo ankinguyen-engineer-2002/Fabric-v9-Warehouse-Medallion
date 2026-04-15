@@ -1,0 +1,12 @@
+CREATE VIEW [Pricing_AFI_Wrk].[v_BuyGroupMaster]
+AS
+SELECT  [bmaBgcode]
+      ,[bmaBgdesc]
+      ,[usra]
+      ,[dtea]
+      ,[usrc]
+      ,[dtec]
+      ,[acrec]
+      ,[bmaShowOnInquiry]
+      ,[bmaCurrencyCode]
+  FROM [$(Source_Data)].[wholesale_pricing_afi].[BuyGroupMaster]

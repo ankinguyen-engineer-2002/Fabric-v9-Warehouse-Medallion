@@ -1,0 +1,26 @@
+CREATE TABLE [Wholesale_Marketing].[AdNotice] (
+
+	[Anokey] int NULL, 
+	[Anocustomernumber] char(8) NULL, 
+	[Anoshipnumber] char(4) NULL, 
+	[Anouserlogin] varchar(37) NULL, 
+	[Anostartdate] datetime2(6) NULL, 
+	[Anoenddate] datetime2(6) NULL, 
+	[Anodescription] varchar(102) NULL, 
+	[Anocomments] varchar(502) NULL, 
+	[Anoemailtime] datetime2(6) NULL, 
+	[Usra] varchar(32) NULL, 
+	[Dtea] datetime2(6) NULL, 
+	[Usrc] varchar(32) NULL, 
+	[Dtec] datetime2(6) NULL, 
+	[Anospecialdescription] varchar(27) NULL, 
+	[Anostatus] char(1) NULL, 
+	[Anonoticetype] char(1) NULL, 
+	[Anorequestdate] datetime2(6) NULL, 
+	[Anosubmitdate] datetime2(6) NULL, 
+	[Anoapprovaldate] datetime2(6) NULL, 
+	[Anouseredited] varchar(32) NULL, 
+	[Anoresponsedate] datetime2(6) NULL, 
+	[Anoallshiptos] bit NULL, 
+	[Anoorderfulfilled] bit NULL
+);

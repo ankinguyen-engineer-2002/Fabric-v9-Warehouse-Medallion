@@ -1,0 +1,26 @@
+CREATE TABLE [Wholesale_DemandPlanning_AFI].[PlannedRequirements] (
+
+	[prqID] bigint NULL, 
+	[prqordernum] varchar(10) NULL, 
+	[prqitemnum] varchar(15) NULL, 
+	[prqitemdescription] varchar(30) NULL, 
+	[prqquantity] decimal(13,3) NULL, 
+	[prqwarehouse] char(3) NULL, 
+	[prqduedate] decimal(8,0) NULL, 
+	[prqshipdate] decimal(8,0) NULL, 
+	[prqcubes] decimal(8,3) NULL, 
+	[prqweight] decimal(7,3) NULL, 
+	[prqitemseries] varchar(25) NULL, 
+	[prqvendornum] char(8) NULL, 
+	[prqPlannedQtyRemaining] decimal(13,3) NULL, 
+	[prqFirmedQty] decimal(13,3) NULL, 
+	[prqActionDate] datetime2(6) NULL, 
+	[prqOEMNum] varchar(12) NULL, 
+	[prqSource] varchar(40) NULL, 
+	[usra] varchar(30) NULL, 
+	[dtea] datetime2(6) NULL, 
+	[usrc] varchar(30) NULL, 
+	[dtec] datetime2(6) NULL, 
+	[prqIsSellable] bit NULL, 
+	[prqUnitOfMeasure] varchar(40) NULL
+);

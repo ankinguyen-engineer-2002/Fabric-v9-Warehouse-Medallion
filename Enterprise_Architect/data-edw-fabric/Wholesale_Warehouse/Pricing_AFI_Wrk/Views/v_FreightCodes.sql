@@ -1,0 +1,12 @@
+CREATE VIEW [Pricing_AFI_Wrk].[v_FreightCodes]
+AS
+SELECT [fcoFrcode]
+      ,[fcoFrdesc]
+      ,[fcoFrtype]
+      ,[usra]
+      ,[dtea]
+      ,[usrc]
+      ,[dtec]
+      ,[acrec]
+      ,[fcoCurrencyCode]
+  FROM [$(Source_Data)].[wholesale_pricing_afi].[FreightCodes]

@@ -1,0 +1,28 @@
+CREATE TABLE [Retail_OOM_Wrk].[OOMSchedulePerformance] (
+
+	[TransDate] date NOT NULL, 
+	[WrittenSales] decimal(19,4) NULL, 
+	[TotalScheduleStore] decimal(19,4) NULL, 
+	[TotalScheduleStoreOrderCount] int NULL, 
+	[TotalScheduleGRT] decimal(19,4) NULL, 
+	[TotalScheduleGRTOrderCount] int NULL, 
+	[TotalScheduleIVR] decimal(19,4) NULL, 
+	[TotalScheduleIVROrderCount] int NULL, 
+	[TotalScheduleSMS] decimal(19,4) NULL, 
+	[TotalScheduleSMSOrderCount] int NULL, 
+	[TotalScheduleChatBot] decimal(19,4) NULL, 
+	[TotalScheduleChatBotOrderCount] int NULL, 
+	[AttackTarget] decimal(19,4) NULL, 
+	[FilledCleanDelivery] decimal(19,4) NULL, 
+	[ScheduleAtPOS] decimal(19,4) NULL, 
+	[ScheduleAtPOSOrderCount] int NULL, 
+	[DaysToSchedule] decimal(19,4) NULL, 
+	[TotalScheduleAudit] decimal(19,4) NULL, 
+	[TotalScheduleUnassigned] decimal(19,4) NULL, 
+	[TotalScheduleUnassignedOrderCount] int NULL, 
+	[TotalScheduleDTR] decimal(19,4) NULL, 
+	[TotalScheduleDTROrderCount] int NULL, 
+	[SMSMessagesSentCount] int NULL, 
+	[AutoScheduleOrderCount] int NULL, 
+	[TotalScheduleAuditOrderCount] int NULL
+);

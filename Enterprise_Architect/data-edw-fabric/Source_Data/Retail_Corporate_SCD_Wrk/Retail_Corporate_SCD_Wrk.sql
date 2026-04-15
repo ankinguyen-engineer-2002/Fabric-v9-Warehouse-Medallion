@@ -1,0 +1,1 @@
+CREATE SCHEMA Retail_Corporate_SCD_Wrk;

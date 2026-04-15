@@ -1,0 +1,13 @@
+CREATE view [Marketing_Wrk].[v_CustomerOwnershipExceptions]
+AS
+SELECT  [Coecustomernumber]
+      ,[Coeshiptonumber]
+      ,[Coedivision]
+      ,[Coerepid]
+      ,[Coeuserid]
+      ,[Coedatechanged]
+      ,[Usra]
+      ,[Dtea]
+      ,[Usrc]
+      ,[Dtec]
+  FROM [$(Source_Data)].[Wholesale_Marketing].[CustomerOwnershipExceptions]

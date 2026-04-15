@@ -1,0 +1,27 @@
+CREATE TABLE [Retail_Dart].[SFMCJobSummary] (
+
+	[ID] int NOT NULL, 
+	[JobID] int NULL, 
+	[EventDate] datetime2(6) NULL, 
+	[MinSendDate] datetime2(6) NULL, 
+	[AttributedWrittenSales] decimal(19,5) NULL, 
+	[SFMCStoreBrandID] varchar(50) NOT NULL, 
+	[Sends] int NULL, 
+	[UniqueSends] int NULL, 
+	[OpenCount3Day] int NULL, 
+	[UniqueOpenCount3Day] int NULL, 
+	[BounceCount3Day] int NULL, 
+	[UniqueBounceCount3Day] int NULL, 
+	[ClickCount3Day] int NULL, 
+	[UniqueClickCount3Day] int NULL, 
+	[UnsubscribeCount3Day] int NULL, 
+	[UniqueUnsubscribeCount3Day] int NULL, 
+	[Journey] bit NOT NULL, 
+	[MessageID] varchar(50) NULL, 
+	[DeploymentID] varchar(50) NULL, 
+	[AttributedWrittenSalesOpenClick] decimal(19,5) NULL, 
+	[AttributedWrittenSalesSends] decimal(19,5) NULL, 
+	[EpsilonJobID] varchar(50) NULL, 
+	[EmailName] varchar(255) NULL, 
+	[EmailSubject] varchar(255) NULL
+);

@@ -1,0 +1,17 @@
+CREATE VIEW [Pricing_AFI_Wrk].[v_PriceList]
+AS
+SELECT 
+      [pliPcode]
+      ,[pliItnbr]
+      ,[pliPrice]
+      ,[pliPcmadj]
+      ,[pliPwhsop]
+      ,[pliSdate]
+      ,[pliEdate]
+      ,[commaudit]
+      ,[usra]
+      ,[dtea]
+      ,[usrc]
+      ,[dtec]
+      ,[acrec]
+  FROM [$(Source_Data)].[wholesale_pricing_afi].[PriceList]

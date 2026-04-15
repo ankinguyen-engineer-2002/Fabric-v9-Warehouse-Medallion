@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build">
+  <Sdk Name="Microsoft.Build.Sql" Version="0.1.12-preview" />
+  <PropertyGroup>
+    <Name>Source_Data</Name>
+    <ProjectGuid>{3DBE2BBF-5B6C-4112-A397-01A504607CD0}</ProjectGuid>
+    <DSP>Microsoft.Data.Tools.Schema.Sql.SqlDwUnifiedDatabaseSchemaProvider</DSP>
+    <ModelCollation>1033, CI</ModelCollation>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SqlServer.Dacpacs.Master">
+      <Version>160.0.0</Version>
+      <GeneratePathProperty>True</GeneratePathProperty>
+      <DatabaseVariableLiteralValue>master</DatabaseVariableLiteralValue>
+    </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include=".vscode\tasks.json" />
+    <None Include="Source_Data_Dev.publish.xml" />
+    <None Include="Source_Data_Prod.publish.xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <SqlCmdVariable Include="ETL_Framework">
+      <Value>$(SqlCmdVar__1)</Value>
+      <DefaultValue>ETL_Framework</DefaultValue>
+    </SqlCmdVariable>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ETL_Framework\ETL_Framework.sqlproj">
+      <Name>ETL_Framework</Name>
+      <Project>{339cfc5c-5700-42f4-82c3-20c6d6af0ee6}</Project>
+      <Private>True</Private>
+      <SuppressMissingDependenciesErrors>False</SuppressMissingDependenciesErrors>
+      <DatabaseSqlCmdVariable>ETL_Framework</DatabaseSqlCmdVariable>
+    </ProjectReference>
+  </ItemGroup>
+  <Target Name="BeforeBuild">
+    <Delete Files="$(BaseIntermediateOutputPath)\project.assets.json" />
+  </Target>
+</Project>

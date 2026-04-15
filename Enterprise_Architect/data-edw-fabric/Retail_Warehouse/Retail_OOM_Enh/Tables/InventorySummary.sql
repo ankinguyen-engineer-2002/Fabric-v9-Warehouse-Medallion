@@ -1,0 +1,26 @@
+CREATE TABLE [Retail_OOM_Enh].[InventorySummary] (
+
+	[LocationID] varchar(50) NOT NULL, 
+	[StoreBrandID] varchar(50) NULL, 
+	[ProductID] varchar(50) NOT NULL, 
+	[InvSubBucketID] char(5) NOT NULL, 
+	[ReasonCodeID] varchar(50) NULL, 
+	[BodTransDate] datetime2(3) NOT NULL, 
+	[Qty] int NOT NULL, 
+	[MaterialCost] decimal(18,3) NOT NULL, 
+	[LandedFreight] decimal(18,3) NOT NULL, 
+	[Addon1Cost] decimal(18,3) NOT NULL, 
+	[Addon2Cost] decimal(18,3) NOT NULL, 
+	[Addon3Cost] decimal(18,3) NOT NULL, 
+	[Addon4Cost] decimal(18,3) NOT NULL, 
+	[TotalCost] decimal(18,3) NOT NULL, 
+	[DateCreated] datetime2(3) NOT NULL, 
+	[QtyOnFloor] int NULL, 
+	[QtyBO] int NULL, 
+	[RateOfSale] decimal(15,2) NULL, 
+	[SellingPrice] decimal(18,3) NULL, 
+	[Diff] int NULL, 
+	[MCodeDiff] int NULL, 
+	[ABC] varchar(2) NULL, 
+	[TBDaysOfSupply] decimal(15,2) NULL
+);

@@ -1,0 +1,13 @@
+CREATE view [Marketing_Wrk].[v_MarketPotential]
+AS
+SELECT  [Mkpyear]
+      ,[Mkpstate]
+      ,[Mkpcountyfips]
+      ,[Mkpproductline]
+      ,[Mkpamount]
+      ,[Mkppercentage]
+      ,[Usra]
+      ,[Dtea]
+      ,[Usrc]
+      ,[Dtec]
+  FROM [$(Source_Data)].[Wholesale_Marketing].[MarketPotential]

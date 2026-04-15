@@ -1,0 +1,1 @@
+CREATE SCHEMA manufacturing_masterdata;

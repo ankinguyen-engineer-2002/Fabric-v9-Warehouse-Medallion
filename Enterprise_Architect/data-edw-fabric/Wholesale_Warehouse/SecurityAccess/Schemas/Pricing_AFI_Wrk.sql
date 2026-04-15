@@ -1,0 +1,4 @@
+CREATE SCHEMA [Pricing_AFI_Wrk]
+    AUTHORIZATION [dbo];
+
+

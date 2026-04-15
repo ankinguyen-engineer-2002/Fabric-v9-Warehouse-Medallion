@@ -1,0 +1,10 @@
+CREATE view [Marketing_Wrk].[v_FinancialDivision]
+AS
+SELECT  [Fdifinancialdiv]
+      ,[Fdidescription]
+      ,[Usra]
+      ,[Dtea]
+      ,[Usrc]
+      ,[Dtec]
+      ,[Fdifinancialdivcodelong]
+  FROM [$(Source_Data)].[Wholesale_Marketing].[FinancialDivision]

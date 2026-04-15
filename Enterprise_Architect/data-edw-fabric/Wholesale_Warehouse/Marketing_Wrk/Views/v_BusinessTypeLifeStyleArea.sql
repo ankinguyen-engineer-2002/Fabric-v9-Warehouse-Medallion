@@ -1,0 +1,10 @@
+CREATE view [Marketing_Wrk].[v_BusinessTypeLifeStyleArea]
+AS
+SELECT [Blsseriesnumber]
+      ,[Blsbusinesstypecode]
+      ,[Blslifestyleareaid]
+      ,[Usra]
+      ,[Dtea]
+      ,[Usrc]
+      ,[Dtec]
+  FROM [$(Source_Data)].[Wholesale_Marketing].[BusinessTypeLifeStyleArea]

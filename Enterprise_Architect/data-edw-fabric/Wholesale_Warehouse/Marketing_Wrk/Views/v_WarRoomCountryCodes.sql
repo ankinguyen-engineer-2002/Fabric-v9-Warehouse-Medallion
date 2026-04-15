@@ -1,0 +1,10 @@
+CREATE VIEW [Marketing_Wrk].[v_WarRoomCountryCodes]
+AS
+SELECT  [Wrcitnbr]
+      ,[Wrccountrycode]
+      ,[Wrcdefaultcode]
+      ,[Usra]
+      ,[Dtea]
+      ,[Usrc]
+      ,[Dtec]
+  FROM [$(Source_Data)].[Wholesale_Marketing].[WarRoomCountryCodes]

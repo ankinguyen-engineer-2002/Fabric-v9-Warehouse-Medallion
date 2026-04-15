@@ -1,0 +1,25 @@
+CREATE TABLE [Wholesale_Vendors_AFI].[VendorPricing] (
+
+	[vdpvendornum] char(8) NULL, 
+	[vdpitemnum] varchar(15) NULL, 
+	[vdpprice] float NULL, 
+	[vdpgrade] bit NULL, 
+	[vdplastactivitydate] datetime2(6) NULL, 
+	[vdpdesignfeepercent] smallint NULL, 
+	[vdpsplit] float NULL, 
+	[vdpforcedactive] bit NULL, 
+	[usra] varchar(30) NULL, 
+	[dtea] datetime2(6) NULL, 
+	[usrc] varchar(30) NULL, 
+	[dtec] datetime2(6) NULL, 
+	[vdpContainerDirectEligible] int NULL, 
+	[vdpFreight] float NULL, 
+	[vdpCurrencyCode] char(3) NULL, 
+	[vdpVATamount] decimal(10,4) NULL, 
+	[vdpExchangeRate] decimal(18,8) NULL, 
+	[vdpWarehousePricingOnly] char(1) NULL, 
+	[vdpItemType] char(1) NULL, 
+	[vdpProcessType] varchar(25) NULL, 
+	[vdpfirstSaleEffectiveDate] datetime2(6) NULL, 
+	[vdpFirstSalePrice] decimal(15,4) NULL
+);

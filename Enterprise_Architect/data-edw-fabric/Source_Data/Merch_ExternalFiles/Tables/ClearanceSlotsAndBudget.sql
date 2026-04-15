@@ -1,0 +1,25 @@
+CREATE TABLE [Merch_ExternalFiles].[ClearanceSlotsAndBudget] (
+
+	[Store] int NULL, 
+	[Store_Name] varchar(26) NULL, 
+	[Servicing_DC] int NULL, 
+	[UPH_4_Piece] int NULL, 
+	[Motion_4_Piece] int NULL, 
+	[DINING_5_Piece] int NULL, 
+	[CASEG_2_Piece] int NULL, 
+	[BEDRO_4_Piece] int NULL, 
+	[BEDDI_2_Piece] int NULL, 
+	[Total_CLR_Vignettes] int NULL, 
+	[UPH] int NULL, 
+	[Motion] int NULL, 
+	[Dining] int NULL, 
+	[Casegoods] int NULL, 
+	[Bedroom] int NULL, 
+	[Bedding] int NULL, 
+	[Total_Weekly_Sales] decimal(10,2) NULL, 
+	[Annualized_Sales] decimal(10,2) NULL, 
+	[LY_Sales] decimal(10,2) NULL, 
+	[Per_Lift] decimal(10,2) NULL, 
+	[Retail_CL_Sales_Budget] decimal(10,2) NULL, 
+	[Annualized_CLR_Retail_Budget] decimal(10,2) NULL
+);

@@ -1,0 +1,23 @@
+CREATE TABLE [Retail_DW_Core].[Epsilon_Bounces] (
+    [StoreBrandID]                    VARCHAR (50)  NULL,
+    [Audience]                        VARCHAR (100) NULL,
+    [ServiceTransactionID]            VARCHAR (100) NULL,
+    [ServiceCommunicationID]          VARCHAR (100) NULL,
+    [JobID]                           VARCHAR (100) NULL,
+    [BounceSubcategory]               VARCHAR (255) NULL,
+    [BounceTypeID]                    INT           NULL,
+    [BounceType]                      VARCHAR (100) NULL,
+    [SMTPCode]                        VARCHAR (10)  NULL,
+    [TriggererSendDefinitionObjectID] VARCHAR (100) NULL,
+    [TriggeredSendCustomerKey]        VARCHAR (100) NULL,
+    [SubscriberKey]                   VARCHAR (100) NULL,
+    [EventDate]                       DATE          NULL,
+    [Domain]                          VARCHAR (255) NULL,
+    [BounceCategoryID]                INT           NULL,
+    [BounceCategory]                  VARCHAR (100) NULL,
+    [BounceSubcategoryID]             INT           NULL,
+    [OrgID]                           VARCHAR (50)  NULL,
+    [DeploymentID]                    VARCHAR (100) NULL,
+    [MessageID]                       VARCHAR (100) NULL,
+    [CustomerKey]                     VARCHAR (100) NULL
+);

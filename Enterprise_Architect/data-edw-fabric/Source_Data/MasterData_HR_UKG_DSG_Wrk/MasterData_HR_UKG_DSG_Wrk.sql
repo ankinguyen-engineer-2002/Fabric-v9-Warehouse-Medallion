@@ -1,0 +1,1 @@
+CREATE SCHEMA MasterData_HR_UKG_DSG_Wrk;

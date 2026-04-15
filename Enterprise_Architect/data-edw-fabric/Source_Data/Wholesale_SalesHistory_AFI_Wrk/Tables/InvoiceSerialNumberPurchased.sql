@@ -1,0 +1,21 @@
+Create TABLE [Wholesale_SalesHistory_AFI_Wrk].[InvoiceSerialNumberPurchased](
+	[Invoicedate] [datetime2](6) NOT NULL,
+	[Invoicenumber] [decimal](9, 0) NOT NULL,
+	[Serialnumber] [varchar](17) NOT NULL,
+	[Ordernumber] [varchar](12) NOT NULL,
+	[Itemnumber] [varchar](17) NOT NULL,
+	[Itemseqnumber] [decimal](7, 0) NOT NULL,
+	[Ponumber] [varchar](27) NOT NULL,
+	[Customernumber] [char](8) NOT NULL,
+	[Shiptonumber] [char](4) NOT NULL,
+	[Vendornumber] [char](8) NOT NULL,
+	[Salesoffice] [varchar](12) NOT NULL,
+	[Countryoforigin] [char](5) NOT NULL,
+	[Dropnumber] [decimal](2, 0) NULL,
+	[Scanname] [varchar](15) NULL,
+	[Loaddate] [datetime2](6) NULL,
+	[Trucknumber] [varchar](17) NULL,
+	[Carrier] [varchar](52) NULL,
+	[Warehouse] [char](3) NULL,
+	[Aatwarehouse] [char](5) NULL
+);

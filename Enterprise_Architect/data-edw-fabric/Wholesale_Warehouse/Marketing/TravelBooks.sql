@@ -1,0 +1,35 @@
+﻿CREATE TABLE [Marketing].[TravelBooks]
+    (
+        [RequestID]           INT           NOT NULL,
+        [EnteredBy]           VARCHAR(100)  NOT NULL,
+        [EnteredDate]         DATETIME2(6)  NOT NULL,
+        [EnteredRole]         VARCHAR(30)   NULL,
+        [EnteredEmail]        VARCHAR(100)  NULL,
+        [Recipient]           VARCHAR(100)  NOT NULL,
+        [RecipientRole]       VARCHAR(30)   NULL,
+        [RecipientEmail]      VARCHAR(100)  NULL,
+        [PostVisitStatus]     VARCHAR(50)   NULL,
+        [PostVisitComments]   VARCHAR(8000) NULL,
+        [DateofVisitOrReview] DATETIME2(6)  NULL,
+        [DeliveryDate]        DATETIME2(6)  NULL,
+        [PrintChart]          BIT           NULL,
+        [PrintGrid]           BIT           NULL,
+        [Division]            CHAR(3)       NOT NULL,
+        [AccountName]         VARCHAR(100)  NULL,
+        [AccountNumber]       VARCHAR(50)   NOT NULL,
+        [Shipto]              VARCHAR(10)   NOT NULL,
+        [Status]              VARCHAR(50)   NOT NULL,
+        [VisitOnly]           BIT           NULL,
+        [EnteredName]         VARCHAR(100)  NULL,
+        [RecipientName]       VARCHAR(100)  NULL,
+        [AddedByUser]                  VARCHAR(30)   NULL,
+        [DateAdded]                  DATETIME2(6)  NULL, --DATETIME2 (7) NULL,
+        [ChangeByUser]                  VARCHAR(30)   NULL,
+        [DateChange]                  DATETIME2(6)  NULL, --DATETIME2 (7) NULL,
+        [Comments]            VARCHAR(8000) NULL
+    );
+
+
+-- DATA_SOURCE = [AzureStorageGen2a],
+-- LOCATION =  N'/Wholesale/Marketing/TravelBooks/AFI_Sales_CSS_lTravelBooks.snappy.parquet',
+-- FILE_FORMAT = [ParquetFileFormatSnappy],

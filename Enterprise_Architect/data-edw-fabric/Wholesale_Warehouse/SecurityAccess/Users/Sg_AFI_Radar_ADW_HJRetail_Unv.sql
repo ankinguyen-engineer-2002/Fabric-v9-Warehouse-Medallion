@@ -1,0 +1,5 @@
+CREATE USER [Sg_AFI_Radar_ADW_HJRetail_Unv] FOR EXTERNAL PROVIDER
+ 
+
+
+

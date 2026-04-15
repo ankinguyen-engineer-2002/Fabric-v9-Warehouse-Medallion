@@ -1,0 +1,1 @@
+CREATE SCHEMA PowerBI_Retail;

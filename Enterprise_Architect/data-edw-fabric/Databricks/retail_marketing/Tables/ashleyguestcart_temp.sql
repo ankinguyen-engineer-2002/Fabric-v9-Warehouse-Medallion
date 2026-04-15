@@ -1,0 +1,26 @@
+CREATE TABLE [retail_marketing].[ashleyguestcart_temp] (
+
+	[CartCreationDateTime] datetime2(6) NULL, 
+	[CartID] varchar(8000) NULL, 
+	[CustomerName] varchar(8000) NULL, 
+	[EmailAddress] varchar(8000) NULL, 
+	[Phone] varchar(8000) NULL, 
+	[AccountOwnerName] varchar(8000) NULL, 
+	[RSAEmail] varchar(8000) NULL, 
+	[StoreName] varchar(8000) NULL, 
+	[RsaId] varchar(8000) NULL, 
+	[StoreId] varchar(8000) NULL, 
+	[PersonEmailOptIn] varchar(8000) NULL, 
+	[ZipPostalCode] varchar(8000) NULL, 
+	[Stage] varchar(8000) NULL, 
+	[ContactOptInRecorded] varchar(8000) NULL, 
+	[ProductSKU] varchar(8000) NULL, 
+	[ProductName] varchar(8000) NULL, 
+	[ProductDescription] varchar(8000) NULL, 
+	[ProductQty] int NULL, 
+	[ProductPrice] decimal(10,2) NULL, 
+	[ProductTotalPrice] decimal(10,2) NULL, 
+	[ProductColor] varchar(8000) NULL, 
+	[ProductImageURL] varchar(8000) NULL, 
+	[POS] varchar(8000) NULL
+);

@@ -1,0 +1,2 @@
+CREATE SCHEMA [MasterData_DW_Wrk]
+    AUTHORIZATION [dbo];

@@ -1,0 +1,21 @@
+CREATE TABLE [Retail_DW_Core].[FactRSADailyStats] (
+    [ID]            BIGINT        NOT NULL,
+    [Source]        VARCHAR (5)   NOT NULL,
+    [StoreID]       INT           NOT NULL,
+    [SalesPersonID] VARCHAR (30)  NOT NULL,
+    [TransDate]     DATE          NOT NULL,
+    [RecordedUps]   INT           NULL,
+    [Prospects]     INT           NULL,
+    [Treat]         INT           NULL,
+    [Quotes]        INT           NULL,
+    [Sold]          INT           NULL,
+    [Worked]        INT           NULL,
+    [BeBack]        INT           NULL,
+    [DateCreated]   DATETIME2 (3) NULL,
+    [CreatedBy]     VARCHAR (10)  NULL,
+    [DateChanged]   DATETIME2 (3) NULL,
+    [ChangedBy]     VARCHAR (10)  NULL,
+    [StrikeOuts]    INT           NULL,
+    [HotRotations]  INT           NULL,
+    [Shots]         INT           NULL
+);

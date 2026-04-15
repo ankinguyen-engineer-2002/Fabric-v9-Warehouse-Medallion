@@ -1,0 +1,4 @@
+CREATE SCHEMA [Quality_AFI_Wrk]
+    AUTHORIZATION [dbo];
+GO
+

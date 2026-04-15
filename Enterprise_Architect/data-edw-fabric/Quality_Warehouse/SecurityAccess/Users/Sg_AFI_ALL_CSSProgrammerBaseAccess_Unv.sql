@@ -1,0 +1,3 @@
+CREATE USER [Sg_AFI_ALL_CSSProgrammerBaseAccess_Unv] FOR EXTERNAL PROVIDER
+    WITH DEFAULT_SCHEMA = [Quality_DW]
+

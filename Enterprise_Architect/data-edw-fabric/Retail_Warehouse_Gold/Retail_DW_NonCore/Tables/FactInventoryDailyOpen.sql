@@ -1,0 +1,26 @@
+CREATE TABLE [Retail_DW_NonCore].[FactInventoryDailyOpen] (
+
+	[TransDateKey] int NOT NULL, 
+	[ProductID] varchar(50) NOT NULL, 
+	[SerialNbrID] varchar(50) NULL, 
+	[LocationID] varchar(50) NOT NULL, 
+	[StoreBrandID] varchar(50) NULL, 
+	[StorageID] varchar(50) NULL, 
+	[MaterialCost] decimal(18,3) NULL, 
+	[LandedFreight] decimal(18,3) NULL, 
+	[Addon1Cost] decimal(18,3) NULL, 
+	[Addon2Cost] decimal(18,3) NULL, 
+	[Addon3Cost] decimal(18,3) NULL, 
+	[Addon4Cost] decimal(18,3) NULL, 
+	[TotalCost] decimal(18,3) NULL, 
+	[Qty] numeric(18,2) NOT NULL, 
+	[QtyCommitted] numeric(18,2) NOT NULL, 
+	[QtySoftCommitted] numeric(18,2) NOT NULL, 
+	[DateAsIs] date NULL, 
+	[AsIsReasonCodeID] varchar(50) NULL, 
+	[InvSubBucketID] varchar(50) NULL, 
+	[PieceStatusID] int NULL, 
+	[InvBucketID] varchar(20) NULL, 
+	[DateInStorageID] date NULL, 
+	[DateInReasonCodeID] date NULL
+);

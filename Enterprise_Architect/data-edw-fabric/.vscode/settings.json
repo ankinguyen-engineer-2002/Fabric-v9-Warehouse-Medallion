@@ -1,0 +1,8 @@
+{
+    "dataworkspace.excludedProjects": [
+        "SourceData/Source_Data/Source_Data.sqlproj",
+        "Source_Data/Source_Data/Source_Data.sqlproj",
+        "Commissions/Commissions.sqlproj",
+        "Retail_Lakehouse/Retail_Lakehouse.sqlproj"
+    ]
+}

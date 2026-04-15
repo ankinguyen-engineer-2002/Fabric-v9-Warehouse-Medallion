@@ -1,0 +1,2 @@
+CREATE USER [Sg_AFI_ALL_CSSProgrammerBaseAccess_Unv] FOR EXTERNAL PROVIDER
+    

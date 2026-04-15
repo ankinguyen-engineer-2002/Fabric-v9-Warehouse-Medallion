@@ -1,0 +1,30 @@
+CREATE TABLE [masterdata_productknowledge].[seriesgroupinglookup] (
+
+	[ltd_DropTimestamp] datetime2(6) NULL, 
+	[ltd_ID] int NULL, 
+	[ltd_mergeIgnore] bit NULL, 
+	[ltd_count1] bigint NULL, 
+	[grpLookupId] int NULL, 
+	[grpLookupCode] varchar(8000) NULL, 
+	[grpHiPrPoint] decimal(38,18) NULL, 
+	[grpLoPrPoint] decimal(38,18) NULL, 
+	[grpPrIncr] decimal(38,18) NULL, 
+	[grpPlCode] varchar(8000) NULL, 
+	[grpSort] int NULL, 
+	[grpIcon] varchar(8000) NULL, 
+	[grpFeaturedProduct] varchar(8000) NULL, 
+	[grpPriceBkld] int NULL, 
+	[grpPriceBkCode] varchar(8000) NULL, 
+	[grpPrPointType] varchar(8000) NULL, 
+	[usra] varchar(8000) NULL, 
+	[dtea] datetime2(6) NULL, 
+	[usrc] varchar(8000) NULL, 
+	[dtec] datetime2(6) NULL, 
+	[acrec] varchar(8000) NULL, 
+	[grpItemNumber] varchar(8000) NULL, 
+	[grpMargin] int NULL, 
+	[grpPriceBookSort] int NULL, 
+	[grpRoomLocation] int NULL, 
+	[grpAssociationCode] varchar(8000) NULL
+);
+

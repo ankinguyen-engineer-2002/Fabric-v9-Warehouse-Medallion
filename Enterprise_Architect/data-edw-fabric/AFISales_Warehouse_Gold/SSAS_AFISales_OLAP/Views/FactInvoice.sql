@@ -1,0 +1,35 @@
+﻿CREATE VIEW [SSAS_AFISALES_OLAP].[FactInvoice]
+AS
+    SELECT
+        [AFI Sales Category],
+        [Division Code],
+        [Sales Region Code],
+        [Sales Repid],
+        RegionCode_RepID_Category,
+        [Account Number],
+        [Shipto Number],
+        [Customer Shipto Division Number],
+        [Invoice Date],
+        [Invoice Number],
+        SH.[Account And Shipto Number],
+        [Territory],
+        [Item SKU],
+        SH.[Store Address ID],
+        SH.[Shipto AddressID],
+        [Warehouse],
+        [Item Status],
+        [Quantity Shipped],
+        [Invoice Discount],
+        [Amount Shipped],
+        [Other Allowances],
+        [Allocated Freight],
+        [Invoiced Line Item Freight],
+        [Other Freight],
+        SH.[Cubes],
+        SH.[Seats],
+        [Advertising Accrual],
+        [Invoice DFI Discount],
+        [Contract Price Amount],
+        SH.SalesTerritoryID
+    FROM
+        AFISales_DW.[FactShippedHistory] SH;

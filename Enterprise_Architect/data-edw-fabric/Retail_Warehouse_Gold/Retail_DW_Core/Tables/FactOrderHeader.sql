@@ -1,0 +1,25 @@
+CREATE TABLE [Retail_DW_Core].[FactOrderHeader] (
+
+	[SourceSystem] varchar(30) NOT NULL, 
+	[OrderKey] bigint NOT NULL, 
+	[SourceOrderID] varchar(20) NOT NULL, 
+	[BaseOrderID] varchar(20) NOT NULL, 
+	[LastUpdatedUTC] datetime2(3) NULL, 
+	[BillToZipOrPostalCode] varchar(10) NULL, 
+	[StoreShipTo] varchar(4) NULL, 
+	[OrderDate] date NULL, 
+	[MarketingCodeID] varchar(30) NULL, 
+	[TransCodeID] int NULL, 
+	[CreditHoldCodeID] varchar(5) NULL, 
+	[RequestedDate] date NULL, 
+	[TransactionSaveTime] datetime2(3) NULL, 
+	[TransactionStartTime] datetime2(3) NULL, 
+	[PriceExceptionComment] varchar(600) NULL, 
+	[IsFinanced] int NULL, 
+	[OriginalTransDate] datetime2(3) NULL, 
+	[SuperOrderID] varchar(50) NULL, 
+	[LastActivityDate] datetime2(3) NULL, 
+	[REACAge] int NULL, 
+	[AgedDays] varchar(30) NULL, 
+	[REACAgeCategory] varchar(50) NULL
+);

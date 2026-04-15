@@ -1,0 +1,17 @@
+CREATE VIEW [Pricing_AFI_Wrk].[v_ExpressFreightInfo]
+AS
+SELECT [CustomerNumber]
+      ,[ItemNumber]
+      ,[ItemClass]
+      ,[Length]
+      ,[Width]
+      ,[Height]
+      ,[Charge]
+      ,[DateAdded]
+      ,[UserAdded]
+      ,[ProgramAdded]
+      ,[DateChanged]
+      ,[UserChanged]
+      ,[ProgramChanged]
+    FROM [$(Source_Data)].[wholesale_pricing_afi].[ExpressFreightInfo]
+    

@@ -1,0 +1,31 @@
+CREATE TABLE [Retail_DW_Core].[MarketingJobSummary] (
+    [MessageID]                       VARCHAR (200)   NULL,
+    [EventDate]                       DATETIME2 (6)   NULL,
+    [EventDateKey]                    INT             NULL,
+    [AttributedWrittenSales]          DECIMAL (16, 9) NULL,
+    [AttributedWrittenSalesOpenClick] DECIMAL (16, 9) NULL,
+    [AttributedWrittenSalesSends]     DECIMAL (17, 9) NULL,
+    [SFMCStoreBrandId]                VARCHAR (200)   NULL,
+    [Sends]                           BIGINT          NULL,
+    [UniqueSends]                     BIGINT          NULL,
+    [OpenCount3Day]                   BIGINT          NULL,
+    [UniqueOpenCount3Day]             BIGINT          NULL,
+    [BounceCount3Day]                 BIGINT          NULL,
+    [UniqueBounceCount3Day]           BIGINT          NULL,
+    [ClickCount3Day]                  BIGINT          NULL,
+    [UniqueClickCount3Day]            BIGINT          NULL,
+    [UnsubscribeCount3Day]            BIGINT          NULL,
+    [UniqueUnsubscribeCount3Day]      BIGINT          NULL,
+    [Journey]                         BIGINT          NULL,
+    [DeploymentId]                    VARCHAR (200)   NULL,
+    [EmailSubject]                    VARCHAR (200)   NULL,
+    [EmailName]                       VARCHAR (200)   NULL,
+    [JobId]                           VARCHAR (200)   NULL,
+    [SourceSystem]                    VARCHAR (200)   NULL,
+    [CreatedDate]                     DATETIME2 (6)   NULL,
+    [CreatedBy]                       VARCHAR (200)   NULL,
+    [UpdatedDate]                     DATETIME2 (6)   NULL,
+    [UpdatedBy]                       VARCHAR (200)   NULL
+);
+GO
+

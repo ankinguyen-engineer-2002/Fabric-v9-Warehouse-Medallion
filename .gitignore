@@ -1,7 +1,10 @@
 # Large files
-files.zip
-all_10_notebooks_source.txt
-files/
+Fabric_Architect/files.zip
+Fabric_Architect/all_10_notebooks_source.txt
+Fabric_Architect/files/
+
+# Enterprise repo .git (nested)
+Enterprise_Architect/data-edw-fabric/.git/
 
 # OS
 .DS_Store
