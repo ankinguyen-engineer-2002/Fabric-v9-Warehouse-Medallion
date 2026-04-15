@@ -100,7 +100,8 @@ function apiJsonToGraph(data) {
   };
   for (const n of data.nodes) {
     const id = n.id.replace(/^dbo\./, '');
-    const type = n.layer === 'external' ? 'other' : getNodeType(id);
+    const validLayers = ['brz','ref','slv','gld','dq','other'];
+    const type = n.layer && validLayers.includes(n.layer) ? n.layer : (n.layer === 'external' ? 'other' : getNodeType(id));
     nodes.set(id, { id, name: id, type, status: n.status, load_type: n.load_type, last_load_date: n.last_load_date, rows_loaded: n.rows_loaded });
   }
   for (const e of data.edges) {
