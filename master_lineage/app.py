@@ -67,6 +67,69 @@ def build_dag_data():
     return {"nodes": nodes, "edges": edges}
 
 
+@st.cache_data(ttl=600)
+def build_sp_dag_data():
+    """Build {nodes, edges} for SP dependency DAG from registry + lineage."""
+    registry = load_csv("registry.csv")
+    lineage = load_csv("lineage.csv")
+
+    nodes, edges, seen = [], [], set()
+
+    # Build SP nodes from registry
+    for r in registry:
+        sp = r.get("sp_name", "")
+        if not sp or sp in seen:
+            continue
+        seen.add(sp)
+        layer = r.get("layer", "")
+        layer_map = {"BRZ": "brz", "REF": "ref", "SLV": "slv", "GLD": "gld"}
+        layer_code = layer_map.get(layer.upper(), "other")
+
+        # Node label = short SP name
+        label = sp.replace("bronze.usp_load_", "").replace("silver.usp_load_", "").replace("gold.usp_load_", "")
+        nodes.append({
+            "id": sp,
+            "layer": layer_code,
+            "load_type": r.get("load_type", ""),
+            "status": "",
+            "last_load_date": "",
+            "rows_loaded": 0,
+        })
+
+        # Edges from depends_on (SP → SP dependency)
+        deps = r.get("depends_on", "")
+        if deps and deps != "nan" and deps != "None" and deps != "":
+            try:
+                dep_list = json.loads(deps)
+                for d in dep_list:
+                    d = d.strip()
+                    if d and d not in seen:
+                        seen.add(d)
+                        # Infer layer from name
+                        dl = "slv" if "slv" in d else ("brz" if "brz" in d or "ref" in d else ("gld" if "gld" in d else "other"))
+                        nodes.append({"id": d, "layer": dl, "load_type": "", "status": "", "last_load_date": "", "rows_loaded": 0})
+                    edges.append({"source": d, "target": sp})
+            except:
+                pass
+
+        # Also add source tables as upstream nodes (from source_objects)
+        src = r.get("source_objects", "")
+        if src and src != "nan" and src != "None" and src != "":
+            try:
+                src_list = json.loads(src)
+                for s in src_list:
+                    s = s.strip().strip('"')
+                    if s and s not in seen:
+                        seen.add(s)
+                        sl = "other" if "Enterprise" in s or "Lakehouse" in s else "brz"
+                        nodes.append({"id": s, "layer": sl, "load_type": "", "status": "", "last_load_date": "", "rows_loaded": 0})
+                    # Don't add edge here — we use depends_on for SP flow, source_objects shown in tooltip
+            except:
+                pass
+
+    return {"nodes": nodes, "edges": edges}
+
+
 # ── Tabs ──
 tab1, tab2, tab3 = st.tabs(["📊 Table Lineage DAG", "⚙️ Stored Procedure Lineage", "👁️ View Definitions"])
 
@@ -91,7 +154,21 @@ with tab1:
 # ════════════════════════════════════════════════════════════════════════════════
 with tab2:
     st.header("⚙️ Stored Procedure Lineage")
-    st.caption("Each SP: what it reads, what it writes, dependencies")
+    st.caption("SP dependency DAG + detail per SP")
+
+    # SP DAG visualization
+    sp_dag = build_sp_dag_data()
+    html_path2 = Path(__file__).parent / "templates" / "lineage.html"
+    html_sp = html_path2.read_text(encoding="utf-8")
+    if sp_dag and sp_dag["nodes"]:
+        html_sp = html_sp.replace(
+            "window.__LINEAGE_API_DATA__ = null;",
+            f"window.__LINEAGE_API_DATA__ = {json.dumps(sp_dag)};",
+        )
+    components.html(html_sp, height=500, scrolling=False)
+
+    st.markdown("---")
+    st.subheader("SP Detail")
 
     registry = load_csv("registry.csv")
     lineage = load_csv("lineage.csv")
