@@ -44,7 +44,7 @@ The Lookup activity connects to the **Lakehouse SQL endpoint** (not the Warehous
 ```sql
 -- Executed on: SupplyChain_Lakehouse SQL endpoint
 -- Connection: b4311980 (LakehouseTableSource)
-SELECT sp_name
+SELECT target_schema, target_table
 FROM SupplyChain_Warehouse.meta.sp_registry
 WHERE layer IN ('BRZ', 'REF')
   AND is_active = 1
@@ -52,50 +52,51 @@ WHERE layer IN ('BRZ', 'REF')
 
 **Returns 18 rows** (7 BRZ + 11 REF):
 
-| # | sp_name | Layer |
-|---|---------|-------|
-| 1 | bronze.usp_load_brz_saleshistory_afi__invoicedetail | BRZ |
-| 2 | bronze.usp_load_brz_saleshistory_afi__invoiceheader | BRZ |
-| 3 | bronze.usp_load_brz_supplychain_enh_1__demandforecastsnapshotdaily | BRZ |
-| 4 | bronze.usp_load_brz_wholesale_codis_afi__codatan | BRZ |
-| 5 | bronze.usp_load_brz_wholesale_codis_afi__comast | BRZ |
-| 6 | bronze.usp_load_brz_wholesale_codis_afi__extord | BRZ |
-| 7 | bronze.usp_load_brz_wholesale_codis_afi__extorit | BRZ |
-| 8 | bronze.usp_load_ref_calendar | REF |
-| 9 | bronze.usp_load_ref_customer_account | REF |
-| 10 | bronze.usp_load_ref_customer_account_group | REF |
-| 11 | bronze.usp_load_ref_customer_grouping | REF |
-| 12 | bronze.usp_load_ref_customer_shipping_location | REF |
-| 13 | bronze.usp_load_ref_forecast_cycle | REF |
-| 14 | bronze.usp_load_ref_forecast_horizon | REF |
-| 15 | bronze.usp_load_ref_item_master | REF |
-| 16 | bronze.usp_load_ref_order_type | REF |
-| 17 | bronze.usp_load_ref_product | REF |
-| 18 | bronze.usp_load_ref_warehouse | REF |
+| # | target_schema | target_table | Layer |
+|---|---------------|--------------|-------|
+| 1 | bronze | brz_saleshistory_afi__invoicedetail | BRZ |
+| 2 | bronze | brz_saleshistory_afi__invoiceheader | BRZ |
+| 3 | bronze | brz_supplychain_enh_1__demandforecastsnapshotdaily | BRZ |
+| 4 | bronze | brz_wholesale_codis_afi__codatan | BRZ |
+| 5 | bronze | brz_wholesale_codis_afi__comast | BRZ |
+| 6 | bronze | brz_wholesale_codis_afi__extord | BRZ |
+| 7 | bronze | brz_wholesale_codis_afi__extorit | BRZ |
+| 8 | bronze | ref_calendar | REF |
+| 9 | bronze | ref_customer_account | REF |
+| 10 | bronze | ref_customer_account_group | REF |
+| 11 | bronze | ref_customer_grouping | REF |
+| 12 | bronze | ref_customer_shipping_location | REF |
+| 13 | bronze | ref_forecast_cycle | REF |
+| 14 | bronze | ref_forecast_horizon | REF |
+| 15 | bronze | ref_item_master | REF |
+| 16 | bronze | ref_order_type | REF |
+| 17 | bronze | ref_product | REF |
+| 18 | bronze | ref_warehouse | REF |
 
-### 1.2 ForEach Activity: Execute SPs in Parallel
+### 1.2 ForEach Activity: Execute Generic SP in Parallel
 
-The ForEach activity iterates over the 18 SP names with `batch=8` and `isSequential=false`. This means up to **8 SPs run in parallel** at any time.
+The ForEach activity iterates over the 18 table rows with `batch=8` and `isSequential=false`. This means up to **8 tables load in parallel** at any time.
 
-Each SP is executed via `SqlServerStoredProcedure` activity:
+Each table is loaded via `SqlServerStoredProcedure` activity calling the **generic SP**:
 - **Connection**: DataWarehouse linkedService (endpoint: 7woj2w...datawarehouse.fabric.microsoft.com, artifactId: e146ffe2)
 - **Retry policy**: retry=2, interval=30 seconds
-- **Command**: `EXEC @item().sp_name`
+- **Command**: `EXEC meta.usp_generic_load @target_schema = @item().target_schema, @target_table = @item().target_table`
 
-### 1.3 Inside Each Bronze SP (Overwrite Pattern -- 17 of 18 SPs)
+### 1.3 Inside the Generic SP (Overwrite Pattern -- 17 of 18 tables)
 
-Every overwrite bronze SP follows this exact sequence:
+The generic SP `meta.usp_generic_load` reads `sp_registry` to determine the view_name and load_type, then executes the correct pattern. For the overwrite pattern (17 of 18 bronze tables):
 
 ```mermaid
 flowchart TD
+    S0["0. EXEC meta.usp_generic_load @target_schema='bronze', @target_table='{table}'\n-> Reads sp_registry: view_name, load_type='overwrite'"]
     S1["1. DECLARE @run_id = CONVERT(VARCHAR(36), NEWID())"]
-    S2["2. EXEC meta.usp_log_run @run_id, sp_name, 'running'\n-> INSERT INTO meta.sp_run_history\n   (run_id, sp_name, start_time, status='running')"]
+    S2["2. EXEC meta.usp_log_run @run_id, 'meta.usp_generic_load', 'running'\n-> INSERT INTO meta.sp_run_history"]
     S3["3. DROP TABLE IF EXISTS bronze.{table}\n-> Removes existing Parquet files"]
-    S4["4. CREATE TABLE bronze.{table} AS\n   SELECT *, CAST(GETUTCDATE() AS DATETIME2(6)) AS _load_dt\n   FROM bronze.vw_{table}\n-> View reads from Enterprise_Lakehouse.{schema}.{source}\n   via 3-part naming\n-> Data materialized as Parquet in Warehouse"]
+    S4["4. CREATE TABLE bronze.{table} AS\n   SELECT *, CAST(GETUTCDATE() AS DATETIME2(6)) AS _load_dt\n   FROM bronze.vw_{table}\n-> View reads from Enterprise_Lakehouse.{schema}.{source}\n   via 3-part naming"]
     S5["5. SELECT @rows = COUNT(*) FROM bronze.{table}"]
-    S6["6. EXEC meta.usp_log_run @run_id, sp_name, 'success',\n   @rows_affected = @rows\n-> UPDATE sp_run_history (end_time, duration, rows, status)\n-> UPDATE sp_registry (last_load_date, rows_loaded, next_run_time)"]
+    S6["6. EXEC meta.usp_log_run @run_id, 'meta.usp_generic_load', 'success',\n   @rows_affected = @rows"]
 
-    S1 --> S2 --> S3 --> S4 --> S5 --> S6
+    S0 --> S1 --> S2 --> S3 --> S4 --> S5 --> S6
 ```
 
 **If an error occurs** (TRY/CATCH):
@@ -103,9 +104,9 @@ flowchart TD
 2. `EXEC meta.usp_log_run @run_id, sp_name, 'failed', @error_message = @err`
 3. `THROW` (re-raises error to pipeline, triggering retry)
 
-### 1.4 Inside the Incremental SP (demandforecast -- 1 of 18 SPs)
+### 1.4 Inside the Generic SP -- Incremental Pattern (demandforecast -- 1 of 18 tables)
 
-`bronze.usp_load_brz_supplychain_enh_1__demandforecastsnapshotdaily` uses the incremental pattern:
+For `brz_supplychain_enh_1__demandforecastsnapshotdaily`, `sp_registry.load_type = 'incremental'`, so `meta.usp_generic_load` uses the incremental pattern:
 
 ```mermaid
 flowchart TD
@@ -322,7 +323,7 @@ The Lookup returns only 3 distinct waves (0, 1, 2), so the ForEach invokes `pl_s
 
 ```sql
 -- Executed on: SupplyChain_Lakehouse SQL endpoint (cross-DB)
-SELECT sp_name
+SELECT target_schema, target_table
 FROM SupplyChain_Warehouse.meta.sp_registry
 WHERE layer = 'GLD'
   AND is_active = 1
@@ -330,23 +331,23 @@ WHERE layer = 'GLD'
 
 **Returns 2 rows**:
 
-| sp_name |
-|---------|
-| gold.usp_load_gld_fact_flat_forecast_actual |
-| gold.usp_load_gld_fact_forecast_kpi |
+| target_schema | target_table |
+|---------------|--------------|
+| gold | gld_fact_flat_forecast_actual |
+| gold | gld_fact_forecast_kpi |
 
-### 3.2 ForEach Activity: Execute Gold SPs
+### 3.2 ForEach Activity: Execute Generic SP for Gold Tables
 
-ForEach with `batch=2` and `isSequential=false`. Both SPs run in parallel.
+ForEach with `batch=2` and `isSequential=false`. Both tables load in parallel via `meta.usp_generic_load`.
 
 ```mermaid
 flowchart LR
-    L["Lookup: 2 gold SPs"]
+    L["Lookup: 2 gold tables"]
     F["ForEach batch=2\nPARALLEL"]
 
     subgraph Parallel["Running simultaneously"]
-        SP1["gld_fact_flat_forecast_actual\n14.8M rows, 15s\n\nView: UNION ALL of\nslv_actual_demand_monthly\n+ slv_forecast_demand_monthly\n+ slv_naive_forecast_monthly"]
-        SP2["gld_fact_forecast_kpi\n41.1M rows, 43s\n\nView: CTE chain of\nforecast x horizon\nLEFT JOIN actuals + naive"]
+        SP1["EXEC meta.usp_generic_load\n'gold','gld_fact_flat_forecast_actual'\n14.8M rows, 15s\n\nView: UNION ALL of\nslv_actual_demand_monthly\n+ slv_forecast_demand_monthly\n+ slv_naive_forecast_monthly"]
+        SP2["EXEC meta.usp_generic_load\n'gold','gld_fact_forecast_kpi'\n41.1M rows, 43s\n\nView: CTE chain of\nforecast x horizon\nLEFT JOIN actuals + naive"]
     end
 
     L --> F --> Parallel
@@ -391,8 +392,8 @@ flowchart TD
 | Table | Writes per Pipeline Run | Written by |
 |-------|------------------------|------------|
 | pipeline_run_log | 1 INSERT (start) + 1 UPDATE (end) | usp_log_pipeline_run (start) + usp_finalize_pipeline (end) |
-| sp_run_history | 56 (2 per SP x 28 SPs) | usp_log_run |
-| sp_registry | 28 (1 update per SP) | usp_log_run |
+| sp_run_history | 56 (2 per table x 28 tables) | usp_log_run (called by usp_generic_load) |
+| sp_registry | 28 (1 update per table) | usp_log_run (called by usp_generic_load) |
 | slv_dag_waves_runtime | 1 DELETE + 8 INSERTs | usp_compute_slv_waves |
 | sp_lineage | 1 DELETE + 52 INSERTs | usp_build_lineage (called by usp_finalize_pipeline) |
 | SC_Control_Tower (SM) | 1 refresh (7 tables) | refresh_sm activity (PBISemanticModelRefresh) |
@@ -415,51 +416,47 @@ flowchart TD
 
 ## Adding a New Table: Impact on Pipeline Flow
 
-### Adding a Bronze Table
+### Adding a Bronze Table (Simplified -- No SP Needed)
 
 ```mermaid
 flowchart TD
     A["1. CREATE VIEW bronze.vw_brz_new_table\n   SELECT ... FROM Enterprise_Lakehouse.{schema}.{source}"]
-    B["2. CREATE PROCEDURE bronze.usp_load_brz_new_table\n   (copy overwrite template, change names)"]
-    C["3. INSERT INTO meta.sp_registry\n   sp_name='bronze.usp_load_brz_new_table'\n   layer='BRZ', is_active=1, ..."]
-    D["4. INSERT INTO meta.dq_rules\n   (completeness + row_count rules)"]
-    E["5. Next pipeline run:\n   Lookup returns 19 SPs (was 18)\n   ForEach includes new SP\n   No pipeline JSON change needed"]
-
-    A --> B --> C --> D --> E
-```
-
-**What changes in the pipeline**: Nothing. The Lookup dynamically reads sp_registry. The ForEach iterates over whatever the Lookup returns. Adding a row to sp_registry is sufficient.
-
-### Adding a Silver Table
-
-```mermaid
-flowchart TD
-    A["1. CREATE VIEW silver.vw_slv_new_table\n   SELECT ... FROM bronze/silver tables"]
-    B["2. CREATE PROCEDURE silver.usp_load_slv_new_table\n   (copy overwrite template)"]
-    C["3. INSERT INTO meta.sp_registry\n   layer='SLV', depends_on='[\"silver.usp_load_slv_xxx\"]'"]
-    D["4. Next pipeline run:\n   usp_compute_slv_waves recalculates\n   New SP auto-assigned to correct wave\n   Parent-child pattern handles\n   any number of waves dynamically"]
-    E["5. ForEach for that wave\n   includes the new SP\n   No pipeline change needed"]
-
-    A --> B --> C --> D --> E
-```
-
-**What changes in the pipeline**: Nothing. The wave computation is dynamic. The parent-child pattern supports any number of waves. The new SP is automatically placed in the correct wave based on its `depends_on` declaration.
-
-**Example**: If you add `slv_new_table` with `depends_on = '["silver.usp_load_slv_naive_forecast_monthly"]'`, it would be auto-assigned to wave 3 (because slv_naive_forecast_monthly is in wave 2). The parent pipeline's ForEach would invoke `pl_sc_silver_wave` for wave 3 with the new SP included.
-
-### Adding a Gold Table
-
-```mermaid
-flowchart TD
-    A["1. CREATE VIEW gold.vw_gld_new_table\n   SELECT ... FROM silver tables"]
-    B["2. CREATE PROCEDURE gold.usp_load_gld_new_table\n   (copy overwrite template)"]
-    C["3. INSERT INTO meta.sp_registry\n   layer='GLD', is_active=1"]
-    D["4. Next pipeline run:\n   Lookup returns 3 SPs (was 2)\n   ForEach includes new SP\n   May need to increase batch from 2"]
+    B["2. INSERT INTO meta.sp_registry\n   target_schema='bronze', target_table='brz_new_table'\n   layer='BRZ', load_type='overwrite', is_active=1\n   (NO per-table SP creation needed!)"]
+    C["3. INSERT INTO meta.dq_rules\n   (completeness + row_count rules)"]
+    D["4. Next pipeline run:\n   Lookup returns 19 tables (was 18)\n   ForEach calls meta.usp_generic_load\n   for the new table automatically\n   No pipeline JSON change needed"]
 
     A --> B --> C --> D
 ```
 
-**What changes in the pipeline**: Nothing in the pipeline definition. The Lookup dynamically picks up the new SP. Consider increasing the ForEach batch size if the number of gold tables grows significantly.
+**What changes in the pipeline**: Nothing. The Lookup dynamically reads sp_registry. The ForEach calls `meta.usp_generic_load` for each table. Adding a view + 1 registry row is sufficient.
+
+### Adding a Silver Table (Simplified -- No SP Needed)
+
+```mermaid
+flowchart TD
+    A["1. CREATE VIEW silver.vw_slv_new_table\n   SELECT ... FROM bronze/silver tables"]
+    B["2. INSERT INTO meta.sp_registry\n   target_schema='silver', target_table='slv_new_table'\n   layer='SLV', depends_on='[\"silver.slv_xxx\"]'\n   (NO per-table SP creation needed!)"]
+    C["3. Next pipeline run:\n   usp_compute_slv_waves recalculates\n   New table auto-assigned to correct wave\n   meta.usp_generic_load handles load\n   No pipeline change needed"]
+
+    A --> B --> C
+```
+
+**What changes in the pipeline**: Nothing. The wave computation is dynamic. The parent-child pattern supports any number of waves. The new table is automatically placed in the correct wave based on its `depends_on` declaration.
+
+**Example**: If you add `slv_new_table` with `depends_on = '["silver.slv_naive_forecast_monthly"]'`, it would be auto-assigned to wave 3 (because slv_naive_forecast_monthly is in wave 2). The parent pipeline's ForEach would invoke `pl_sc_silver_wave` for wave 3, and `meta.usp_generic_load` would load the new table.
+
+### Adding a Gold Table (Simplified -- No SP Needed)
+
+```mermaid
+flowchart TD
+    A["1. CREATE VIEW gold.vw_gld_new_table\n   SELECT ... FROM silver tables"]
+    B["2. INSERT INTO meta.sp_registry\n   target_schema='gold', target_table='gld_new_table'\n   layer='GLD', is_active=1\n   (NO per-table SP creation needed!)"]
+    C["3. Next pipeline run:\n   Lookup returns 3 tables (was 2)\n   ForEach calls meta.usp_generic_load\n   May need to increase batch from 2"]
+
+    A --> B --> C
+```
+
+**What changes in the pipeline**: Nothing in the pipeline definition. The Lookup dynamically picks up the new table. `meta.usp_generic_load` handles the load. Consider increasing the ForEach batch size if the number of gold tables grows significantly.
 
 ---
 

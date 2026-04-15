@@ -18,7 +18,7 @@ flowchart LR
         B["bronze\n18 tables\nraw mirror from source"]
         S["silver\n8 tables\nclean + join + business rules"]
         G["gold\n2 tables\nBI-ready facts"]
-        M["meta\n7 tables + 8 SPs + 1 fn + 1 view\nconfig / log / DQ / DAG"]
+        M["meta\n7 tables + 9 SPs + 1 fn + 1 view\nconfig / log / DQ / DAG / generic load"]
         B --> S --> G
     end
 
@@ -31,18 +31,18 @@ flowchart LR
 
 | Schema | Role | Contains |
 |--------|------|----------|
-| `bronze` | Raw mirror from Enterprise_Lakehouse | 18 Tables + 17 Views (ETL logic) + 18 SPs (load execution) |
-| `silver` | Clean, conform, join, apply business rules | 8 Tables + 8 Views + 8 SPs |
-| `gold` | Business-ready facts/dimensions for Power BI | 2 Tables + 2 Views + 2 SPs |
-| `meta` | System control plane | 7 Tables + 8 SPs + 1 Function + 1 View |
+| `bronze` | Raw mirror from Enterprise_Lakehouse | 18 Tables + 17 Views (ETL logic) |
+| `silver` | Clean, conform, join, apply business rules | 8 Tables + 8 Views |
+| `gold` | Business-ready facts/dimensions for Power BI | 2 Tables + 2 Views |
+| `meta` | System control plane | 7 Tables + 9 SPs (incl. usp_generic_load) + 1 Function + 1 View |
 
 ### 1.3 Design Principles
 
 | Principle | Implementation |
 |-----------|---------------|
 | **Pure T-SQL** | No Notebooks, no PySpark, no Lakehouse ETL. All logic in SQL views and stored procedures. |
-| **3-file-per-table** | Every data table has exactly 3 objects: VIEW (ETL formula) + SP (execution robot) + TABLE (materialized data). |
-| **Metadata-driven** | Adding a new table = INSERT 1 row in `meta.sp_registry`. The pipeline picks it up automatically. No pipeline JSON changes. |
+| **Generic SP + 2-file-per-table** | Every data table has 2 objects: VIEW (ETL formula) + TABLE (materialized data). A single generic SP (`meta.usp_generic_load`) handles all loads by reading sp_registry config. Supports 8 load patterns: overwrite, incremental, upsert, datekey, daterange, identity, cdc, scd2. |
+| **Metadata-driven** | Adding a new table = CREATE VIEW + INSERT 1 row in `meta.sp_registry`. No per-table SP needed. The pipeline picks it up automatically. No pipeline JSON changes. |
 | **DAG orchestration** | Silver SPs declare `depends_on` in sp_registry. `usp_compute_slv_waves` auto-computes execution waves. Pipeline runs waves sequentially, SPs within a wave in parallel. |
 | **Config-driven DQ** | DQ rules stored in `meta.dq_rules` table, not hardcoded. 7 check types. Add a rule = INSERT 1 row. |
 | **Auto-built lineage** | `source_objects` JSON in sp_registry is parsed by `usp_build_lineage` to generate a full lineage graph (52 edges). |
@@ -107,25 +107,8 @@ SupplyChain_Warehouse/
 |   |   +-- vw_ref_product
 |   |   +-- vw_ref_warehouse
 |   |
-|   +-- Stored Procedures/ (18)
-|       +-- usp_load_brz_saleshistory_afi__invoicedetail
-|       +-- usp_load_brz_saleshistory_afi__invoiceheader
-|       +-- usp_load_brz_supplychain_enh_1__demandforecastsnapshotdaily
-|       +-- usp_load_brz_wholesale_codis_afi__codatan
-|       +-- usp_load_brz_wholesale_codis_afi__comast
-|       +-- usp_load_brz_wholesale_codis_afi__extord
-|       +-- usp_load_brz_wholesale_codis_afi__extorit
-|       +-- usp_load_ref_calendar
-|       +-- usp_load_ref_customer_account
-|       +-- usp_load_ref_customer_account_group
-|       +-- usp_load_ref_customer_grouping
-|       +-- usp_load_ref_customer_shipping_location
-|       +-- usp_load_ref_forecast_cycle
-|       +-- usp_load_ref_forecast_horizon
-|       +-- usp_load_ref_item_master
-|       +-- usp_load_ref_order_type
-|       +-- usp_load_ref_product
-|       +-- usp_load_ref_warehouse
+|   +-- Stored Procedures/ (0)
+|       (DELETED -- all 18 per-table SPs replaced by meta.usp_generic_load)
 |
 +-- silver/
 |   +-- Tables/ (8)
@@ -148,15 +131,8 @@ SupplyChain_Warehouse/
 |   |   +-- vw_slv_open_order_monthly
 |   |   +-- vw_slv_naive_forecast_monthly
 |   |
-|   +-- Stored Procedures/ (8)
-|       +-- usp_load_slv_invoice_detail_line_level
-|       +-- usp_load_slv_forecast_demand_monthly
-|       +-- usp_load_slv_open_order_line_level
-|       +-- usp_load_slv_actual_demand_monthly
-|       +-- usp_load_slv_actual_demand_weekly
-|       +-- usp_load_slv_invoice_weekly
-|       +-- usp_load_slv_open_order_monthly
-|       +-- usp_load_slv_naive_forecast_monthly
+|   +-- Stored Procedures/ (0)
+|       (DELETED -- all 8 per-table SPs replaced by meta.usp_generic_load)
 |
 +-- gold/
 |   +-- Tables/ (2)
@@ -167,9 +143,8 @@ SupplyChain_Warehouse/
 |   |   +-- vw_gld_fact_flat_forecast_actual
 |   |   +-- vw_gld_fact_forecast_kpi
 |   |
-|   +-- Stored Procedures/ (2)
-|       +-- usp_load_gld_fact_flat_forecast_actual
-|       +-- usp_load_gld_fact_forecast_kpi
+|   +-- Stored Procedures/ (0)
+|       (DELETED -- all 2 per-table SPs replaced by meta.usp_generic_load)
 |
 +-- meta/
     +-- Tables/ (7)
@@ -181,7 +156,8 @@ SupplyChain_Warehouse/
     |   +-- pipeline_run_log                         log: pipeline-level runs (auto by usp_log_pipeline_run + usp_finalize_pipeline)
     |   +-- slv_dag_waves_runtime           8 rows     runtime: wave computation results
     |
-    +-- Stored Procedures/ (8)
+    +-- Stored Procedures/ (9)
+    |   +-- usp_generic_load              GENERIC SP: routes by load_type (8 patterns), replaces all 28 per-table SPs
     |   +-- usp_log_run                   log SP start/end/rows/status
     |   +-- usp_check_dq                  DQ engine (read rules -> execute -> log)
     |   +-- usp_build_lineage             parse source_objects -> build lineage
@@ -241,13 +217,13 @@ The master pipeline starts with a `log_start` activity that inserts a row into `
 
 ```mermaid
 flowchart LR
-    L["Lookup: get_bronze_sps\n\nSource: LakehouseTableSource\nConnection: b4311980 (Lakehouse)\nQuery: SELECT sp_name\nFROM SupplyChain_Warehouse.meta.sp_registry\nWHERE layer IN ('BRZ','REF')\nAND is_active = 1\nAND meta.ufn_should_run(sp_name) = 1"]
+    L["Lookup: get_bronze_tables\n\nSource: LakehouseTableSource\nConnection: b4311980 (Lakehouse)\nQuery: SELECT target_schema, target_table\nFROM SupplyChain_Warehouse.meta.sp_registry\nWHERE layer IN ('BRZ','REF')\nAND is_active = 1"]
 
-    F["ForEach: run_bronze_sps\nbatch = 8\nisSequential = false (PARALLEL)"]
+    F["ForEach: run_bronze_tables\nbatch = 8\nisSequential = false (PARALLEL)"]
 
-    SP["SqlServerStoredProcedure\nEXEC @item().sp_name\nlinkedService: DataWarehouse endpoint\nRetry: 2, interval: 30s"]
+    SP["SqlServerStoredProcedure\nEXEC meta.usp_generic_load\n@target_schema=@item().target_schema\n@target_table=@item().target_table\nlinkedService: DataWarehouse endpoint\nRetry: 2, interval: 30s"]
 
-    L -->|"Returns 18 sp_names\n(7 BRZ + 11 REF)"| F
+    L -->|"Returns 18 tables\n(7 BRZ + 11 REF)"| F
     F --> SP
 ```
 
@@ -279,13 +255,13 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    L["Lookup: get_wave_sps\n\nSELECT sp_name\nFROM SupplyChain_Warehouse\n.meta.slv_dag_waves_runtime\nWHERE wave = @pipeline().parameters.wave_number"]
+    L["Lookup: get_wave_tables\n\nSELECT r.target_schema, r.target_table\nFROM SupplyChain_Warehouse.meta.slv_dag_waves_runtime w\nJOIN SupplyChain_Warehouse.meta.sp_registry r\nON w.sp_name = r.sp_name\nWHERE w.wave = @pipeline().parameters.wave_number"]
 
-    F["ForEach: run_wave_sps\nbatch = 8\nisSequential = false (PARALLEL)"]
+    F["ForEach: run_wave_tables\nbatch = 8\nisSequential = false (PARALLEL)"]
 
-    SP["SqlServerStoredProcedure\nEXEC @item().sp_name"]
+    SP["SqlServerStoredProcedure\nEXEC meta.usp_generic_load\n@target_schema=@item().target_schema\n@target_table=@item().target_table"]
 
-    L -->|"SPs for this wave"| F
+    L -->|"Tables for this wave"| F
     F --> SP
 ```
 
@@ -295,13 +271,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    L["Lookup: get_gold_sps\n\nSource: LakehouseTableSource\nConnection: b4311980\nQuery: SELECT sp_name\nFROM SupplyChain_Warehouse.meta.sp_registry\nWHERE layer = 'GLD'\nAND is_active = 1"]
+    L["Lookup: get_gold_tables\n\nSource: LakehouseTableSource\nConnection: b4311980\nQuery: SELECT target_schema, target_table\nFROM SupplyChain_Warehouse.meta.sp_registry\nWHERE layer = 'GLD'\nAND is_active = 1"]
 
-    F["ForEach: run_gold_sps\nbatch = 2\nisSequential = false (PARALLEL)"]
+    F["ForEach: run_gold_tables\nbatch = 2\nisSequential = false (PARALLEL)"]
 
-    SP["SqlServerStoredProcedure\nEXEC @item().sp_name"]
+    SP["SqlServerStoredProcedure\nEXEC meta.usp_generic_load\n@target_schema=@item().target_schema\n@target_table=@item().target_table"]
 
-    L -->|"Returns 2 sp_names"| F
+    L -->|"Returns 2 tables"| F
     F --> SP
 ```
 
@@ -388,125 +364,64 @@ This works because Fabric's SQL endpoint supports cross-database queries between
 
 ---
 
-## 5. 3-File-Per-Table Pattern
+## 5. Generic SP + 2-File-Per-Table Pattern
 
 ### 5.1 Pattern Diagram
 
 ```mermaid
 flowchart LR
+    REG["SP_REGISTRY\n\nConfig row per table\ntarget_schema, target_table\nview_name, load_type\ndate_key, date_range_days\nprimary_key, watermark_column"]
+
     V["VIEW\n\nThe Recipe\n\nSELECT FROM source\nJOINs, CTEs, CAST\nColumn mapping\nFilters, transforms\n\nPure SQL, no side effects"]
 
-    SP["STORED PROCEDURE\n\nThe Robot\n\n1. Generate run_id (NEWID)\n2. Log 'running' to sp_run_history\n3. DROP TABLE IF EXISTS\n4. CTAS from view\n5. COUNT rows\n6. Log 'success' to sp_run_history\n7. Update sp_registry\n\nError handling via TRY/CATCH"]
+    GSP["meta.usp_generic_load\n\nThe Robot (1 for all tables)\n\n1. Read config from sp_registry\n2. Generate run_id (NEWID)\n3. Log 'running' to sp_run_history\n4. Route by load_type:\n   overwrite: DROP + CTAS\n   incremental: INSERT WHERE >\n   upsert: MERGE\n   datekey/daterange: DELETE + INSERT\n   identity/cdc/scd2: specialized\n5. COUNT rows\n6. Log 'success'\n\nError handling via TRY/CATCH"]
 
     T["TABLE\n\nThe Product\n\nMaterialized Parquet on disk\nIncludes _load_dt column\nQueried by downstream\nviews and Power BI"]
 
-    V -->|"SP reads view"| SP
-    SP -->|"CTAS creates"| T
+    REG -->|"config"| GSP
+    V -->|"reads view"| GSP
+    GSP -->|"CTAS/INSERT/MERGE"| T
 ```
 
 ### 5.2 Why This Pattern?
 
-- **Separation of concerns**: View holds logic, SP handles execution/logging, table stores data.
+- **Separation of concerns**: View holds logic, generic SP handles execution/logging, table stores data.
 - **Testability**: You can `SELECT * FROM vw_xxx` to preview results without materializing.
-- **Reusability**: Every SP follows the same template -- only the schema/table names change.
+- **Zero-SP onboarding**: Adding a new table requires only a VIEW + 1 row in sp_registry. No per-table SP.
+- **8 load patterns**: overwrite, incremental, upsert, datekey, daterange, identity, cdc, scd2 -- all handled by 1 SP reading from sp_registry.
 - **Observability**: Every execution is logged with run_id, start/end time, row count, status, error message.
+- **Aligned with Enterprise ETL_Framework**: Same load_type taxonomy used across all projects.
 
-### 5.3 SP Template -- Overwrite Pattern (17 bronze + 8 silver + 2 gold = 27 SPs)
-
-```sql
-CREATE OR ALTER PROCEDURE {schema}.usp_load_{table} AS
-BEGIN
-    DECLARE @run_id VARCHAR(36) = CONVERT(VARCHAR(36), NEWID());
-    DECLARE @rows BIGINT;
-
-    -- Step 1: Log start
-    EXEC meta.usp_log_run @run_id, '{schema}.usp_load_{table}', 'running',
-         @load_type = 'overwrite';
-
-    BEGIN TRY
-        -- Step 2: Drop and recreate from view
-        DROP TABLE IF EXISTS {schema}.{table};
-        CREATE TABLE {schema}.{table} AS
-        SELECT *, CAST(GETUTCDATE() AS DATETIME2(6)) AS _load_dt
-        FROM {schema}.vw_{table};
-
-        -- Step 3: Count rows
-        SELECT @rows = COUNT(*) FROM {schema}.{table};
-
-        -- Step 4: Log success
-        EXEC meta.usp_log_run @run_id, '{schema}.usp_load_{table}', 'success',
-             @rows_affected = @rows, @load_type = 'overwrite';
-    END TRY
-    BEGIN CATCH
-        DECLARE @err VARCHAR(4000) = ERROR_MESSAGE();
-        EXEC meta.usp_log_run @run_id, '{schema}.usp_load_{table}', 'failed',
-             @error_message = @err, @load_type = 'overwrite';
-        THROW;
-    END CATCH
-END
-```
-
-### 5.4 SP Template -- Incremental Pattern (1 SP: brz_demandforecast only)
+### 5.3 Generic SP -- meta.usp_generic_load (replaces all 28 per-table SPs)
 
 ```sql
-CREATE OR ALTER PROCEDURE {schema}.usp_load_{table} AS
-BEGIN
-    DECLARE @run_id VARCHAR(36) = CONVERT(VARCHAR(36), NEWID());
-    DECLARE @rows BIGINT;
-    DECLARE @last_wm VARCHAR(200);
-    DECLARE @new_wm VARCHAR(200);
-    DECLARE @table_exists INT = 0;
+-- Called by pipeline ForEach:
+EXEC meta.usp_generic_load @target_schema = 'bronze', @target_table = 'brz_saleshistory_afi__invoicedetail';
 
-    EXEC meta.usp_log_run @run_id, '{schema}.usp_load_{table}', 'running',
-         @load_type = 'incremental';
-
-    BEGIN TRY
-        -- Check if table already exists
-        SELECT @table_exists = COUNT(*) FROM sys.tables t
-        JOIN sys.schemas s ON t.schema_id = s.schema_id
-        WHERE s.name = '{schema}' AND t.name = '{table}';
-
-        -- Get last watermark
-        SELECT @last_wm = last_watermark_value FROM meta.sp_registry
-        WHERE sp_name = '{schema}.usp_load_{table}';
-
-        IF @table_exists = 0 OR @last_wm IS NULL
-        BEGIN
-            -- First run: full load with cutoff date
-            DROP TABLE IF EXISTS {schema}.{table};
-            CREATE TABLE {schema}.{table} AS
-            SELECT *, CAST(GETUTCDATE() AS DATETIME2(6)) AS _load_dt
-            FROM {schema}.vw_{table}
-            WHERE {watermark_column} >= CAST('2023-01-01' AS DATETIME2(6));
-            SELECT @rows = COUNT(*) FROM {schema}.{table};
-        END
-        ELSE
-        BEGIN
-            -- Subsequent: append only new rows
-            INSERT INTO {schema}.{table}
-            SELECT *, CAST(GETUTCDATE() AS DATETIME2(6)) AS _load_dt
-            FROM {schema}.vw_{table}
-            WHERE {watermark_column} > CAST(@last_wm AS DATETIME2(6));
-            SELECT @rows = @@ROWCOUNT;
-        END
-
-        -- Update watermark
-        SELECT @new_wm = CAST(MAX({watermark_column}) AS VARCHAR(200))
-        FROM {schema}.{table};
-        UPDATE meta.sp_registry SET last_watermark_value = @new_wm
-        WHERE sp_name = '{schema}.usp_load_{table}';
-
-        EXEC meta.usp_log_run @run_id, '{schema}.usp_load_{table}', 'success',
-             @rows_affected = @rows, @load_type = 'incremental';
-    END TRY
-    BEGIN CATCH
-        DECLARE @err VARCHAR(4000) = ERROR_MESSAGE();
-        EXEC meta.usp_log_run @run_id, '{schema}.usp_load_{table}', 'failed',
-             @error_message = @err, @load_type = 'incremental';
-        THROW;
-    END CATCH
-END
+-- The SP internally:
+-- 1. Reads sp_registry WHERE target_schema = @target_schema AND target_table = @target_table
+-- 2. Gets: view_name, load_type, watermark_column, primary_key, date_key, date_range_days
+-- 3. Routes by load_type:
+--    'overwrite'    -> DROP TABLE IF EXISTS + CTAS from view
+--    'incremental'  -> INSERT WHERE watermark_column > last_watermark_value
+--    'upsert'       -> MERGE on primary_key
+--    'datekey'      -> DELETE WHERE date_key IN (SELECT DISTINCT date_key FROM view) + INSERT
+--    'daterange'    -> DELETE WHERE date_key >= DATEADD(DAY, -date_range_days, GETUTCDATE()) + INSERT
+--    'identity'     -> INSERT with MAX(id)+1
+--    'cdc'          -> Apply CDC operations
+--    'scd2'         -> SCD Type 2 logic
+-- 4. Logs start/end via meta.usp_log_run
+-- 5. Updates sp_registry with rows_loaded, last_load_date
 ```
+
+### 5.4 sp_registry New Columns for Generic SP
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| `date_key` | VARCHAR(100) | Date column name for datekey/daterange patterns |
+| `date_range_days` | INT | Number of days for daterange pattern |
+
+These columns are NULL for overwrite/incremental patterns and only used when load_type requires date-based partitioning.
 
 ---
 
@@ -703,7 +618,7 @@ The refresh syncs Direct Lake metadata with the latest Parquet files written by 
 | **Purpose** | The central registry -- defines every data SP in the system: what to run, how, when, and what it depends on. |
 | **Auto-populated** | `last_load_date`, `rows_loaded`, `next_run_time` (updated by usp_log_run after each SP execution) |
 | **Manual input** | All other columns (INSERT when adding a new table) |
-| **Key columns** | `sp_name` (PK equivalent), `layer` (BRZ/REF/SLV/GLD), `depends_on` (JSON), `source_objects` (JSON), `is_active` (0/1), `load_type` (overwrite/incremental), `watermark_column`, `last_watermark_value` |
+| **Key columns** | `sp_name` (PK equivalent), `layer` (BRZ/REF/SLV/GLD), `depends_on` (JSON), `source_objects` (JSON), `is_active` (0/1), `load_type` (overwrite/incremental/upsert/datekey/daterange/identity/cdc/scd2), `watermark_column`, `last_watermark_value`, `date_key` (for datekey/daterange patterns), `date_range_days` (for daterange pattern) |
 | **Written when** | Manual INSERT for each new table. Auto-UPDATE after each SP run. |
 
 ```sql
@@ -722,6 +637,8 @@ CREATE TABLE meta.sp_registry (
     source_objects      VARCHAR(2000)   NULL,         -- JSON: ["Enterprise_Lakehouse.schema.table"]
     watermark_column    VARCHAR(100)    NULL,
     primary_key         VARCHAR(500)    NULL,
+    date_key            VARCHAR(100)    NULL,         -- date column for datekey/daterange patterns
+    date_range_days     INT             NULL,         -- number of days for daterange pattern
     is_active           INT             NOT NULL,     -- 0/1 (no BIT in Fabric WH)
     last_load_date      DATETIME2(6)    NULL,
     last_watermark_value VARCHAR(200)   NULL,
@@ -868,7 +785,15 @@ CREATE TABLE meta.slv_dag_waves_runtime (
 );
 ```
 
-### 8.2 Stored Procedures (8)
+### 8.2 Stored Procedures (9)
+
+#### meta.usp_generic_load
+
+| Aspect | Detail |
+|--------|--------|
+| **What it does** | Generic load SP that replaces all 28 per-table SPs. Reads config from `sp_registry` (view_name, load_type, watermark_column, primary_key, date_key, date_range_days) and routes to the correct load pattern. Supports 8 patterns: overwrite, incremental, upsert, datekey, daterange, identity, cdc, scd2. |
+| **When called** | By the pipeline ForEach activity for every table in every layer (bronze, silver, gold). Called as `EXEC meta.usp_generic_load @target_schema, @target_table`. |
+| **Key logic** | 1) Read sp_registry config for @target_schema + @target_table. 2) Generate run_id, log 'running'. 3) Route by load_type to appropriate load pattern. 4) Count rows, log 'success'/'failed'. Aligned with Enterprise ETL_Framework patterns. |
 
 #### meta.usp_log_run
 
@@ -1077,10 +1002,10 @@ flowchart LR
 
 | Schema | Table Pattern | View Pattern | SP Pattern |
 |--------|--------------|--------------|------------|
-| bronze | `brz_{source_system}__{entity}` | `vw_brz_{source_system}__{entity}` | `usp_load_brz_{source_system}__{entity}` |
-| bronze (ref) | `ref_{entity}` | `vw_ref_{entity}` | `usp_load_ref_{entity}` |
-| silver | `slv_{business_concept}` | `vw_slv_{business_concept}` | `usp_load_slv_{business_concept}` |
-| gold | `gld_{fact\|dim}_{subject}` | `vw_gld_{fact\|dim}_{subject}` | `usp_load_gld_{fact\|dim}_{subject}` |
+| bronze | `brz_{source_system}__{entity}` | `vw_brz_{source_system}__{entity}` | (none -- uses meta.usp_generic_load) |
+| bronze (ref) | `ref_{entity}` | `vw_ref_{entity}` | (none -- uses meta.usp_generic_load) |
+| silver | `slv_{business_concept}` | `vw_slv_{business_concept}` | (none -- uses meta.usp_generic_load) |
+| gold | `gld_{fact\|dim}_{subject}` | `vw_gld_{fact\|dim}_{subject}` | (none -- uses meta.usp_generic_load) |
 | meta | descriptive (e.g., `sp_registry`) | `vw_*` (e.g., `vw_slv_dag_waves`) | `usp_*` / `ufn_*` |
 
 ### 11.2 Column Prefixes
@@ -1113,15 +1038,17 @@ flowchart LR
 
 | Schema | Tables | Views | SPs | Functions | Total |
 |--------|--------|-------|-----|-----------|-------|
-| bronze | 18 | 17 | 18 | -- | 53 |
-| silver | 8 | 8 | 8 | -- | 24 |
-| gold | 2 | 2 | 2 | -- | 6 |
-| meta | 7 | 1 | 8 | 1 | 17 |
-| **Total** | **35** | **28** | **36** | **1** | **100** |
+| bronze | 18 | 17 | 0 | -- | 35 |
+| silver | 8 | 8 | 0 | -- | 16 |
+| gold | 2 | 2 | 0 | -- | 4 |
+| meta | 7 | 1 | 9 | 1 | 18 |
+| **Total** | **35** | **28** | **9** | **1** | **73** |
+
+> **Change from previous version**: 28 per-table SPs (18 bronze + 8 silver + 2 gold) have been **deleted** and replaced by 1 generic SP (`meta.usp_generic_load`). meta SPs increased from 8 to 9. Total objects reduced from 100 to 73 (net -27).
 
 **Pipelines**: 5 (`pl_sc_master`, `pl_sc_bronze`, `pl_sc_silver`, `pl_sc_silver_wave`, `pl_sc_gold`)
 
-**Grand total**: 100 warehouse objects + 5 pipelines = **105 managed artifacts**
+**Grand total**: 73 warehouse objects + 5 pipelines = **78 managed artifacts**
 
 ### Row Count Summary
 

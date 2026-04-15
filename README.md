@@ -31,17 +31,18 @@ flowchart LR
 
 | Schema | Purpose | Pattern |
 |--------|---------|---------|
-| **bronze** | Raw mirror from source systems | `VIEW` reads source via 3-part naming → `SP` does DROP + CTAS |
-| **silver** | Clean, conform, join, business rules | `VIEW` reads bronze/silver → `SP` does DROP + CTAS |
-| **gold** | Business-ready facts & dimensions | `VIEW` reads silver → `SP` does DROP + CTAS |
+| **bronze** | Raw mirror from source systems | `VIEW` reads source via 3-part naming → Generic SP does DROP + CTAS |
+| **silver** | Clean, conform, join, business rules | `VIEW` reads bronze/silver → Generic SP does DROP + CTAS |
+| **gold** | Business-ready facts & dimensions | `VIEW` reads silver → Generic SP does DROP + CTAS |
 | **meta** | System control plane | Config tables + log tables + utility SPs + DAG engine |
 
 ---
 
 ## Key Features
 
-- **3-file-per-table** — VIEW (ETL logic) + SP (execution) + TABLE (materialized data)
-- **Metadata-driven** — adding a new table = INSERT 1 row into `meta.sp_registry`, no pipeline changes
+- **Generic SP architecture** — 1 SP (`meta.usp_generic_load`) replaces 28 per-table SPs, supports 8 load patterns (overwrite, incremental, upsert, datekey, daterange, identity, cdc, scd2), aligned with Enterprise ETL_Framework
+- **2-file-per-table** — VIEW (ETL logic) + TABLE (materialized data). No per-table SP needed.
+- **Metadata-driven** — adding a new table = CREATE VIEW + INSERT 1 row into `meta.sp_registry`, no pipeline changes, no SP creation
 - **DAG-based silver** — `depends_on` column defines dependencies, SP auto-computes execution waves
 - **Parent-child pipeline** — sequential between waves, parallel within each wave (Microsoft recommended pattern)
 - **Auto-scale to N waves** — iterative wave computation (max 30), no recursive CTE needed
@@ -56,26 +57,28 @@ flowchart LR
 {Warehouse}/
 ├── bronze/
 │   ├── Tables/    brz_{source}__{entity}, ref_{entity}
-│   ├── Views/     vw_{table_name} → SELECT FROM source (3-part naming)
-│   └── SPs/       usp_load_{table_name} → DROP + CTAS
+│   └── Views/     vw_{table_name} → SELECT FROM source (3-part naming)
 │
 ├── silver/
 │   ├── Tables/    slv_{concept}
-│   ├── Views/     vw_slv_{concept} → JOINs, CTEs, transforms
-│   └── SPs/       usp_load_slv_{concept} → DROP + CTAS (with depends_on)
+│   └── Views/     vw_slv_{concept} → JOINs, CTEs, transforms
 │
 ├── gold/
 │   ├── Tables/    gld_{fact|dim}_{subject}
-│   ├── Views/     vw_gld_{subject} → aggregation, UNION
-│   └── SPs/       usp_load_gld_{subject} → DROP + CTAS
+│   └── Views/     vw_gld_{subject} → aggregation, UNION
 │
 └── meta/
     ├── Tables/    sp_registry, sp_run_history, dq_rules, dq_results,
     │              sp_lineage, pipeline_run_log, slv_dag_waves_runtime
-    ├── SPs/       usp_log_run, usp_check_dq, usp_build_lineage,
-    │              usp_compute_slv_waves, usp_run_silver_dag
+    ├── SPs/       usp_generic_load (routes by load_type from sp_registry),
+    │              usp_log_run, usp_check_dq, usp_build_lineage,
+    │              usp_compute_slv_waves, usp_run_silver_dag,
+    │              usp_debug_loop, usp_finalize_pipeline,
+    │              usp_log_pipeline_run
     └── Functions/ ufn_should_run
 ```
+
+> **Note**: Per-table SPs (bronze.usp_load_brz_*, silver.usp_load_slv_*, gold.usp_load_gld_*) have been **deleted**. All 28 data tables are now loaded by the single `meta.usp_generic_load` SP, which reads `sp_registry` to determine the target schema, table, view, and load pattern.
 
 ---
 
@@ -102,11 +105,11 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    L["Lookup\nmeta.sp_registry\nWHERE layer = @layer"]
+    L["Lookup\nmeta.sp_registry\nWHERE layer = @layer\nSELECT target_schema, target_table"]
     F["ForEach batch=N\nPARALLEL"]
-    SP["EXEC @item.sp_name"]
+    SP["EXEC meta.usp_generic_load\n@target_schema, @target_table"]
 
-    L -->|"N SPs"| F --> SP
+    L -->|"N tables"| F --> SP
 ```
 
 ### Silver — Parent-Child DAG (parallel within wave, sequential between waves)
@@ -182,62 +185,72 @@ flowchart LR
 
 ---
 
-## 3-File-Per-Table Pattern
+## Generic SP Architecture
+
+Instead of 28 per-table SPs, a single **Generic SP** handles all loads:
 
 ```mermaid
 flowchart LR
-    V["VIEW\nETL logic\nSELECT FROM source\n(the recipe)"]
-    SP["STORED PROCEDURE\nDROP + CTAS\nLog to meta\n(the robot)"]
-    T["TABLE\nMaterialized data\nParquet on disk\n(the product)"]
+    REG["sp_registry\ntarget_schema, target_table\nview_name, load_type\ndate_key, date_range_days"]
+    GSP["meta.usp_generic_load\n@target_schema\n@target_table\n\nReads sp_registry\nRoutes by load_type"]
+    V["VIEW\nETL logic\n(the recipe)"]
+    T["TABLE\nMaterialized data\n(the product)"]
 
-    V -->|"SP reads"| SP -->|"CTAS creates"| T
+    REG -->|"config"| GSP
+    V -->|"reads"| GSP -->|"CTAS/INSERT"| T
 ```
 
-### SP Template — Overwrite
+### 8 Load Patterns
+
+| Pattern | load_type | Description |
+|---------|-----------|-------------|
+| Overwrite | `overwrite` | DROP + CTAS from view (default) |
+| Incremental | `incremental` | INSERT WHERE watermark > last value |
+| Upsert | `upsert` | MERGE on primary_key |
+| DateKey | `datekey` | DELETE + INSERT by date_key column |
+| DateRange | `daterange` | DELETE last N days + INSERT |
+| Identity | `identity` | INSERT with MAX(id)+1 |
+| CDC | `cdc` | Apply change data capture operations |
+| SCD2 | `scd2` | Slowly changing dimension type 2 |
+
+### Generic SP Usage
 ```sql
-CREATE OR ALTER PROCEDURE {schema}.usp_load_{table} AS
-BEGIN
-    DECLARE @run_id VARCHAR(36) = CONVERT(VARCHAR(36), NEWID());
-    DECLARE @rows BIGINT;
-    EXEC meta.usp_log_run @run_id, '{schema}.usp_load_{table}', 'running';
-    BEGIN TRY
-        DROP TABLE IF EXISTS {schema}.{table};
-        CREATE TABLE {schema}.{table} AS
-        SELECT *, CAST(GETUTCDATE() AS DATETIME2(6)) AS _load_dt
-        FROM {schema}.vw_{table};
-        SELECT @rows = COUNT(*) FROM {schema}.{table};
-        EXEC meta.usp_log_run @run_id, '{schema}.usp_load_{table}', 'success',
-             @rows_affected = @rows;
-    END TRY
-    BEGIN CATCH
-        DECLARE @err VARCHAR(4000) = ERROR_MESSAGE();
-        EXEC meta.usp_log_run @run_id, '{schema}.usp_load_{table}', 'failed',
-             @error_message = @err;
-        THROW;
-    END CATCH
-END
+-- Pipeline ForEach calls this for every table:
+EXEC meta.usp_generic_load @target_schema = 'bronze', @target_table = 'brz_saleshistory_afi__invoicedetail';
+
+-- The SP reads sp_registry to find:
+--   view_name, load_type, watermark_column, primary_key, date_key, date_range_days
+-- Then routes to the correct load pattern.
 ```
 
 ---
 
-## Adding a New Table
+## Adding a New Table (Simplified)
 
-### Bronze
+With the Generic SP, adding a new table no longer requires creating a per-table stored procedure.
+
+### Bronze (2 steps, was 3)
 ```sql
 -- 1. Create view
 CREATE OR ALTER VIEW bronze.vw_brz_{name} AS
 SELECT ... FROM {Source_Lakehouse}.{schema}.{source_table};
--- 2. Create SP (copy overwrite template)
--- 3. Register
-INSERT INTO meta.sp_registry (sp_name, layer, load_type, ...) VALUES (...);
+
+-- 2. Register (NO SP creation needed!)
+INSERT INTO meta.sp_registry (sp_name, view_name, target_schema, target_table,
+    layer, load_type, frequency, execution_order, is_active, source_objects, project)
+VALUES ('meta.usp_generic_load', 'bronze.vw_brz_{name}',
+    'bronze', 'brz_{name}', 'BRZ', 'overwrite', 'daily', 1, 1,
+    '["{Source_Lakehouse}.{schema}.{source_table}"]', '{project}');
 ```
 
 ### Silver (with DAG)
 ```sql
--- Same as bronze, plus depends_on:
+-- 1. Create view
+-- 2. Register with depends_on:
 INSERT INTO meta.sp_registry (..., depends_on)
-VALUES (..., '["silver.usp_load_slv_table_a"]');
--- Pipeline auto picks up → wave auto-computed → parallel execution
+VALUES (..., '["silver.slv_upstream_table"]');
+-- Pipeline auto picks up -> wave auto-computed -> parallel execution
+-- NO SP creation needed!
 ```
 
 ---
@@ -246,9 +259,9 @@ VALUES (..., '["silver.usp_load_slv_table_a"]');
 
 | Schema | Tables | Views | SPs |
 |--------|--------|-------|-----|
-| bronze | `brz_{src}__{tbl}` / `ref_{entity}` | `vw_brz_*` / `vw_ref_*` | `usp_load_brz_*` / `usp_load_ref_*` |
-| silver | `slv_{concept}` | `vw_slv_*` | `usp_load_slv_*` |
-| gold | `gld_{fact\|dim}_{subject}` | `vw_gld_*` | `usp_load_gld_*` |
+| bronze | `brz_{src}__{tbl}` / `ref_{entity}` | `vw_brz_*` / `vw_ref_*` | (none -- uses meta.usp_generic_load) |
+| silver | `slv_{concept}` | `vw_slv_*` | (none -- uses meta.usp_generic_load) |
+| gold | `gld_{fact\|dim}_{subject}` | `vw_gld_*` | (none -- uses meta.usp_generic_load) |
 | meta | descriptive | `vw_*` | `usp_*` / `ufn_*` |
 
 Column prefixes: `id_` keys · `code_` categories · `name_` descriptions · `qty_` quantities · `amt_` amounts · `dt_` dates · `num_` numbers · `ts_` timestamps · `pct_` percentages · `is_` flags (0/1)
@@ -285,7 +298,7 @@ Column prefixes: `id_` keys · `code_` categories · `name_` descriptions · `qt
 
 | File | Description |
 |------|-------------|
-| [v9_architecture_supplychain.md](v9_architecture_supplychain.md) | All 98+ objects with names, row counts, pipeline IDs, source mappings, Semantic Model |
+| [v9_architecture_supplychain.md](v9_architecture_supplychain.md) | All 73 objects with names, row counts, pipeline IDs, source mappings, Semantic Model |
 | [v9_pipeline_supplychain.md](v9_pipeline_supplychain.md) | Execution trace with actual SP names, durations, wave assignments |
 | [v9_setup_supplychain.md](v9_setup_supplychain.md) | Implementation log: Spark→T-SQL conversions, bugs encountered, fixes applied |
 

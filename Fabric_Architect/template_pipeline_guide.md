@@ -69,38 +69,38 @@ The Lookup activity connects to the **Lakehouse SQL endpoint** (not the Warehous
 ```sql
 -- Executed on: {Project_Lakehouse} SQL endpoint
 -- Connection: {lakehouse_connection_id} (LakehouseTableSource)
-SELECT sp_name
+SELECT target_schema, target_table
 FROM {Project_Warehouse}.meta.sp_registry
 WHERE layer IN ('BRZ', 'REF')
   AND is_active = 1
-  AND meta.ufn_should_run(sp_name) = 1
 ```
 
 **Returns N rows** ({N_brz} BRZ + {N_ref} REF).
 
-### 1.2 ForEach Activity: Execute SPs in Parallel
+### 1.2 ForEach Activity: Execute Generic SP in Parallel
 
-The ForEach activity iterates over the SP names with `batch={batch_size}` and `isSequential=false`. Up to **{batch_size} SPs run in parallel** at any time.
+The ForEach activity iterates over the table rows with `batch={batch_size}` and `isSequential=false`. Up to **{batch_size} tables load in parallel** at any time.
 
-Each SP is executed via `SqlServerStoredProcedure` activity:
+Each table is loaded via `SqlServerStoredProcedure` activity calling the **generic SP**:
 - **Connection**: DataWarehouse linkedService (endpoint: {warehouse_endpoint})
 - **Retry policy**: retry=2, interval=30 seconds
-- **Command**: `EXEC @item().sp_name`
+- **Command**: `EXEC meta.usp_generic_load @target_schema = @item().target_schema, @target_table = @item().target_table`
 
-### 1.3 Inside Each Bronze SP (Overwrite Pattern)
+### 1.3 Inside the Generic SP (Overwrite Pattern)
 
-Every overwrite bronze SP follows this exact sequence:
+The generic SP `meta.usp_generic_load` reads `sp_registry` to determine the view_name and load_type, then executes the correct pattern. For the overwrite pattern:
 
 ```mermaid
 flowchart TD
+    S0["0. EXEC meta.usp_generic_load @target_schema='bronze', @target_table='{table_name}'\n-> Reads sp_registry: view_name, load_type='overwrite'"]
     S1["1. DECLARE @run_id = CONVERT(VARCHAR(36), NEWID())"]
-    S2["2. EXEC meta.usp_log_run @run_id, sp_name, 'running'\n-> INSERT INTO meta.sp_run_history\n   (run_id, sp_name, start_time, status='running')"]
+    S2["2. EXEC meta.usp_log_run @run_id, sp_name, 'running'\n-> INSERT INTO meta.sp_run_history"]
     S3["3. DROP TABLE IF EXISTS bronze.{table_name}\n-> Removes existing Parquet files"]
-    S4["4. CREATE TABLE bronze.{table_name} AS\n   SELECT *, CAST(GETUTCDATE() AS DATETIME2(6)) AS _load_dt\n   FROM bronze.vw_{table_name}\n-> View reads from {Source_Lakehouse}.{schema}.{source}\n   via 3-part naming\n-> Data materialized as Parquet in Warehouse"]
+    S4["4. CREATE TABLE bronze.{table_name} AS\n   SELECT *, CAST(GETUTCDATE() AS DATETIME2(6)) AS _load_dt\n   FROM bronze.vw_{table_name}\n-> View reads from {Source_Lakehouse}.{schema}.{source}\n   via 3-part naming"]
     S5["5. SELECT @rows = COUNT(*) FROM bronze.{table_name}"]
-    S6["6. EXEC meta.usp_log_run @run_id, sp_name, 'success',\n   @rows_affected = @rows\n-> UPDATE sp_run_history (end_time, duration, rows, status)\n-> UPDATE sp_registry (last_load_date, rows_loaded, next_run_time)"]
+    S6["6. EXEC meta.usp_log_run @run_id, sp_name, 'success',\n   @rows_affected = @rows"]
 
-    S1 --> S2 --> S3 --> S4 --> S5 --> S6
+    S0 --> S1 --> S2 --> S3 --> S4 --> S5 --> S6
 ```
 
 **If an error occurs** (TRY/CATCH):
@@ -185,11 +185,12 @@ The silver pipeline has 10 pre-built Lookup+ForEach stages (wave 0 through wave 
 
 1. **Lookup**: Queries the Lakehouse SQL endpoint with cross-DB:
    ```sql
-   SELECT sp_name
-   FROM {Project_Warehouse}.meta.slv_dag_waves_runtime
-   WHERE wave = {N}
+   SELECT r.target_schema, r.target_table
+   FROM {Project_Warehouse}.meta.slv_dag_waves_runtime w
+   JOIN {Project_Warehouse}.meta.sp_registry r ON w.sp_name = r.sp_name
+   WHERE w.wave = {N}
    ```
-2. **ForEach** (batch={batch_size}, PARALLEL): Executes each returned SP via SqlServerStoredProcedure.
+2. **ForEach** (batch={batch_size}, PARALLEL): Calls `meta.usp_generic_load` for each returned table via SqlServerStoredProcedure.
 
 For waves where the Lookup returns no rows, the ForEach receives an empty array and skips execution entirely. No error, no delay.
 
@@ -216,9 +217,9 @@ flowchart LR
     Wave0 -->|"sequential"| Wave1 -->|"sequential"| Wave2
 ```
 
-Each SP within a wave follows the same overwrite pattern as bronze:
-1. Generate run_id
-2. Log 'running' to sp_run_history
+Each table within a wave is loaded by `meta.usp_generic_load`, which follows the same overwrite pattern as bronze:
+1. Read config from sp_registry (view_name, load_type)
+2. Generate run_id, log 'running'
 3. DROP TABLE IF EXISTS silver.{table_name}
 4. CTAS from silver.vw_{table_name} (view reads from bronze tables, applies JOINs/CTEs/transforms)
 5. COUNT rows
@@ -238,7 +239,7 @@ Lookups for waves that have no assigned SPs return empty result sets. The ForEac
 
 ```sql
 -- Executed on: {Project_Lakehouse} SQL endpoint (cross-DB)
-SELECT sp_name
+SELECT target_schema, target_table
 FROM {Project_Warehouse}.meta.sp_registry
 WHERE layer = 'GLD'
   AND is_active = 1
@@ -254,9 +255,9 @@ flowchart LR
     F["ForEach\nbatch={batch_size}\nPARALLEL"]
 
     subgraph Parallel["Running simultaneously"]
-        SP1["EXEC gold.usp_load_gld_{subject_1}"]
-        SP2["EXEC gold.usp_load_gld_{subject_2}"]
-        SPN["EXEC gold.usp_load_gld_{subject_N}"]
+        SP1["EXEC meta.usp_generic_load\n'gold','gld_{subject_1}'"]
+        SP2["EXEC meta.usp_generic_load\n'gold','gld_{subject_2}'"]
+        SPN["EXEC meta.usp_generic_load\n'gold','gld_{subject_N}'"]
     end
 
     L --> F --> Parallel
@@ -354,56 +355,52 @@ flowchart TD
 
 | Table | When to Write | What to Write |
 |-------|--------------|---------------|
-| sp_registry | When adding a new table | INSERT 1 row with sp_name, layer, load_type, depends_on, source_objects |
+| sp_registry | When adding a new table | INSERT 1 row with target_schema, target_table, view_name, layer, load_type, depends_on, source_objects |
 | dq_rules | When adding DQ checks | INSERT 1 row per rule with check_type, target table, threshold, severity |
 
 ---
 
 ## Adding a New Table: Impact on Pipeline Flow
 
-### Adding a Bronze Table
+### Adding a Bronze Table (Simplified -- No SP Needed)
 
 ```mermaid
 flowchart TD
     A["1. CREATE VIEW bronze.vw_brz_{source}__{entity}\n   SELECT ... FROM {Source_Lakehouse}.{schema}.{source_table}"]
-    B["2. CREATE PROCEDURE bronze.usp_load_brz_{source}__{entity}\n   (copy overwrite template, change names)"]
-    C["3. INSERT INTO meta.sp_registry\n   sp_name='bronze.usp_load_brz_{source}__{entity}'\n   layer='BRZ', is_active=1, ..."]
-    D["4. INSERT INTO meta.dq_rules\n   (completeness + row_count rules)"]
-    E["5. Next pipeline run:\n   Lookup returns N+1 SPs\n   ForEach includes new SP\n   No pipeline JSON change needed"]
-
-    A --> B --> C --> D --> E
-```
-
-**What changes in the pipeline**: Nothing. The Lookup dynamically reads sp_registry. The ForEach iterates over whatever the Lookup returns. Adding a row to sp_registry is sufficient.
-
-### Adding a Silver Table
-
-```mermaid
-flowchart TD
-    A["1. CREATE VIEW silver.vw_slv_{concept}\n   SELECT ... FROM bronze/silver tables"]
-    B["2. CREATE PROCEDURE silver.usp_load_slv_{concept}\n   (copy overwrite template)"]
-    C["3. INSERT INTO meta.sp_registry\n   layer='SLV', depends_on='[\"silver.usp_load_slv_{dep}\"]'"]
-    D["4. Next pipeline run:\n   usp_compute_slv_waves recalculates\n   New SP auto-assigned to correct wave\n   If new wave needed, pipeline already has\n   stages 0-9 pre-built"]
-    E["5. ForEach for that wave\n   includes the new SP\n   No pipeline change needed"]
-
-    A --> B --> C --> D --> E
-```
-
-**What changes in the pipeline**: Nothing. The wave computation is dynamic. The 10 pre-built wave stages handle up to 10 waves. The new SP is automatically placed in the correct wave based on its `depends_on` declaration.
-
-### Adding a Gold Table
-
-```mermaid
-flowchart TD
-    A["1. CREATE VIEW gold.vw_gld_{fact|dim}_{subject}\n   SELECT ... FROM silver tables"]
-    B["2. CREATE PROCEDURE gold.usp_load_gld_{fact|dim}_{subject}\n   (copy overwrite template)"]
-    C["3. INSERT INTO meta.sp_registry\n   layer='GLD', is_active=1"]
-    D["4. Next pipeline run:\n   Lookup returns N+1 gold SPs\n   ForEach includes new SP\n   Consider increasing batch if many gold tables"]
+    B["2. INSERT INTO meta.sp_registry\n   target_schema='bronze', target_table='brz_{source}__{entity}'\n   layer='BRZ', load_type='overwrite', is_active=1\n   (NO per-table SP creation needed!)"]
+    C["3. INSERT INTO meta.dq_rules\n   (completeness + row_count rules)"]
+    D["4. Next pipeline run:\n   Lookup returns N+1 tables\n   ForEach calls meta.usp_generic_load\n   No pipeline JSON change needed"]
 
     A --> B --> C --> D
 ```
 
-**What changes in the pipeline**: Nothing in the pipeline definition. The Lookup dynamically picks up the new SP.
+**What changes in the pipeline**: Nothing. The Lookup dynamically reads sp_registry. The ForEach calls `meta.usp_generic_load` for each table. Adding a view + 1 registry row is sufficient.
+
+### Adding a Silver Table (Simplified -- No SP Needed)
+
+```mermaid
+flowchart TD
+    A["1. CREATE VIEW silver.vw_slv_{concept}\n   SELECT ... FROM bronze/silver tables"]
+    B["2. INSERT INTO meta.sp_registry\n   target_schema='silver', target_table='slv_{concept}'\n   layer='SLV', depends_on='[\"silver.slv_{dep}\"]'\n   (NO per-table SP creation needed!)"]
+    C["3. Next pipeline run:\n   usp_compute_slv_waves recalculates\n   meta.usp_generic_load handles load\n   No pipeline change needed"]
+
+    A --> B --> C
+```
+
+**What changes in the pipeline**: Nothing. The wave computation is dynamic. The new table is automatically placed in the correct wave based on its `depends_on` declaration. `meta.usp_generic_load` handles the load.
+
+### Adding a Gold Table (Simplified -- No SP Needed)
+
+```mermaid
+flowchart TD
+    A["1. CREATE VIEW gold.vw_gld_{fact|dim}_{subject}\n   SELECT ... FROM silver tables"]
+    B["2. INSERT INTO meta.sp_registry\n   target_schema='gold', target_table='gld_{subject}'\n   layer='GLD', is_active=1\n   (NO per-table SP creation needed!)"]
+    C["3. Next pipeline run:\n   Lookup returns N+1 gold tables\n   meta.usp_generic_load handles load\n   No pipeline change needed"]
+
+    A --> B --> C
+```
+
+**What changes in the pipeline**: Nothing in the pipeline definition. The Lookup dynamically picks up the new table. `meta.usp_generic_load` handles the load.
 
 ---
 

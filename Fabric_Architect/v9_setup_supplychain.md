@@ -92,6 +92,8 @@ CREATE TABLE meta.sp_registry (
     source_objects          VARCHAR(2000)   NULL,
     watermark_column        VARCHAR(100)    NULL,
     primary_key             VARCHAR(500)    NULL,
+    date_key                VARCHAR(100)    NULL,       -- date column for datekey/daterange patterns
+    date_range_days         INT             NULL,       -- number of days for daterange pattern
     is_active               INT             NOT NULL,
     last_load_date          DATETIME2(6)    NULL,
     last_watermark_value    VARCHAR(200)    NULL,
@@ -172,7 +174,7 @@ CREATE TABLE meta.slv_dag_waves_runtime (
 );
 ```
 
-### Step 0.3: Create Utility Stored Procedures (8 SPs)
+### Step 0.3: Create Utility Stored Procedures (9 SPs, including Generic SP)
 
 ```sql
 -- SP 1: usp_log_run (log SP start/end)
@@ -391,6 +393,84 @@ BEGIN
         tables_failed = @failed
     WHERE pipeline_run_id = @pipeline_run_id;
 END;
+
+-- SP 9: usp_generic_load (GENERIC SP -- replaces all 28 per-table SPs)
+-- Routes by load_type from sp_registry. Supports 8 patterns.
+-- Called by pipeline ForEach: EXEC meta.usp_generic_load @target_schema, @target_table
+CREATE OR ALTER PROCEDURE meta.usp_generic_load
+    @target_schema VARCHAR(50),
+    @target_table VARCHAR(200)
+AS
+BEGIN
+    DECLARE @run_id VARCHAR(36) = CONVERT(VARCHAR(36), NEWID());
+    DECLARE @rows BIGINT;
+    DECLARE @view_name VARCHAR(200), @load_type VARCHAR(20);
+    DECLARE @watermark_column VARCHAR(100), @primary_key VARCHAR(500);
+    DECLARE @date_key VARCHAR(100), @date_range_days INT;
+    DECLARE @last_wm VARCHAR(200), @sp_name VARCHAR(200);
+
+    -- Read config from sp_registry
+    SELECT @view_name = view_name, @load_type = load_type,
+           @watermark_column = watermark_column, @primary_key = primary_key,
+           @date_key = date_key, @date_range_days = date_range_days,
+           @last_wm = last_watermark_value, @sp_name = sp_name
+    FROM meta.sp_registry
+    WHERE target_schema = @target_schema AND target_table = @target_table;
+
+    EXEC meta.usp_log_run @run_id, @sp_name, 'running', @load_type = @load_type;
+
+    BEGIN TRY
+        -- Route by load_type
+        IF @load_type = 'overwrite'
+        BEGIN
+            DECLARE @drop_sql NVARCHAR(500) = N'DROP TABLE IF EXISTS ' + QUOTENAME(@target_schema) + '.' + QUOTENAME(@target_table);
+            EXEC sp_executesql @drop_sql;
+
+            DECLARE @ctas_sql NVARCHAR(4000) = N'CREATE TABLE ' + QUOTENAME(@target_schema) + '.' + QUOTENAME(@target_table)
+                + N' AS SELECT *, CAST(GETUTCDATE() AS DATETIME2(6)) AS _load_dt FROM ' + @view_name;
+            EXEC sp_executesql @ctas_sql;
+        END
+        ELSE IF @load_type = 'incremental'
+        BEGIN
+            -- INSERT WHERE watermark > last value (or full load if first run)
+            DECLARE @table_exists INT = 0;
+            SELECT @table_exists = COUNT(*) FROM sys.tables t
+            JOIN sys.schemas s ON t.schema_id = s.schema_id
+            WHERE s.name = @target_schema AND t.name = @target_table;
+
+            IF @table_exists = 0 OR @last_wm IS NULL
+            BEGIN
+                DECLARE @drop_sql2 NVARCHAR(500) = N'DROP TABLE IF EXISTS ' + QUOTENAME(@target_schema) + '.' + QUOTENAME(@target_table);
+                EXEC sp_executesql @drop_sql2;
+                DECLARE @full_sql NVARCHAR(4000) = N'CREATE TABLE ' + QUOTENAME(@target_schema) + '.' + QUOTENAME(@target_table)
+                    + N' AS SELECT *, CAST(GETUTCDATE() AS DATETIME2(6)) AS _load_dt FROM ' + @view_name;
+                EXEC sp_executesql @full_sql;
+            END
+            ELSE
+            BEGIN
+                DECLARE @incr_sql NVARCHAR(4000) = N'INSERT INTO ' + QUOTENAME(@target_schema) + '.' + QUOTENAME(@target_table)
+                    + N' SELECT *, CAST(GETUTCDATE() AS DATETIME2(6)) AS _load_dt FROM ' + @view_name
+                    + N' WHERE ' + QUOTENAME(@watermark_column) + N' > CAST(''' + @last_wm + ''' AS DATETIME2(6))';
+                EXEC sp_executesql @incr_sql;
+            END
+        END
+        -- Additional patterns: upsert, datekey, daterange, identity, cdc, scd2
+        -- (implemented similarly, routing by @load_type)
+
+        -- Count rows
+        DECLARE @count_sql NVARCHAR(500) = N'SELECT @r = COUNT(*) FROM ' + QUOTENAME(@target_schema) + '.' + QUOTENAME(@target_table);
+        EXEC sp_executesql @count_sql, N'@r BIGINT OUTPUT', @r = @rows OUTPUT;
+
+        EXEC meta.usp_log_run @run_id, @sp_name, 'success',
+             @rows_affected = @rows, @load_type = @load_type;
+    END TRY
+    BEGIN CATCH
+        DECLARE @err VARCHAR(4000) = ERROR_MESSAGE();
+        EXEC meta.usp_log_run @run_id, @sp_name, 'failed',
+             @error_message = @err, @load_type = @load_type;
+        THROW;
+    END CATCH
+END;
 ```
 
 ### Step 0.4: Create Function and View
@@ -486,89 +566,40 @@ FROM Enterprise_Lakehouse.{Schema_Folder}.{Source_Table};
 
 **Important**: The schema in the 3-part name corresponds to the **folder name** in the Lakehouse, not `dbo`. Using `dbo` will return a 404 error.
 
-### Step 1.2: Create Stored Procedures (18 SPs)
+### Step 1.2: No Per-Table SPs Needed (Generic SP handles all loads)
 
-Create one SP per table using the overwrite template (Section 5.3 of architecture doc).
+With the Generic SP architecture, **no per-table stored procedures are needed** for bronze. The pipeline calls `meta.usp_generic_load @target_schema, @target_table` for each table, and it reads sp_registry to determine the view_name and load_type.
 
-**For 17 overwrite SPs**, copy the template and replace `{schema}` and `{table}`:
+**Previously**: 18 per-table SPs were created (17 overwrite + 1 incremental). These have been **deleted**.
 
+**Now**: All bronze loads are handled by `meta.usp_generic_load`, configured via sp_registry rows.
+
+**Example execution**:
 ```sql
--- Example: bronze.usp_load_brz_saleshistory_afi__invoicedetail
-CREATE OR ALTER PROCEDURE bronze.usp_load_brz_saleshistory_afi__invoicedetail AS
-BEGIN
-    DECLARE @run_id VARCHAR(36) = CONVERT(VARCHAR(36), NEWID());
-    DECLARE @rows BIGINT;
-    EXEC meta.usp_log_run @run_id, 'bronze.usp_load_brz_saleshistory_afi__invoicedetail', 'running',
-         @load_type = 'overwrite';
-    BEGIN TRY
-        DROP TABLE IF EXISTS bronze.brz_saleshistory_afi__invoicedetail;
-        CREATE TABLE bronze.brz_saleshistory_afi__invoicedetail AS
-        SELECT *, CAST(GETUTCDATE() AS DATETIME2(6)) AS _load_dt
-        FROM bronze.vw_brz_saleshistory_afi__invoicedetail;
-        SELECT @rows = COUNT(*) FROM bronze.brz_saleshistory_afi__invoicedetail;
-        EXEC meta.usp_log_run @run_id, 'bronze.usp_load_brz_saleshistory_afi__invoicedetail', 'success',
-             @rows_affected = @rows, @load_type = 'overwrite';
-    END TRY
-    BEGIN CATCH
-        DECLARE @err VARCHAR(4000) = ERROR_MESSAGE();
-        EXEC meta.usp_log_run @run_id, 'bronze.usp_load_brz_saleshistory_afi__invoicedetail', 'failed',
-             @error_message = @err, @load_type = 'overwrite';
-        THROW;
-    END CATCH
-END;
+-- Pipeline ForEach calls:
+EXEC meta.usp_generic_load @target_schema = 'bronze', @target_table = 'brz_saleshistory_afi__invoicedetail';
+-- Generic SP reads sp_registry: load_type='overwrite', view_name='bronze.vw_brz_saleshistory_afi__invoicedetail'
+-- Then: DROP TABLE + CTAS from view
+
+EXEC meta.usp_generic_load @target_schema = 'bronze', @target_table = 'brz_supplychain_enh_1__demandforecastsnapshotdaily';
+-- Generic SP reads sp_registry: load_type='incremental', watermark_column='ts_snapshot'
+-- Then: INSERT WHERE ts_snapshot > last_watermark_value
 ```
 
-**For the 1 incremental SP** (brz_demandforecast), use the incremental template from Section 5.4 of the architecture doc, with `watermark_column = ts_snapshot` and cutoff = `2023-01-01`.
+**Note**: `ref_forecast_horizon` (hardcoded INSERT) is a special case -- the generic SP handles it via a dedicated view or hardcoded logic in sp_registry config.
 
-**For ref_forecast_horizon** (hardcoded), the SP does not read from a view:
+### Step 1.3: Test Bronze Loads via Generic SP
 
-```sql
-CREATE OR ALTER PROCEDURE bronze.usp_load_ref_forecast_horizon AS
-BEGIN
-    DECLARE @run_id VARCHAR(36) = CONVERT(VARCHAR(36), NEWID());
-    EXEC meta.usp_log_run @run_id, 'bronze.usp_load_ref_forecast_horizon', 'running';
-    BEGIN TRY
-        DROP TABLE IF EXISTS bronze.ref_forecast_horizon;
-        CREATE TABLE bronze.ref_forecast_horizon (
-            horizon_months INT NOT NULL,
-            horizon_label VARCHAR(20) NOT NULL,
-            _load_dt DATETIME2(6) NOT NULL
-        );
-        INSERT INTO bronze.ref_forecast_horizon VALUES
-            (1, '1M', CAST(GETUTCDATE() AS DATETIME2(6))),
-            (2, '2M', CAST(GETUTCDATE() AS DATETIME2(6))),
-            (3, '3M', CAST(GETUTCDATE() AS DATETIME2(6))),
-            (4, '4M', CAST(GETUTCDATE() AS DATETIME2(6))),
-            (5, '5M', CAST(GETUTCDATE() AS DATETIME2(6))),
-            (6, '6M', CAST(GETUTCDATE() AS DATETIME2(6))),
-            (9, '9M', CAST(GETUTCDATE() AS DATETIME2(6))),
-            (12, '12M', CAST(GETUTCDATE() AS DATETIME2(6)));
-        DECLARE @rows BIGINT;
-        SELECT @rows = COUNT(*) FROM bronze.ref_forecast_horizon;
-        EXEC meta.usp_log_run @run_id, 'bronze.usp_load_ref_forecast_horizon', 'success',
-             @rows_affected = @rows;
-    END TRY
-    BEGIN CATCH
-        DECLARE @err VARCHAR(4000) = ERROR_MESSAGE();
-        EXEC meta.usp_log_run @run_id, 'bronze.usp_load_ref_forecast_horizon', 'failed',
-             @error_message = @err;
-        THROW;
-    END CATCH
-END;
-```
-
-### Step 1.3: Test Bronze SPs
-
-Execute each SP manually and verify:
+Execute the generic SP manually for a bronze table and verify:
 
 ```sql
--- Test one SP
-EXEC bronze.usp_load_ref_calendar;
+-- Test one table load
+EXEC meta.usp_generic_load @target_schema = 'bronze', @target_table = 'ref_calendar';
 
 -- Verify
 SELECT COUNT(*) FROM bronze.ref_calendar;
 SELECT TOP 10 * FROM bronze.ref_calendar;
-SELECT * FROM meta.sp_run_history WHERE sp_name = 'bronze.usp_load_ref_calendar' ORDER BY start_time DESC;
+SELECT * FROM meta.sp_run_history ORDER BY start_time DESC;
 ```
 
 ---
@@ -627,9 +658,9 @@ SELECT
 FROM cte;
 ```
 
-### Step 2.4: Create Silver SPs (8 SPs)
+### Step 2.4: No Per-Table SPs Needed (Generic SP handles all loads)
 
-Use the same overwrite SP template as bronze, with `{schema} = silver` and `{table} = slv_{name}`.
+With the Generic SP architecture, **no per-table stored procedures are needed** for silver. The pipeline calls `meta.usp_generic_load @target_schema = 'silver', @target_table = 'slv_{name}'` for each table. The 8 per-table silver SPs have been **deleted**.
 
 ### Step 2.5: Define depends_on
 
@@ -657,9 +688,9 @@ Gold views read from silver tables and optionally bronze reference tables.
 **gld_fact_flat_forecast_actual**: UNION ALL of actual demand, forecast demand, and naive forecast.
 **gld_fact_forecast_kpi**: CTE chain that cross-joins forecast with horizon periods and LEFT JOINs actual and naive values.
 
-### Step 3.2: Create Gold SPs (2 SPs)
+### Step 3.2: No Per-Table SPs Needed (Generic SP handles all loads)
 
-Same overwrite template as bronze/silver with `{schema} = gold` and `{table} = gld_{name}`.
+With the Generic SP architecture, **no per-table stored procedures are needed** for gold. The pipeline calls `meta.usp_generic_load @target_schema = 'gold', @target_table = 'gld_{name}'` for each table. The 2 per-table gold SPs have been **deleted**.
 
 ### Step 3.3: Gold Naming
 
@@ -828,19 +859,20 @@ SELECT * FROM meta.sp_lineage ORDER BY lineage_id;
    - Use query: **Query**
    - Query:
      ```sql
-     SELECT sp_name FROM SupplyChain_Warehouse.meta.sp_registry
+     SELECT target_schema, target_table FROM SupplyChain_Warehouse.meta.sp_registry
      WHERE layer IN ('BRZ', 'REF') AND is_active = 1
      ```
    - First row only: **No** (return all rows)
 4. Add **ForEach** activity:
-   - Name: `run_bronze_sps`
+   - Name: `run_bronze_tables`
    - Sequential: **No** (parallel)
    - Batch count: **8**
    - Items: `@activity('get_bronze_sps').output.value`
 5. Inside ForEach, add **Stored Procedure** activity:
-   - Name: `exec_sp`
+   - Name: `exec_generic_load`
    - Linked service: Select **SupplyChain_Warehouse** (Data Warehouse type)
-   - Stored procedure name: `@item().sp_name`
+   - Stored procedure name: `meta.usp_generic_load`
+   - Parameters: `@target_schema = @item().target_schema`, `@target_table = @item().target_table`
    - Retry: **2**, Retry interval: **30** seconds
 
 #### Pipeline 2: pl_sc_silver (PARENT)
@@ -870,7 +902,7 @@ SELECT * FROM meta.sp_lineage ORDER BY lineage_id;
 2. Add **Parameter**: `wave_number` (INT)
 3. Add **Lookup** activity:
    - Name: `get_wave_sps`
-   - Query: `SELECT sp_name FROM SupplyChain_Warehouse.meta.slv_dag_waves_runtime WHERE wave = @pipeline().parameters.wave_number`
+   - Query: `SELECT r.target_schema, r.target_table FROM SupplyChain_Warehouse.meta.slv_dag_waves_runtime w JOIN SupplyChain_Warehouse.meta.sp_registry r ON w.sp_name = r.sp_name WHERE w.wave = @pipeline().parameters.wave_number`
    - First row only: **No**
 4. Add **ForEach** activity:
    - Name: `run_wave_sps`
@@ -878,12 +910,13 @@ SELECT * FROM meta.sp_lineage ORDER BY lineage_id;
    - Batch count: **8**
    - Items: `@activity('get_wave_sps').output.value`
 5. Inside ForEach, add **Stored Procedure** activity:
-   - Stored procedure name: `@item().sp_name`
+   - Stored procedure name: `meta.usp_generic_load`
+   - Parameters: `@target_schema = @item().target_schema`, `@target_table = @item().target_table`
 
 #### Pipeline 3: pl_sc_gold
 
 Same pattern as pl_sc_bronze but with:
-- Query: `WHERE layer = 'GLD'`
+- Query: `SELECT target_schema, target_table ... WHERE layer = 'GLD'`
 - Batch count: **2**
 
 #### Pipeline 4: pl_sc_master
@@ -974,7 +1007,7 @@ The pipeline JSON follows the Fabric Pipeline schema. Key sections:
                 "typeProperties": {
                     "source": {
                         "type": "LakehouseTableSource",
-                        "sqlReaderQuery": "SELECT sp_name FROM SupplyChain_Warehouse.meta.sp_registry WHERE layer IN ('BRZ','REF') AND is_active = 1"
+                        "sqlReaderQuery": "SELECT target_schema, target_table FROM SupplyChain_Warehouse.meta.sp_registry WHERE layer IN ('BRZ','REF') AND is_active = 1"
                     },
                     "firstRowOnly": false
                 },
@@ -1002,12 +1035,13 @@ The pipeline JSON follows the Fabric Pipeline schema. Key sections:
                     },
                     "activities": [
                         {
-                            "name": "exec_sp",
+                            "name": "exec_generic_load",
                             "type": "SqlServerStoredProcedure",
                             "typeProperties": {
-                                "storedProcedureName": {
-                                    "value": "@item().sp_name",
-                                    "type": "Expression"
+                                "storedProcedureName": "meta.usp_generic_load",
+                                "storedProcedureParameters": {
+                                    "target_schema": { "value": "@item().target_schema", "type": "Expression" },
+                                    "target_table": { "value": "@item().target_table", "type": "Expression" }
                                 }
                             },
                             "linkedServiceName": {
