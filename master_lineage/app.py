@@ -15,6 +15,43 @@ from pathlib import Path
 
 st.set_page_config(page_title="SC Lineage Explorer", layout="wide", initial_sidebar_state="collapsed")
 
+# ── Authentication ──
+DEFAULT_USER = "admin123"
+DEFAULT_PASS = "admin123"
+
+def check_login():
+    if st.session_state.get("authenticated"):
+        return True
+
+    st.markdown("""
+    <style>
+    [data-testid="stAppViewContainer"] {background: #0a0f1a;}
+    </style>
+    """, unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        st.markdown("<h2 style='text-align:center; margin-top:20vh; color:#e2e8f0;'>🔗 Lineage Explorer</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align:center; color:#64748b; margin-bottom:2rem;'>Supply Chain Warehouse v9</p>", unsafe_allow_html=True)
+
+        with st.form("login_form"):
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
+            submitted = st.form_submit_button("Login", use_container_width=True)
+
+        if submitted:
+            valid_user = st.secrets.get("LOGIN_USER", DEFAULT_USER)
+            valid_pass = st.secrets.get("LOGIN_PASS", DEFAULT_PASS)
+            if username == valid_user and password == valid_pass:
+                st.session_state["authenticated"] = True
+                st.rerun()
+            else:
+                st.error("Invalid username or password.")
+    return False
+
+if not check_login():
+    st.stop()
+
 DATA_DIR = Path(__file__).parent / "data"
 
 
