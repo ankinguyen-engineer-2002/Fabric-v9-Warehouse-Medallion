@@ -349,14 +349,15 @@ flowchart TD
 | [v9_pipeline_supplychain.md](Fabric_Architect/v9_pipeline_supplychain.md) | Execution trace with actual SP names, durations, wave assignments |
 | [v9_setup_supplychain.md](Fabric_Architect/v9_setup_supplychain.md) | Implementation log: Spark→T-SQL conversions, bugs encountered, fixes applied |
 
-### Scale & Enterprise
+### Scale & Operations
 
 | File | Description |
 |------|-------------|
-| [multi_mart_scale_architecture.md](multi_mart_scale_architecture.md) | **Multi Data Mart scale design**: N marts parallel, cross-mart deps, cost optimization, roadmap |
-| [Enterprise_vs_Fabric_comparison.md](Enterprise_vs_Fabric_comparison.md) | Detailed comparison: ETL framework, load patterns, schema, CI/CD, change propagation |
-| [generic_sp_migration_plan.md](generic_sp_migration_plan.md) | Migration plan: 28 per-table SPs → 1 generic SP (8 patterns) |
-| [SESSION_CONTEXT.md](SESSION_CONTEXT.md) | Full session context: connections, decisions, bugs, skills (for AI continuity) |
+| [multi_mart_scale_architecture.md](multi_mart_scale_architecture.md) | **Multi Data Mart scale**: N marts parallel, cross-mart deps, cost optimization, roadmap |
+| [scheduling_and_concurrency.md](scheduling_and_concurrency.md) | **Scheduling**: trigger mechanism, smart skip, concurrency, frequency tiers |
+| [Enterprise_vs_Fabric_comparison.md](Enterprise_vs_Fabric_comparison.md) | Enterprise comparison: ETL framework, load patterns, CI/CD, change propagation |
+| [generic_sp_migration_plan.md](generic_sp_migration_plan.md) | Migration: 28 per-table SPs → 1 generic SP (8 patterns) |
+| [SESSION_CONTEXT.md](SESSION_CONTEXT.md) | Session context: connections, decisions, bugs, skills (for AI continuity) |
 
 ---
 
