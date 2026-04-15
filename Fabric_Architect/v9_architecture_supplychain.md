@@ -1038,17 +1038,17 @@ flowchart LR
 
 | Schema | Tables | Views | SPs | Functions | Total |
 |--------|--------|-------|-----|-----------|-------|
-| bronze | 18 | 17 | 0 | -- | 35 |
+| bronze | 18 | 18 | 0 | -- | 36 |
 | silver | 8 | 8 | 0 | -- | 16 |
 | gold | 2 | 2 | 0 | -- | 4 |
-| meta | 7 | 1 | 9 | 1 | 18 |
-| **Total** | **35** | **28** | **9** | **1** | **73** |
+| meta | 7 | 2 | 9 | 1 | 19 |
+| **Total** | **35** | **30** | **9** | **1** | **75** |
 
-> **Change from previous version**: 28 per-table SPs (18 bronze + 8 silver + 2 gold) have been **deleted** and replaced by 1 generic SP (`meta.usp_generic_load`). meta SPs increased from 8 to 9. Total objects reduced from 100 to 73 (net -27).
+> **Change from previous version**: 28 per-table SPs (18 bronze + 8 silver + 2 gold) have been **deleted** and replaced by 1 generic SP (`meta.usp_generic_load`). meta SPs increased from 8 to 9. Total objects reduced from 100 to 75 (net -25).
 
 **Pipelines**: 5 (`pl_sc_master`, `pl_sc_bronze`, `pl_sc_silver`, `pl_sc_silver_wave`, `pl_sc_gold`)
 
-**Grand total**: 73 warehouse objects + 5 pipelines = **78 managed artifacts**
+**Grand total**: 75 warehouse objects + 5 pipelines = **80 managed artifacts**
 
 ### Row Count Summary
 

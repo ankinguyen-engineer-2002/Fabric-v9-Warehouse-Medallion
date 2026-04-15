@@ -298,7 +298,7 @@ Column prefixes: `id_` keys · `code_` categories · `name_` descriptions · `qt
 
 | File | Description |
 |------|-------------|
-| [v9_architecture_supplychain.md](Fabric_Architect/v9_architecture_supplychain.md) | All 74 objects with names, row counts, pipeline IDs, source mappings, Semantic Model |
+| [v9_architecture_supplychain.md](Fabric_Architect/v9_architecture_supplychain.md) | All 75 objects with names, row counts, pipeline IDs, source mappings, Semantic Model |
 | [v9_pipeline_supplychain.md](Fabric_Architect/v9_pipeline_supplychain.md) | Execution trace with actual SP names, durations, wave assignments |
 | [v9_setup_supplychain.md](Fabric_Architect/v9_setup_supplychain.md) | Implementation log: Spark→T-SQL conversions, bugs encountered, fixes applied |
 

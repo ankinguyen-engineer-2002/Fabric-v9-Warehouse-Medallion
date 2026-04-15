@@ -50,7 +50,7 @@ cursor = conn.cursor()
 
 ## 3. Kiến trúc v9 hiện tại (sau tất cả thay đổi)
 
-### 4 Schemas, 74 objects
+### 4 Schemas, 75 objects
 
 ```
 SupplyChain_Warehouse/
@@ -58,7 +58,7 @@ SupplyChain_Warehouse/
 ├── silver/  (8 tables + 8 views + 0 SPs = 16)
 ├── gold/    (2 tables + 2 views + 0 SPs = 4)
 └── meta/    (7 tables + 2 views + 9 SPs + 1 fn = 19)
-                                        TOTAL: 74 (was 100 before generic SP)
+                                        TOTAL: 75 (was 100 before generic SP)
 ```
 
 ### Per-table SPs đã XÓA — thay bằng 1 generic SP
