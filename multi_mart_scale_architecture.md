@@ -401,7 +401,236 @@ Với 10 marts:
 
 ---
 
-## 10. Thay đổi cần thiết (từ hiện tại → multi-mart)
+## 10. Scheduling — Pipeline Trigger Frequency
+
+### Hiện trạng
+
+| Config | Giá trị | Ở đâu |
+|--------|---------|-------|
+| Pipeline trigger | **Manual** (chưa schedule) | Fabric Pipeline settings |
+| sp_registry.frequency | `daily` (18 tables) / `monthly` (10 tables) | Per-table config |
+| sp_registry.scheduled_hour | `2` (UTC) cho tất cả | Per-table config |
+| next_run_time calculation | Trong `usp_log_run` | Khi SP chạy xong → tính next |
+
+### Pipeline trigger vs Table frequency — 2 tầng khác nhau
+
+```
+Tầng 1: PIPELINE TRIGGER (khi nào master chạy?)
+  → Fabric Pipeline Schedule: daily 2AM / hourly / every 15min
+  → Hoặc manual trigger
+  → KHÔNG liên quan sp_registry
+
+Tầng 2: TABLE FREQUENCY (table nào chạy trong lần trigger này?)
+  → sp_registry.frequency + next_run_time + ufn_should_run
+  → Pipeline trigger 10 lần/ngày nhưng monthly table chỉ chạy 1 lần/tháng
+  → "Smart skip": ufn_should_run = 0 nếu chưa đến giờ
+```
+
+### Các scenario trigger frequency
+
+#### Scenario A: Daily (hiện tại phù hợp)
+```
+Pipeline schedule: daily 2:00 AM UTC
+  → 18 daily tables: chạy mỗi ngày ✅
+  → 10 monthly tables: chạy 1 lần/tháng (skip 29 ngày còn lại) ✅
+  → CU cost: 1 pipeline run/ngày
+```
+
+#### Scenario B: Hourly (near-realtime)
+```
+Pipeline schedule: every 1 hour
+  → hourly tables: chạy mỗi giờ ✅
+  → daily tables: chạy 1 lần/ngày (skip 23 giờ còn lại) ✅
+  → monthly tables: chạy 1 lần/tháng ✅
+  → CU cost: 24 pipeline runs/ngày nhưng hầu hết skip
+  → Vấn đề: mỗi trigger vẫn tốn overhead (Lookup, SP call dù skip)
+```
+
+#### Scenario C: Every 15 minutes (real-time-ish)
+```
+Pipeline schedule: every 15 min
+  → 96 triggers/ngày
+  → Hầu hết tables skip (chỉ hourly/realtime tables chạy)
+  → CU cost: overhead 96 × (Lookup + ForEach skip) ≈ ~5 CU/ngày overhead
+  → Vấn đề: snapshot conflict tăng nếu 2 triggers overlap
+  → Giải pháp: master pipeline concurrency=1 (queue, không overlap)
+```
+
+#### Scenario D: Multi-schedule (recommend cho production)
+```
+Pipeline 1: pl_sc_master_daily (daily 2AM)
+  → Chạy TẤT CẢ tables (daily + monthly khi đến kỳ)
+  → Full pipeline: bronze → silver → gold → SM refresh
+
+Pipeline 2: pl_sc_master_hourly (every 1 hour, 6AM-10PM)
+  → Chỉ chạy tables có frequency='hourly'
+  → Lighter pipeline: chỉ bronze hourly → silver deps → gold deps
+  → KHÔNG refresh SM mỗi giờ (tốn CU)
+
+Pipeline 3: pl_sc_master_realtime (every 15 min) [tương lai]
+  → Chỉ chạy tables có frequency='realtime'
+  → Rất nhẹ: 1-2 incremental tables
+```
+
+### ufn_should_run — Gate logic hiện tại
+
+```sql
+-- Hiện tại:
+CASE
+  WHEN is_active = 0 THEN 0                    -- disabled
+  WHEN next_run_time IS NULL THEN 1             -- never ran → run now
+  WHEN next_run_time <= GETUTCDATE() THEN 1     -- overdue → run now
+  ELSE 0                                         -- not yet → skip
+END
+```
+
+**Hoạt động đúng** cho mọi frequency. Khi pipeline trigger mỗi 15 phút:
+- daily table (next_run = tomorrow 2AM): skip 95/96 triggers ✅
+- hourly table (next_run = 1 hour later): skip 3/4 triggers ✅
+- monthly table: skip ~2880/2880 triggers ✅
+
+### Vấn đề khi trigger quá thường xuyên
+
+| Vấn đề | Trigger 15min | Trigger hourly | Trigger daily |
+|--------|-------------|-------------|------------|
+| Overhead (Lookup per trigger) | 96×/ngày | 24×/ngày | 1×/ngày |
+| Snapshot conflict risk | Cao (overlap) | Thấp | Không |
+| CU waste (empty runs) | ~5 CU/ngày | ~1 CU/ngày | 0 |
+| Pipeline queue | Cần concurrency=1 | OK | OK |
+| SM refresh frequency | Mỗi 15min quá tốn | Hourly OK | Daily OK |
+
+### Recommend
+
+| Giai đoạn | Trigger | Lý do |
+|-----------|---------|-------|
+| **Hiện tại (DEV)** | Manual hoặc daily 2AM | Đủ cho test |
+| **Production (1 mart)** | Daily 2AM | Đơn giản, đủ cho batch |
+| **Production (N marts)** | Daily 2AM + optional hourly | Daily cho batch, hourly cho hot tables |
+| **Near-realtime** | Multi-schedule (D+H+15min) | Tách pipeline theo frequency tier |
+
+### Setup schedule trên Fabric Portal
+
+```
+Fabric Portal → Pipeline → pl_sc_master → Schedule
+  → Recurrence: Daily
+  → Time: 02:00 AM
+  → Timezone: UTC (hoặc local)
+  → Start date: today
+  → End date: none (ongoing)
+```
+
+Hoặc via REST API:
+```json
+POST /v1/workspaces/{ws}/items/{pipeline_id}/schedules
+{
+  "enabled": true,
+  "configuration": {
+    "type": "Cron",
+    "startDateTime": "2026-04-15T02:00:00",
+    "interval": 1440,
+    "localTimeZoneId": "SE Asia Standard Time"
+  }
+}
+```
+
+### sp_registry.frequency vs Pipeline schedule — Không conflict
+
+```
+Pipeline schedule = "KHI NÀO master chạy" (Fabric level)
+sp_registry.frequency = "TABLE NÀY cần refresh bao lâu 1 lần" (application level)
+
+Ví dụ:
+  Pipeline chạy mỗi 1 giờ
+  Table ref_calendar frequency='monthly', next_run_time = 2026-05-01
+  → ufn_should_run = 0 → generic SP skip → table không bị load lại
+  → Chỉ khi next_run_time <= now → ufn_should_run = 1 → load
+
+Kết luận: trigger pipeline thường xuyên KHÔNG làm table load nhiều hơn cần thiết
+```
+
+### Cần thay đổi gì cho multi-frequency?
+
+| Component | Cần đổi? | Chi tiết |
+|-----------|---------|----------|
+| sp_registry.frequency | Có thể thêm 'hourly', 'realtime' | Đã hỗ trợ sẵn |
+| ufn_should_run | **Không** | Đã handle mọi frequency |
+| usp_log_run next_run_time | **Không** | Đã có CASE cho hourly/daily/weekly/monthly |
+| Pipeline trigger | Thêm schedule | Fabric Portal hoặc API |
+| usp_generic_load | **Không** | Frequency-agnostic |
+| Pipeline Lookup | Có thể thêm frequency filter | Optional: WHERE frequency='hourly' cho hourly pipeline |
+
+---
+
+## 11. Implementation Chi Tiết — Multi Mart Setup (30 phút)
+
+### Step 1: Pipeline Lookup thêm project filter (5 phút)
+
+Hiện tại:
+```sql
+SELECT target_schema, target_table FROM meta.sp_registry
+WHERE layer IN ('BRZ','REF') AND is_active = 1
+```
+
+Đổi thành:
+```sql
+SELECT target_schema, target_table FROM meta.sp_registry
+WHERE layer IN ('BRZ','REF') AND is_active = 1 AND project = @project_name
+```
+
+Tương tự cho silver wave Lookup + gold Lookup.
+
+### Step 2: Tạo pl_sc_mart — generic mart pipeline (10 phút)
+
+Pipeline mới nhận parameter `project_name`:
+
+```
+pl_sc_mart (parameter: project_name):
+  [1] pl_sc_bronze (Lookup WHERE project=@project → ForEach → generic SP)
+  [2] pl_sc_silver (compute_waves WHERE project=@project → parent-child)
+  [3] pl_sc_gold (Lookup WHERE project=@project → ForEach → generic SP)
+```
+
+Hoặc đơn giản hơn: InvokePipeline cho bronze/silver/gold với project parameter.
+
+### Step 3: Master pipeline → ForEach marts parallel (10 phút)
+
+```
+pl_sc_master:
+  [1] log_start
+  [2] Lookup: SELECT DISTINCT project FROM meta.sp_registry WHERE is_active = 1
+  [3] ForEach project (isSequential=false, batch=10):
+        InvokePipeline: pl_sc_mart(project=@item().project)
+  [4] Cross-mart silver (nếu có)
+  [5] finalize
+  [6] ForEach SM refresh
+```
+
+### Step 4: usp_compute_slv_waves thêm project filter (5 phút)
+
+```sql
+-- Hiện tại: tính wave cho TẤT CẢ SLV tables
+SELECT sp_name, 0 FROM meta.sp_registry
+WHERE layer = 'SLV' AND is_active = 1
+
+-- Đổi: thêm project filter
+SELECT sp_name, 0 FROM meta.sp_registry
+WHERE layer = 'SLV' AND is_active = 1 AND project = @project_name
+```
+
+### Step 5: Test với 2 marts
+```sql
+-- Mart 1: supplychain (đã có)
+SELECT COUNT(*) FROM meta.sp_registry WHERE project = 'supplychain';  -- 28
+
+-- Mart 2: forecast (ví dụ, tạo mới)
+INSERT INTO meta.sp_registry (..., project) VALUES (..., 'forecast');
+-- Tạo views cho forecast tables
+-- Trigger pipeline → 2 marts chạy parallel
+```
+
+---
+
+## 12. Thay đổi cần thiết (từ hiện tại → multi-mart)
 
 | Component | Hiện tại | Cần đổi | Effort |
 |-----------|---------|---------|--------|
