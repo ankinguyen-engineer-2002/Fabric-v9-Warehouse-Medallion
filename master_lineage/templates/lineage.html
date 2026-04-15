@@ -71,6 +71,11 @@ const TYPE_CONFIG = {
   brz:   { color: "#22c55e", label: "BRZ",   icon: "◇" },
   ref:   { color: "#14b8a6", label: "REF",   icon: "◎" },
   slv:   { color: "#3b82f6", label: "SLV",   icon: "◆" },
+  slv0:  { color: "#60a5fa", label: "SLV-W0", icon: "◆" },
+  slv1:  { color: "#3b82f6", label: "SLV-W1", icon: "◆" },
+  slv2:  { color: "#2563eb", label: "SLV-W2", icon: "◆" },
+  slv3:  { color: "#1d4ed8", label: "SLV-W3", icon: "◆" },
+  slv4:  { color: "#1e40af", label: "SLV-W4", icon: "◆" },
   gld:   { color: "#f59e0b", label: "GLD",   icon: "★" },
   dq:    { color: "#ef4444", label: "DQ",    icon: "●" },
   other: { color: "#94a3b8", label: "Raw",   icon: "○" },
@@ -100,7 +105,7 @@ function apiJsonToGraph(data) {
   };
   for (const n of data.nodes) {
     const id = n.id.replace(/^dbo\./, '');
-    const validLayers = ['brz','ref','slv','gld','dq','other'];
+    const validLayers = ['brz','ref','slv','slv0','slv1','slv2','slv3','slv4','gld','dq','other'];
     const type = n.layer && validLayers.includes(n.layer) ? n.layer : (n.layer === 'external' ? 'other' : getNodeType(id));
     nodes.set(id, { id, name: id, type, status: n.status, load_type: n.load_type, last_load_date: n.last_load_date, rows_loaded: n.rows_loaded });
   }
@@ -125,8 +130,8 @@ function layoutDAG(nodes, edges, collapsed) {
 
   const layers = new Map(), done = new Set();
   const nodeById = new Map(); vis.forEach(n => nodeById.set(n.id, n));
-  /* Fixed layer assignments: external(0) → brz/ref(1) → slv(2) → gld(3) */
-  const FIXED_LAYERS = {other: 0, orphan: 0, brz: 1, ref: 1, slv: 2, gld: 3};
+  /* Fixed layer assignments: external(0) → brz/ref(1) → slv wave0(2) → slv wave1(3) → slv wave2(4) → gld(5) */
+  const FIXED_LAYERS = {other: 0, orphan: 0, brz: 1, ref: 1, slv: 2, slv0: 2, slv1: 3, slv2: 4, slv3: 5, slv4: 6, gld: 7};
   function assign(id) {
     if (done.has(id)) return layers.get(id) || 0;
     done.add(id);

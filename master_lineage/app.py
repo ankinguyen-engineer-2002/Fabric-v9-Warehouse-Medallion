@@ -34,7 +34,29 @@ def build_dag_data():
     registry = {r.get("target_table", ""): r for r in load_csv("registry.csv")}
 
     nodes, edges, seen = [], [], set()
-    layer_map = {"BRZ": "brz", "REF": "ref", "SLV": "slv", "GLD": "gld"}
+
+    # Build SLV wave map from depends_on (simple topological assignment)
+    slv_waves = {}
+    slv_regs = [r for r in registry.values() if r.get("layer", "").upper() == "SLV"]
+    # Wave 0: no silver deps
+    for r in slv_regs:
+        deps = r.get("depends_on", "") or ""
+        if not deps or deps in ("nan", "None") or "silver" not in deps:
+            slv_waves[r.get("target_table", "")] = 0
+    # Wave 1+: deps all in previous waves
+    for wave in range(1, 10):
+        for r in slv_regs:
+            tbl = r.get("target_table", "")
+            if tbl in slv_waves:
+                continue
+            deps = r.get("depends_on", "") or ""
+            try:
+                dep_list = json.loads(deps)
+                dep_tables = [d.split(".")[-1].replace("usp_load_", "") for d in dep_list if "silver" in d]
+                if all(dt in slv_waves for dt in dep_tables):
+                    slv_waves[tbl] = wave
+            except:
+                pass
 
     for row in rows:
         src_schema = row.get("source_schema", "").strip()
@@ -44,10 +66,15 @@ def build_dag_data():
 
         if "Enterprise_Lakehouse" in src_schema or "SupplyChain_Lakehouse" in src_schema:
             src_id = f"{src_schema}.{src_table}"
-            src_layer = "external"
+            src_layer = "other"
         else:
             src_id = src_table
+            # Determine source layer with wave
             src_layer = src_schema
+            if src_table in slv_waves:
+                src_layer = f"slv{slv_waves[src_table]}"
+            elif "brz" in src_table or "ref" in src_table:
+                src_layer = "brz"
 
         tgt_id = tgt_table
 
@@ -58,8 +85,15 @@ def build_dag_data():
         if tgt_id not in seen:
             seen.add(tgt_id)
             reg = registry.get(tgt_table, {})
-            layer = reg.get("layer", tgt_schema) or tgt_schema
-            layer = layer_map.get(layer.upper(), layer.lower()) if layer else tgt_schema
+            layer_raw = (reg.get("layer", tgt_schema) or tgt_schema).upper()
+            if layer_raw == "SLV" and tgt_table in slv_waves:
+                layer = f"slv{slv_waves[tgt_table]}"
+            elif layer_raw == "BRZ" or layer_raw == "REF":
+                layer = "brz"
+            elif layer_raw == "GLD":
+                layer = "gld"
+            else:
+                layer = "other"
             nodes.append({"id": tgt_id, "layer": layer, "load_type": reg.get("load_type", ""), "status": "", "last_load_date": "", "rows_loaded": 0})
 
         edges.append({"source": src_id, "target": tgt_id})
