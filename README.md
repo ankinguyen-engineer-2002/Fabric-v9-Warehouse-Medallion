@@ -290,17 +290,24 @@ Column prefixes: `id_` keys · `code_` categories · `name_` descriptions · `qt
 
 | File | Description |
 |------|-------------|
-| [template_architecture.md](template_architecture.md) | Architecture reference template: schemas, pipelines, DAG, meta, DQ, naming, constraints |
-| [template_pipeline_guide.md](template_pipeline_guide.md) | Pipeline execution trace template: what happens when master triggers, meta auto-population |
-| [template_setup_guide.md](template_setup_guide.md) | Phase-by-phase setup guide: DDL, SP templates, pipeline JSON, both Fabric UI and REST API |
+| [template_architecture.md](Fabric_Architect/template_architecture.md) | Architecture reference template: schemas, pipelines, DAG, meta, DQ, naming, constraints |
+| [template_pipeline_guide.md](Fabric_Architect/template_pipeline_guide.md) | Pipeline execution trace template: what happens when master triggers, meta auto-population |
+| [template_setup_guide.md](Fabric_Architect/template_setup_guide.md) | Phase-by-phase setup guide: DDL, SP templates, pipeline JSON, both Fabric UI and REST API |
 
 ### Project-specific (SupplyChain implementation)
 
 | File | Description |
 |------|-------------|
-| [v9_architecture_supplychain.md](v9_architecture_supplychain.md) | All 73 objects with names, row counts, pipeline IDs, source mappings, Semantic Model |
-| [v9_pipeline_supplychain.md](v9_pipeline_supplychain.md) | Execution trace with actual SP names, durations, wave assignments |
-| [v9_setup_supplychain.md](v9_setup_supplychain.md) | Implementation log: Spark→T-SQL conversions, bugs encountered, fixes applied |
+| [v9_architecture_supplychain.md](Fabric_Architect/v9_architecture_supplychain.md) | All 74 objects with names, row counts, pipeline IDs, source mappings, Semantic Model |
+| [v9_pipeline_supplychain.md](Fabric_Architect/v9_pipeline_supplychain.md) | Execution trace with actual SP names, durations, wave assignments |
+| [v9_setup_supplychain.md](Fabric_Architect/v9_setup_supplychain.md) | Implementation log: Spark→T-SQL conversions, bugs encountered, fixes applied |
+
+### Enterprise comparison
+
+| File | Description |
+|------|-------------|
+| [Enterprise_vs_Fabric_comparison.md](Enterprise_vs_Fabric_comparison.md) | Detailed comparison: ETL framework, load patterns, schema, CI/CD, change propagation |
+| [generic_sp_migration_plan.md](generic_sp_migration_plan.md) | Migration plan: 28 per-table SPs → 1 generic SP (8 patterns) |
 
 ---
 
@@ -327,15 +334,66 @@ The architecture includes a **Direct Lake Semantic Model** that sits on top of t
 
 ---
 
+## Enterprise Compatibility
+
+### TableDictionary View
+`meta.vw_table_dictionary` maps `sp_registry` (22 cols) → Enterprise `TableDictionary` format (**63/63 columns matched** + 6 v9 extras = 69 total). US team can query this view using their familiar column names.
+
+### Generic SP — 8 Load Patterns
+`meta.usp_generic_load` implements all 8 Enterprise ETL patterns in a single SP:
+
+| v9 load_type | Enterprise Equivalent | SP Used by Enterprise |
+|-------------|----------------------|----------------------|
+| `overwrite` | DELINSERT | usp_IncrementalTableLoad |
+| `incremental` | Append/DateKey | usp_IncrementalTableLoad |
+| `upsert` | Upsert | usp_IncrementalTableLoad |
+| `datekey` | DateKey | usp_IncrementalTableLoad |
+| `daterange` | DateRange | usp_UpdateCuratedTableFromView_DateRange |
+| `identity` | Identity | usp_IncrementalTableLoad |
+| `cdc` | CDC | usp_IncrementalTableLoad |
+| `scd2` | SCD2 | usp_SCD2_TableLoad |
+
+---
+
+## Multi-Environment Roadmap
+
+Current state: **DEV workspace** fully operational. Next steps for TEST and PROD:
+
+```mermaid
+flowchart LR
+    DEV["DEV Workspace\n✅ Operational\nv9 architecture complete"]
+    TEST["TEST Workspace\n🔜 Next\nValidation + UAT"]
+    PROD["PROD Workspace\n🔜 Later\nProduction deployment"]
+    DEV -->|"Deployment Pipeline\nor Git sync"| TEST -->|"Approval gate"| PROD
+```
+
+### Fabric Git Integration
+When Warehouse connects to Git (Azure DevOps or GitHub), Fabric **auto-exports** all objects as a SQL database project (.sqlproj + .sql files). This enables:
+- Version control for all DDL changes
+- Branch-based development (feature → dev → main)
+- Deployment Pipelines: DEV → TEST → PROD promotion
+
+### SqlCmdVariable `$(...)`
+Enterprise team uses `$(Source_Data)` syntax in .sql files for multi-environment deployment. Fabric auto-export does **NOT** convert 3-part naming to `$(...)`. Two approaches:
+- **Fabric native**: Use Deployment Pipelines (no `$(...)` needed — Fabric handles environment mapping)
+- **Enterprise-aligned**: Manually maintain .sql files with `$(...)` + DacFx build/deploy (matches Enterprise CI/CD exactly)
+
+Current v9 uses 3-part naming directly. Convert to `$(...)` when PROD deployment requires it.
+
+---
+
 ## Tech Stack
 
 - **Platform**: Microsoft Fabric (Synapse Data Warehouse)
 - **Language**: T-SQL (pure, no PySpark/Notebooks)
 - **Orchestration**: Fabric Data Pipelines (parent-child pattern)
+- **ETL Engine**: Generic SP (8 load patterns, aligned with Enterprise ETL_Framework)
 - **Semantic Model**: Direct Lake (TMDL via Fabric REST API)
 - **BI**: Power BI Direct Lake
+- **Lineage**: Interactive Streamlit app ([live](https://vn-engineer-lineage.streamlit.app))
 - **Version Control**: GitHub / Azure DevOps
 - **Deployment**: Fabric REST API + Claude Code / DacFx (.sqlproj)
+- **Environments**: DEV (operational) → TEST → PROD (roadmap)
 
 ---
 
