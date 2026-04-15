@@ -164,7 +164,7 @@ function layoutDAG(nodes, edges, collapsed) {
     }
   }
 
-  const NW=220,NH=36,HG=100,VG=12;
+  const NW=320,NH=36,HG=120,VG=12;
   const np = new Map();
   sorted.forEach(l => {
     const g = groups.get(l), th = g.length*NH+(g.length-1)*VG, sy = -th/2;
@@ -187,7 +187,7 @@ function EdgePath({from,to,color,highlight,dim}) {
 
 function NodeBox({pos,isFocus,isConn,isDim,isSH,isSD,onHover,onSelect}) {
   const cfg = TYPE_CONFIG[pos.node.type]||TYPE_CONFIG.model;
-  const tn = pos.node.name.length>28 ? pos.node.name.slice(0,26)+"..." : pos.node.name;
+  const tn = pos.node.name.length>42 ? pos.node.name.slice(0,40)+"..." : pos.node.name;
   let bg="#111827",border="#1e293b",bw=1,op=1,tc="#cbd5e1";
   if (isFocus) {bg=cfg.color+"1a";border=cfg.color;bw=2;tc="#f1f5f9";}
   else if (isConn) {border=cfg.color+"66";tc="#e2e8f0";}
