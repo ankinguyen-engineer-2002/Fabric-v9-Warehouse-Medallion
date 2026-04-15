@@ -85,11 +85,16 @@ flowchart LR
 flowchart LR
     M["pl_master"] --> LS["log_start"]
     LS --> B["pl_bronze\nLookup + ForEach"]
-    B --> S["pl_silver\nParent-Child DAG"]
-    S --> G["pl_gold\nLookup + ForEach"]
-    G --> FN["finalize"]
+    B --> DQ1["DQ: bronze ⚠"]
+    DQ1 --> S["pl_silver\nParent-Child DAG"]
+    S --> DQ2["DQ: silver ⚠"]
+    DQ2 --> G["pl_gold\nLookup + ForEach"]
+    G --> DQ3["DQ: gold ⚠"]
+    DQ3 --> FN["finalize"]
     FN --> SM["refresh_sm\nSemantic Model Refresh"]
 ```
+
+> ⚠ DQ gates shown for completeness. Currently experimental — `meta.usp_check_dq` has a known WHILE loop limitation in Fabric WH. DQ checks currently run via Python script, not yet integrated into pipeline activities.
 
 ### Bronze & Gold — Lookup + Parallel ForEach
 

@@ -1059,6 +1059,8 @@ Same pattern as pl_{prefix}_bronze but with:
 5. Add **PBISemanticModelRefresh** activity: `refresh_sm` (see Phase 6 for details)
 6. Connect: log_start -> invoke_bronze -> invoke_silver -> invoke_gold -> finalize -> refresh_sm
 
+> ⚠ **DQ gates (future)**: DQ check activities (`meta.usp_check_dq`) can be added between each layer (after bronze, after silver, after gold) to validate data before proceeding. Currently experimental — `usp_check_dq` has a known WHILE loop limitation in Fabric WH. DQ checks currently run via Python script, not yet integrated into pipeline activities.
+
 ### Approach B: Create via REST API
 
 #### Step B.1: Get Workspace and Item IDs

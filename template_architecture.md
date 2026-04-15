@@ -157,11 +157,16 @@ flowchart LR
     SM["PBISemanticModelRefresh\nrefresh_sm\nDirect Lake metadata sync"]
 
     LS -->|"on success"| B
-    B -->|"on success"| S
-    S -->|"on success"| G
-    G -->|"on success"| FN
+    B -->|"on success"| DQ1["DQ: bronze ⚠"]
+    DQ1 -->|"on success"| S
+    S -->|"on success"| DQ2["DQ: silver ⚠"]
+    DQ2 -->|"on success"| G
+    G -->|"on success"| DQ3["DQ: gold ⚠"]
+    DQ3 -->|"on success"| FN
     FN -->|"on success"| SM
 ```
+
+> ⚠ DQ gates shown for completeness. Currently experimental — `meta.usp_check_dq` has a known WHILE loop limitation in Fabric WH. DQ checks currently run via Python script, not yet integrated into pipeline activities.
 
 The master pipeline invokes each child pipeline sequentially using InvokePipeline activities, runs finalize to rebuild lineage and update the run log, then refreshes the Semantic Model. If any child fails, the master stops (no subsequent layers run). The `log_start` SP inserts a row into `pipeline_run_log` with status='running'. The `finalize` SP calls `usp_build_lineage` and updates the pipeline_run_log row with final status, counts, and end_time. The `refresh_sm` activity syncs the Direct Lake Semantic Model with the latest gold table data.
 

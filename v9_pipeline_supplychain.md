@@ -20,8 +20,16 @@ flowchart LR
     FN["Step 5: finalize\n(SqlServerStoredProcedure)\nEXEC meta.usp_finalize_pipeline\nbuilds lineage + updates\npipeline_run_log to 'success'"]
     SM["Step 6: refresh_sm\n(PBISemanticModelRefresh)\nRefresh SC_Control_Tower\nDirect Lake metadata sync\n7 tables refreshed"]
 
-    T --> LS -->|"on success"| B -->|"on success"| S -->|"on success"| G -->|"on success"| FN -->|"on success"| SM
+    T --> LS -->|"on success"| B
+    B -->|"on success"| DQ1["DQ: bronze ⚠"]
+    DQ1 -->|"on success"| S
+    S -->|"on success"| DQ2["DQ: silver ⚠"]
+    DQ2 -->|"on success"| G
+    G -->|"on success"| DQ3["DQ: gold ⚠"]
+    DQ3 -->|"on success"| FN -->|"on success"| SM
 ```
+
+> ⚠ DQ gates shown for completeness. Currently experimental — `meta.usp_check_dq` has a known WHILE loop limitation in Fabric WH. DQ checks currently run via Python script, not yet integrated into pipeline activities.
 
 If any child pipeline fails, execution stops. Silver does not run if bronze fails. Gold does not run if silver fails. The `log_start` activity records the pipeline run at the beginning, the `finalize` activity rebuilds lineage and updates the run log with final status, and the `refresh_sm` activity syncs the Semantic Model's Direct Lake metadata with the latest gold tables.
 
@@ -466,6 +474,7 @@ T+00:02    -> ForEach batch=8: first 8 SPs start in parallel
 T+00:10    ->   8 more SPs start as slots free up
 T+00:20    ->   remaining 2 SPs start
 T+03:00    -> All 18 bronze SPs complete (3 retried once for snapshot conflicts)
+T+03:00  -> [DQ: bronze ⚠ — not yet integrated, would run meta.usp_check_dq for bronze rules]
 T+03:00  -> pl_sc_bronze completes, master invokes pl_sc_silver (46437ae6)
 T+03:01    -> SP: EXEC meta.usp_compute_slv_waves (computes 3 waves, writes 8 rows)
 T+03:02    -> Lookup wave 0: returns 3 SPs
@@ -478,10 +487,12 @@ T+07:18    -> Lookup wave 2: returns 1 SP
 T+07:18    -> ForEach wave 2: 1 SP runs
 T+07:23    -> Wave 2 completes (naive_forecast_monthly at 5s)
 T+07:24    -> No more waves (Lookup returned only 3 distinct waves)
+T+09:00  -> [DQ: silver ⚠ — not yet integrated, would run meta.usp_check_dq for silver rules]
 T+09:00    -> pl_sc_silver completes, master invokes pl_sc_gold (94fc130e)
 T+09:01    -> Lookup: returns 2 sp_names
 T+09:01    -> ForEach batch=2: both SPs start in parallel
 T+09:44    -> Both gold SPs complete (slowest: forecast_kpi at 43s)
+T+09:44  -> [DQ: gold ⚠ — not yet integrated, would run meta.usp_check_dq for gold rules]
 T+09:45  -> finalize: EXEC meta.usp_finalize_pipeline
              -> EXEC meta.usp_build_lineage (rebuild 52 lineage edges)
              -> Count success/failed SPs from sp_run_history
