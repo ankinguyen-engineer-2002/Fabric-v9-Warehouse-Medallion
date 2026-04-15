@@ -132,6 +132,9 @@ def build_sp_dag_data():
     return {"nodes": nodes, "edges": edges}
 
 
+# ── Shared ──
+html_path = Path(__file__).parent / "templates" / "lineage.html"
+
 # ── Tabs ──
 tab1, tab2, tab3 = st.tabs(["📊 Table Lineage DAG", "⚙️ Stored Procedure Lineage", "👁️ View Definitions"])
 
@@ -140,7 +143,6 @@ tab1, tab2, tab3 = st.tabs(["📊 Table Lineage DAG", "⚙️ Stored Procedure L
 # ════════════════════════════════════════════════════════════════════════════════
 with tab1:
     dag_data = build_dag_data()
-    html_path = Path(__file__).parent / "templates" / "lineage.html"
     html_content = html_path.read_text(encoding="utf-8")
 
     if dag_data and dag_data["nodes"]:
@@ -155,22 +157,8 @@ with tab1:
 # TAB 2: Stored Procedure Lineage
 # ════════════════════════════════════════════════════════════════════════════════
 with tab2:
-    st.header("⚙️ Stored Procedure Lineage")
-    st.caption("SP dependency DAG + detail per SP")
-
-    # SP DAG visualization
-    sp_dag = build_sp_dag_data()
-    html_path2 = Path(__file__).parent / "templates" / "lineage.html"
-    html_sp = html_path2.read_text(encoding="utf-8")
-    if sp_dag and sp_dag["nodes"]:
-        html_sp = html_sp.replace(
-            "window.__LINEAGE_API_DATA__ = null;",
-            f"window.__LINEAGE_API_DATA__ = {json.dumps(sp_dag)};",
-        )
-    components.html(html_sp, height=500, scrolling=False)
-
-    st.markdown("---")
-    st.subheader("SP Detail")
+    st.header("⚙️ Stored Procedure & View Lineage")
+    st.caption("Select an SP to see its ETL flow: source tables → view → SP → target table")
 
     registry = load_csv("registry.csv")
     lineage = load_csv("lineage.csv")
@@ -210,10 +198,42 @@ with tab2:
                 except:
                     st.code(src)
 
-            # Lineage edges for this SP
+            # Lineage edges for this SP — show as mini DAG
             sp_edges = [r for r in lineage if r.get("sp_name", "") == selected_sp]
             if sp_edges:
-                st.markdown("**Lineage edges:**")
+                st.markdown("**ETL Flow (source → SP → target):**")
+
+                # Build mini DAG for this SP only
+                mini_nodes, mini_edges, mini_seen = [], [], set()
+                tgt = f"{sp_row.get('target_schema','')}.{sp_row.get('target_table','')}"
+                layer_map = {"BRZ": "brz", "REF": "ref", "SLV": "slv", "GLD": "gld"}
+                sp_layer = layer_map.get(sp_row.get("layer", "").upper(), "other")
+
+                for r in sp_edges:
+                    src_s = r.get("source_schema", "").strip()
+                    src_t = r.get("source_table", "").strip()
+                    src_id = f"{src_s}.{src_t}" if src_s else src_t
+                    src_layer = "other" if "Enterprise" in src_s or "Lakehouse" in src_s else (
+                        "brz" if "brz" in src_t or "ref" in src_t else ("slv" if "slv" in src_t else "other"))
+
+                    if src_id not in mini_seen:
+                        mini_seen.add(src_id)
+                        mini_nodes.append({"id": src_id, "layer": src_layer, "load_type": "", "status": "", "last_load_date": "", "rows_loaded": 0})
+
+                    if tgt not in mini_seen:
+                        mini_seen.add(tgt)
+                        mini_nodes.append({"id": tgt, "layer": sp_layer, "load_type": sp_row.get("load_type", ""), "status": "", "last_load_date": "", "rows_loaded": 0})
+
+                    mini_edges.append({"source": src_id, "target": tgt})
+
+                mini_data = {"nodes": mini_nodes, "edges": mini_edges}
+                html_mini = html_path.read_text(encoding="utf-8")
+                html_mini = html_mini.replace(
+                    "window.__LINEAGE_API_DATA__ = null;",
+                    f"window.__LINEAGE_API_DATA__ = {json.dumps(mini_data)};",
+                )
+                components.html(html_mini, height=350, scrolling=False)
+
                 import pandas as pd
                 df = pd.DataFrame(sp_edges)[["source_schema", "source_table", "target_schema", "target_table", "relationship_type"]]
                 st.dataframe(df, use_container_width=True)
