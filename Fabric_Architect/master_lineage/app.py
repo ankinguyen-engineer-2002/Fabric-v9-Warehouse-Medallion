@@ -60,30 +60,33 @@ def build_dag_data():
     registry = {r.get("target_table", ""): r for r in load_csv("registry.csv")}
     nodes, edges, seen = [], [], set()
 
-    # Compute silver waves from depends_on
+    # Compute silver waves from depends_on (correct: collect-then-assign per wave)
     slv_waves = {}
     slv_regs = [r for r in registry.values() if r.get("layer", "").upper() == "SLV"]
+    # Wave 0: no silver dependencies
     for r in slv_regs:
         deps = r.get("depends_on", "") or ""
         if not deps or deps in ("nan", "None") or "silver" not in deps:
             slv_waves[r.get("target_table", "")] = 0
-    for wave in range(1, 10):
+    # Wave 1..N: collect all candidates per wave THEN assign (not during iteration)
+    for wave in range(1, 30):
+        newly_assigned = {}
         for r in slv_regs:
             tbl = r.get("target_table", "")
             if tbl in slv_waves: continue
             deps = r.get("depends_on", "") or ""
             try:
                 dep_list = json.loads(deps)
-                # Strip usp_load_ prefix to match target_table names
                 dep_tables = []
                 for d in dep_list:
                     if "silver" in d or "slv" in d:
-                        name = d.split(".")[-1]
-                        name = name.replace("usp_load_", "")  # Fix: silver.usp_load_slv_x → slv_x
+                        name = d.split(".")[-1].replace("usp_load_", "")
                         dep_tables.append(name)
                 if dep_tables and all(dt in slv_waves for dt in dep_tables):
-                    slv_waves[tbl] = wave
+                    newly_assigned[tbl] = wave
             except: pass
+        if not newly_assigned: break  # no more tables to assign → done
+        slv_waves.update(newly_assigned)
 
     def get_tier(name):
         """Strict tier assignment by name prefix — never misplace a node."""
