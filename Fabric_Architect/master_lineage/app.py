@@ -60,6 +60,7 @@ def build_dag_data():
     registry = {r.get("target_table", ""): r for r in load_csv("registry.csv")}
     nodes, edges, seen = [], [], set()
 
+    # Compute silver waves from depends_on
     slv_waves = {}
     slv_regs = [r for r in registry.values() if r.get("layer", "").upper() == "SLV"]
     for r in slv_regs:
@@ -73,10 +74,31 @@ def build_dag_data():
             deps = r.get("depends_on", "") or ""
             try:
                 dep_list = json.loads(deps)
-                dep_tables = [d.split(".")[-1] for d in dep_list if "silver" in d or "slv" in d]
-                if all(dt in slv_waves for dt in dep_tables):
+                # Strip usp_load_ prefix to match target_table names
+                dep_tables = []
+                for d in dep_list:
+                    if "silver" in d or "slv" in d:
+                        name = d.split(".")[-1]
+                        name = name.replace("usp_load_", "")  # Fix: silver.usp_load_slv_x → slv_x
+                        dep_tables.append(name)
+                if dep_tables and all(dt in slv_waves for dt in dep_tables):
                     slv_waves[tbl] = wave
             except: pass
+
+    def get_tier(name):
+        """Strict tier assignment by name prefix — never misplace a node."""
+        n = name.lower()
+        if "enterprise_lakehouse" in n or "supplychain_lakehouse" in n:
+            return "other"
+        if n.startswith("brz_"):
+            return "brz"
+        if n.startswith("ref_"):
+            return "brz"  # ref_ in same column as brz
+        if n.startswith("slv_"):
+            return f"slv{slv_waves.get(name, 0)}"
+        if n.startswith("gld_"):
+            return "gld"
+        return "other"
 
     for row in rows:
         src_schema = row.get("source_schema", "").strip()
@@ -84,26 +106,20 @@ def build_dag_data():
         tgt_schema = row.get("target_schema", "").strip()
         tgt_table = row.get("target_table", "").strip()
 
+        # Source node ID: full path for external, table name for internal
         if "Enterprise_Lakehouse" in src_schema or "SupplyChain_Lakehouse" in src_schema:
             src_id = f"{src_schema}.{src_table}"
-            src_layer = "other"
         else:
             src_id = src_table
-            src_layer = f"slv{slv_waves[src_table]}" if src_table in slv_waves else ("brz" if "brz" in src_table or "ref" in src_table else "other")
 
         tgt_id = tgt_table
         if src_id not in seen:
             seen.add(src_id)
-            nodes.append({"id": src_id, "layer": src_layer, "load_type": "", "status": "", "last_load_date": "", "rows_loaded": 0})
+            nodes.append({"id": src_id, "layer": get_tier(src_id), "load_type": "", "status": "", "last_load_date": "", "rows_loaded": 0})
         if tgt_id not in seen:
             seen.add(tgt_id)
             reg = registry.get(tgt_table, {})
-            layer_raw = (reg.get("layer", tgt_schema) or tgt_schema).upper()
-            if layer_raw == "SLV" and tgt_table in slv_waves: layer = f"slv{slv_waves[tgt_table]}"
-            elif layer_raw in ("BRZ", "REF"): layer = "brz"
-            elif layer_raw == "GLD": layer = "gld"
-            else: layer = "other"
-            nodes.append({"id": tgt_id, "layer": layer, "load_type": reg.get("load_type", ""), "status": "", "last_load_date": "", "rows_loaded": 0})
+            nodes.append({"id": tgt_id, "layer": get_tier(tgt_id), "load_type": reg.get("load_type", ""), "status": "", "last_load_date": "", "rows_loaded": 0})
         edges.append({"source": src_id, "target": tgt_id})
     return {"nodes": nodes, "edges": edges}
 
