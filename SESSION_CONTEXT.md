@@ -109,6 +109,7 @@ Tất cả 28 tables giờ load bằng `meta.usp_generic_load(@target_schema, @t
 | `meta.usp_build_lineage` | Parse source_objects → sp_lineage |
 | `meta.usp_debug_loop` | Debug utility |
 | `meta.ufn_should_run` | Check scheduling gate (1/0) |
+| `meta.ufn_utc_to_cst` | UTC → CST/CDT conversion (DST aware, maps Enterprise fn_GetDate) |
 
 ### 2 Views
 
@@ -116,6 +117,7 @@ Tất cả 28 tables giờ load bằng `meta.usp_generic_load(@target_schema, @t
 |------|---------|
 | `meta.vw_table_dictionary` | Map sp_registry (22 cols) → Enterprise TableDictionary (63/63 cols + 6 v9 extras = 69 cols) |
 | `meta.vw_slv_dag_waves` | Legacy DAG view (3 CTE cố định, thay bằng SP iterative) |
+| `meta.vw_run_history_tz` | Log view voi 3 timezone: UTC + CST + VN (UTC+7) |
 
 ### 7 Tables
 

@@ -208,7 +208,7 @@ Developer manually fixes view
 | | Enterprise | v9 |
 |-|-----------|-----|
 | Audit log | `AuditLog` table (DateTime, User, Description, Command) | `sp_run_history` (run_id, sp_name, status, rows, duration) |
-| Timezone | `fn_GetDate` multi-timezone (EST/CST/PST + DST) | UTC only (GETUTCDATE) |
+| Timezone | `fn_GetDate` multi-timezone (EST/CST/PST + DST) | **`ufn_utc_to_cst`** — CST/CDT (DST aware). UTC core + CST in logs + VN via view |
 | Pipeline log | Not in framework (Azure Pipeline handles) | `pipeline_run_log` (auto by log_start + finalize) |
 | DQ | `usp_Audit_FABRIC_Tables` (row count validation) | `dq_rules` + `dq_results` (7 check types, config-driven) |
 | Alerts | `usp_DataWarehouseDataFeedAlert_Fabric` (Teams/email) | Not implemented |
@@ -222,8 +222,8 @@ Developer manually fixes view
 ### High priority (completed)
 1. ~~**Generic load SP**~~ — **DONE**: `meta.usp_generic_load` handles 8/8 patterns via sp_registry lookup
 2. ~~**SCD2 support**~~ — **DONE**: scd2 load_type in generic SP
-3. **.sqlproj integration** — build-time schema validation (not implemented)
-4. **fn_GetDate timezone** — multi-timezone audit timestamps (not implemented)
+3. ~~**fn_GetDate timezone**~~ — **DONE**: `meta.ufn_utc_to_cst` (CST/CDT + DST), vw_table_dictionary [Modified] → CST
+4. **.sqlproj integration** — build-time schema validation (not implemented, guide written)
 
 ### Medium priority
 5. **TableDictionary expansion** — add SourcePlatform, StorageType, DateRangeDays
