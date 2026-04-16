@@ -11,3 +11,6 @@ Enterprise_Architect/data-edw-fabric/.git/
 
 # Claude cache
 .claude/
+
+# Private portfolio
+_private/
