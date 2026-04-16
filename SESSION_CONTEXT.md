@@ -66,15 +66,17 @@ SupplyChain_Warehouse/
 28 SPs cũ (bronze.usp_load_*, silver.usp_load_*, gold.usp_load_*) đã bị xóa.
 Tất cả 28 tables giờ load bằng `meta.usp_generic_load(@target_schema, @target_table)`.
 
-### 5 Pipelines
+### 5 Pipelines (tên mới từ 2026-04-16, naming: `pl_{layer}_{project}`)
 
 | Pipeline | ID | Vai trò |
 |----------|-----|---------|
 | pl_sc_master | 319a8160-3f3a-4b87-8ad6-75ac4f3ec184 | log_start → bronze → silver → gold → finalize → refresh_sm |
-| pl_sc_bronze | 1bdbaebb-7222-4e9c-a45d-3e632bba846d | Lookup → ForEach(8) → EXEC meta.usp_generic_load |
-| pl_sc_silver | 46437ae6-3a15-4697-957d-f1f44ba10633 | compute_waves → ForEach wave → InvokePipeline child |
-| pl_sc_silver_wave | 57a09720-21a2-49b5-a472-1e19abd14f76 | Lookup wave SPs → ForEach(8) → EXEC meta.usp_generic_load |
-| pl_sc_gold | 94fc130e-f327-46a9-b7ba-cd2aa328c0da | Lookup → ForEach(2) → EXEC meta.usp_generic_load |
+| pl_bronze_forecast | 1bdbaebb-7222-4e9c-a45d-3e632bba846d | Lookup → ForEach(**6**) → EXEC meta.usp_generic_load |
+| pl_silver_forecast | 46437ae6-3a15-4697-957d-f1f44ba10633 | compute_waves → ForEach wave → InvokePipeline child |
+| pl_silver_wave_forecast | 57a09720-21a2-49b5-a472-1e19abd14f76 | Lookup wave SPs → ForEach(8) → EXEC meta.usp_generic_load |
+| pl_gold_forecast | 94fc130e-f327-46a9-b7ba-cd2aa328c0da | Lookup → ForEach(2) → EXEC meta.usp_generic_load |
+
+> Master invoke child bằng GUID → đổi tên không ảnh hưởng. Bronze batch giảm 8→6 để giảm snapshot conflict.
 
 ### Semantic Model
 

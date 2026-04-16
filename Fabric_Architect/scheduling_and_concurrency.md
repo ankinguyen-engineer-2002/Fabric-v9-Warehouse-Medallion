@@ -1,14 +1,18 @@
 # Scheduling & Concurrency Guide
-> Pipeline trigger, table frequency, smart skip, concurrency control
+> Pipeline trigger, table frequency, cron scheduling, smart skip, concurrency control
 > Kiến trúc hiện tại + multi data mart
 
 ---
 
-## 1. Cơ chế trigger hiện tại — Pipeline KHÔNG đọc schedule
+## 1. Cơ chế scheduling hiện tại — Cron + Smart Skip ĐÃ KÍCH HOẠT
 
-### Sự thật quan trọng
+### Tổng quan
 
-**Pipeline hiện tại KHÔNG dùng `ufn_should_run`**. Mỗi lần trigger → TẤT CẢ active tables đều chạy, bất kể frequency.
+Pipeline Lookup đã có **schedule filter** — chỉ load tables ĐẾN HẠN chạy. Monthly tables tự skip khi chưa đến kỳ.
+
+**Cron expression** trong `sp_registry.cron_expression` quyết định tần suất mỗi table.
+**next_run_time** được `usp_log_run` tự SET sau mỗi lần chạy.
+**Pipeline Lookup** check: `next_run_time IS NULL OR next_run_time <= GETUTCDATE()` → chỉ tables đến hạn mới chạy.
 
 ```
 Pipeline trigger (manual hoặc schedule)
@@ -137,7 +141,7 @@ pl_sc_master: concurrency = 1
 ### 4.2 ForEach-level concurrency
 
 ```
-pl_sc_bronze: ForEach batchCount = 8
+pl_bronze_forecast: ForEach batchCount = 8
   → 8 tables load song song cùng lúc
   → Fabric WH dual compute pool: READ (view) + WRITE (CTAS) tách biệt
   → Snapshot conflict khi 8 DROP+CTAS đồng thời → retry 3×60s handle
@@ -274,25 +278,84 @@ curl -X POST "https://api.fabric.microsoft.com/v1/workspaces/{ws}/items/{pipelin
 
 ---
 
-## 7. Tóm tắt: cần thay đổi gì
+## 7. Implementation Status — ĐÃ HOÀN THÀNH
 
-### Kích hoạt smart skip (recommend):
+### Đã tạo:
 
-| Component | Thay đổi | Effort |
-|-----------|---------|--------|
-| Bronze Lookup query | Thêm `AND (next_run_time IS NULL OR next_run_time <= GETUTCDATE())` | 1 phút |
-| Silver wave Lookup | Tương tự | 1 phút |
-| Gold Lookup query | Tương tự | 1 phút |
-| Pipeline schedule | Set daily 2AM trên Fabric Portal | 1 phút |
-| **Tổng** | | **4 phút** |
+| Object | Loại | Chi tiết |
+|--------|------|----------|
+| `sp_registry.cron_expression` | Column | VARCHAR(100), cron syntax per table |
+| `meta.ufn_cron_is_due(@cron)` | Function | Parse cron → return 1 nếu now match |
 
-### Không cần thay đổi:
+### Đã config:
 
-| Component | Lý do |
-|-----------|-------|
-| sp_registry | frequency + next_run_time đã có |
-| ufn_should_run | Đã tạo, chỉ chưa dùng trong pipeline |
-| usp_log_run | Đã tính next_run_time đúng |
+| Tables | Cron | Nghĩa |
+|--------|------|-------|
+| 18 daily (BRZ+SLV+GLD+REF) | `0 2 * * *` | 2:00 AM UTC mỗi ngày |
+| 10 monthly (REF) | `0 2 1 * *` | 2:00 AM UTC ngày 1 mỗi tháng |
+
+### Đã sửa pipeline (tên mới từ 2026-04-16):
+
+| Pipeline | Tên cũ | Lookup filter thêm |
+|----------|--------|-------------------|
+| pl_bronze_forecast | pl_bronze_forecast | `AND (r.cron_expression IS NULL OR r.next_run_time IS NULL OR r.next_run_time <= GETUTCDATE())` |
+| pl_gold_forecast | pl_gold_forecast | Tương tự |
+| pl_silver_wave_forecast | pl_silver_wave_forecast | Silver dùng DAG waves (không filter cron trực tiếp) |
+
+> **Naming convention**: `pl_{layer}_{project}`. Master giữ `pl_sc_master` (duy nhất). Child pipelines đổi suffix theo project (forecast, inventory, ...).
+
+### Concurrency:
+- `pl_sc_master`: **concurrency = 1** (chỉ 1 instance chạy, trigger tiếp → queue)
+- ForEach bronze: **batch = 6** (giảm từ 8 → 6, giảm snapshot conflict)
+- ForEach gold: **batch = 2**
+- ForEach silver wave: **batch = 8**
+
+### Snapshot conflict mitigation (2026-04-16):
+
+**Vấn đề**: 8 tables bronze load song song → cùng INSERT/UPDATE `sp_run_history` → snapshot isolation conflict → table báo failed dù data đã load xong.
+
+**Giải pháp 3 lớp**:
+1. **Giảm batchCount 8 → 6**: ít concurrent writes hơn → giảm xác suất conflict
+2. **Retry trong `usp_log_run`**: WHILE retry < 3 + TRY/CATCH + WAITFOR DELAY 2s giữa mỗi retry. Nếu INSERT/UPDATE conflict → tự retry, không crash SP.
+3. **Pipeline retry**: `exec_generic` activity đã có retry=3, interval=60s → nếu SP vẫn fail thì pipeline tự retry
+
+```sql
+-- usp_log_run retry logic (simplified):
+WHILE @retry < 3 AND @done = 0
+BEGIN
+    BEGIN TRY
+        INSERT/UPDATE sp_run_history ...
+        SET @done = 1;
+    END TRY
+    BEGIN CATCH
+        SET @retry = @retry + 1;
+        WAITFOR DELAY '00:00:02';
+    END CATCH
+END
+```
+
+### Đổi tần suất 1 table:
+```sql
+-- Ví dụ: đổi ref_warehouse sang weekly
+UPDATE meta.sp_registry
+SET cron_expression = '0 2 * * 1',  -- 2AM Monday
+    frequency = 'weekly'
+WHERE target_table = 'ref_warehouse';
+```
+
+### Cron cheat sheet:
+```
+*/15 * * * *          mỗi 15 phút
+0 * * * *             mỗi giờ đầu
+0 */5 * * *           mỗi 5 giờ
+0 2 * * *             2AM mỗi ngày
+0 8,14 * * *          8AM + 2PM mỗi ngày
+0 2 * * 1             2AM mỗi thứ 2
+0 2 * * 1-5           2AM weekdays
+0 2 1 * *             2AM ngày 1 mỗi tháng
+0 2 15 * *            2AM ngày 15 mỗi tháng
+*/15 6-22 * * 1-5     mỗi 15p, 6AM-10PM, weekdays
+```
 | usp_generic_load | Frequency-agnostic |
 | Views | Không liên quan scheduling |
 | Meta tables | Đã đủ columns |

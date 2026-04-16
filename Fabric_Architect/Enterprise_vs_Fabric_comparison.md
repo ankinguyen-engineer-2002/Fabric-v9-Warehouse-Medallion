@@ -49,7 +49,7 @@ flowchart TD
 |-|------------------------------|----------------------|
 | Columns | **64** | 20 |
 | Scope | ALL warehouses (enterprise-wide) | 1 warehouse only |
-| Load patterns | 8 (CDC, DELINSERT, Upsert, DateKey, DateRange, Identity, Insert, SCD2) | 2 active (overwrite, incremental) + 2 template (upsert, scd2) |
+| Load patterns | 8 (CDC, DELINSERT, Upsert, DateKey, DateRange, Identity, Insert, SCD2) | **8/8 implemented** (overwrite, incremental, upsert, datekey, daterange, identity, cdc, scd2) in `meta.usp_generic_load` |
 | Source tracking | SourceServer, SourceDatabase, SourceObject, SourcePlatform | source_objects (JSON array) |
 | Scheduling | JobName, JobServer, RefreshRate | frequency, scheduled_hour, next_run_time |
 | DAG | Not built-in | depends_on (JSON) + auto wave computation |
@@ -63,12 +63,12 @@ flowchart TD
 
 | | Enterprise | v9 |
 |-|-----------|-----|
-| **Approach** | 1 generic SP handles ALL tables | 1 SP per table (template copy) |
-| **Main SP** | `usp_IncrementalTableLoad` (33KB, 8 patterns) | Template: DROP+CTAS / INSERT+watermark |
-| **SCD2** | `usp_SCD2_TableLoad` (built-in) | Not implemented |
-| **View refresh** | `usp_RefreshCuratedTableFromView` | SP calls CTAS from view |
+| **Approach** | 1 generic SP handles ALL tables | **1 generic SP** (`meta.usp_generic_load`) handles ALL tables |
+| **Main SP** | `usp_IncrementalTableLoad` (33KB, 8 patterns) | `usp_generic_load` — **8/8 patterns matched** |
+| **SCD2** | `usp_SCD2_TableLoad` (built-in) | **Implemented** (scd2 load_type in generic SP) |
+| **View refresh** | `usp_RefreshCuratedTableFromView` | Overwrite pattern (DROP + CTAS from view) |
 | **Parquet** | `usp_CreateTableFromParquet` | N/A (reads via 3-part naming) |
-| **Audit** | `usp_Audit_FABRIC_Tables` | meta.usp_check_dq (experimental) |
+| **Audit** | `usp_Audit_FABRIC_Tables` | meta.usp_check_dq (config-driven, 2 check types) |
 | **Alerts** | `usp_DataWarehouseDataFeedAlert_Fabric` | Not implemented |
 | **Dynamic SQL** | SqlCmdVariables + dynamic routing | sp_executesql parameterized |
 
@@ -78,12 +78,12 @@ flowchart TD
 |---------|-------------------------|-------------------|
 | **Full reload** | DELINSERT (delete all, insert fresh) | overwrite (DROP TABLE + CTAS) |
 | **Incremental** | DateKey (filter by date column) | watermark (WHERE ts > last_wm) |
-| **Upsert** | MERGE with PK from TableDictionary | Template exists, not active |
-| **SCD2** | Full history: EffectiveStart/End, IsCurrent, RowVersion | Not implemented |
-| **CDC** | Change Data Capture from source | Not implemented |
-| **DateRange** | Configurable N-day range delete+insert | Not implemented |
-| **Identity** | Filter by auto-increment PK | Not implemented |
-| **Append** | Insert-only, no duplicate check | Not implemented |
+| **Upsert** | MERGE with PK from TableDictionary | **Implemented** (DELETE matching + INSERT by PK) |
+| **SCD2** | Full history: EffectiveStart/End, IsCurrent, RowVersion | **Implemented** (_scd2_start_dt, _scd2_end_dt, _scd2_is_current, _scd2_version) |
+| **CDC** | Change Data Capture from source | **Implemented** (DELETE matching + INSERT from CDC view) |
+| **DateRange** | Configurable N-day range delete+insert | **Implemented** (date_key + date_range_days from sp_registry) |
+| **Identity** | Filter by auto-increment PK | **Implemented** (INSERT WHERE PK > MAX existing) |
+| **Append** | Insert-only, no duplicate check | Covered by incremental pattern |
 
 ---
 
@@ -219,11 +219,11 @@ Developer manually fixes view
 
 ## 8. What v9 Can Adopt from Enterprise
 
-### High priority
-1. **Generic load SP** — 1 SP handles all patterns via TableDictionary lookup (vs copy template per table)
-2. **SCD2 support** — built-in historical tracking
-3. **.sqlproj integration** — build-time schema validation
-4. **fn_GetDate timezone** — multi-timezone audit timestamps
+### High priority (completed)
+1. ~~**Generic load SP**~~ — **DONE**: `meta.usp_generic_load` handles 8/8 patterns via sp_registry lookup
+2. ~~**SCD2 support**~~ — **DONE**: scd2 load_type in generic SP
+3. **.sqlproj integration** — build-time schema validation (not implemented)
+4. **fn_GetDate timezone** — multi-timezone audit timestamps (not implemented)
 
 ### Medium priority
 5. **TableDictionary expansion** — add SourcePlatform, StorageType, DateRangeDays
