@@ -43,7 +43,7 @@ flowchart LR
         B["bronze\n18 tables · 18 views\nraw mirror"]
         S["silver\n8 tables · 8 views\ntransform + join"]
         G["gold\n2 tables · 2 views\nBI-ready"]
-        M["meta\n7 tables · 9 SPs · 3 views · 3 functions\nconfig · log · DQ · DAG"]
+        M["meta\n7 tables · 9 SPs · 2 views · 3 functions\nconfig · log · DQ · DAG"]
         B --> S --> G
     end
 
@@ -59,7 +59,7 @@ flowchart LR
 | **bronze** | Raw mirror from source systems | 18 tables + 18 views | `VIEW` reads source via 3-part naming → Generic SP does DROP + CTAS |
 | **silver** | Clean, conform, join, business rules | 8 tables + 8 views | `VIEW` reads bronze/silver → Generic SP does DROP + CTAS (DAG wave order) |
 | **gold** | Business-ready facts & dimensions | 2 tables + 2 views | `VIEW` reads silver → Generic SP does DROP + CTAS |
-| **meta** | System control plane | 7 tables + 9 SPs + 3 views + 3 fn | Config + log + DQ + DAG + lineage + timezone |
+| **meta** | System control plane | 7 tables + 9 SPs + 2 views + 3 fn | Config + log + DQ + DAG + lineage + timezone |
 
 ### Warehouse Structure
 
@@ -86,13 +86,12 @@ SupplyChain_Warehouse/
     │              usp_compute_slv_waves, usp_run_silver_dag,
     │              usp_debug_loop, usp_finalize_pipeline,
     │              usp_log_pipeline_run                        (9)
-    ├── Views/     vw_table_dictionary, vw_slv_dag_waves,
-    │              vw_run_history_tz                            (3)
+    ├── Views/     vw_table_dictionary, vw_run_history_tz        (2)
     └── Functions/ ufn_should_run, ufn_cron_is_due,
                    ufn_utc_to_cst                              (3)
 ```
 
-> **78 total objects** across 4 schemas. Per-table SPs have been deleted — all 28 tables loaded by 1 generic SP.
+> **77 total objects** across 4 schemas. Per-table SPs have been deleted — all 28 tables loaded by 1 generic SP.
 
 ### Key Features
 
