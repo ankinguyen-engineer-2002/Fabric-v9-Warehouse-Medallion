@@ -120,17 +120,22 @@ function apiJsonToGraph(data) {
 }
 
 /* ─── DAG Layout ─── */
+const LAYER_LABELS = {0:'Source',1:'Bronze / REF',2:'Silver W0',3:'Silver W1',4:'Silver W2',5:'Silver W3',6:'Silver W4',7:'Gold'};
+const LAYER_COLORS = {0:'#94a3b8',1:'#22c55e',2:'#60a5fa',3:'#3b82f6',4:'#2563eb',5:'#1d4ed8',6:'#1e40af',7:'#f59e0b'};
+
 function layoutDAG(nodes, edges, collapsed) {
   const vis = nodes.filter(n => !collapsed.has(n.type));
   const vIds = new Set(vis.map(n => n.id));
   const vEdges = edges.filter(e => vIds.has(e.from) && vIds.has(e.to));
-  const parents = new Map();
-  vis.forEach(n => parents.set(n.id, []));
-  vEdges.forEach(e => { if (parents.has(e.to)) parents.get(e.to).push(e.from); });
+  const parents = new Map(), children = new Map();
+  vis.forEach(n => { parents.set(n.id, []); children.set(n.id, []); });
+  vEdges.forEach(e => {
+    if (parents.has(e.to)) parents.get(e.to).push(e.from);
+    if (children.has(e.from)) children.get(e.from).push(e.to);
+  });
 
   const layers = new Map(), done = new Set();
   const nodeById = new Map(); vis.forEach(n => nodeById.set(n.id, n));
-  /* Fixed layer assignments: external(0) → brz/ref(1) → slv wave0(2) → slv wave1(3) → slv wave2(4) → gld(5) */
   const FIXED_LAYERS = {other: 0, orphan: 0, brz: 1, ref: 1, slv: 2, slv0: 2, slv1: 3, slv2: 4, slv3: 5, slv4: 6, gld: 7};
   function assign(id) {
     if (done.has(id)) return layers.get(id) || 0;
@@ -145,49 +150,86 @@ function layoutDAG(nodes, edges, collapsed) {
   }
   vis.forEach(n => assign(n.id));
 
-  const groups = new Map();
-  vis.forEach(n => { const l = layers.get(n.id)||0; if (!groups.has(l)) groups.set(l,[]); groups.get(l).push(n); });
+  /* Group by layer and COMPACT — remove empty layers */
+  const rawGroups = new Map();
+  vis.forEach(n => { const l = layers.get(n.id)||0; if (!rawGroups.has(l)) rawGroups.set(l,[]); rawGroups.get(l).push(n); });
+  const rawSorted = Array.from(rawGroups.keys()).sort((a,b) => a-b);
+
+  /* Build compacted column index + keep original layer id for labels */
+  const groups = new Map(), layerMeta = new Map();
+  let colIdx = 0;
+  rawSorted.forEach(origLayer => {
+    groups.set(colIdx, rawGroups.get(origLayer));
+    layerMeta.set(colIdx, { label: LAYER_LABELS[origLayer] || `Layer ${origLayer}`, color: LAYER_COLORS[origLayer] || '#475569', origLayer });
+    /* Update layers map to compacted index */
+    rawGroups.get(origLayer).forEach(n => layers.set(n.id, colIdx));
+    colIdx++;
+  });
   const sorted = Array.from(groups.keys()).sort((a,b) => a-b);
   const pos = new Map();
 
+  /* Initial sort: group by sub-type, then alphabetical */
   sorted.forEach(l => {
     groups.get(l).sort((a,b) => {
-      const o = {other:0,orphan:0,brz:1,ref:2,slv:3,gld:4,dq:5};
+      const o = {other:0,orphan:0,brz:1,ref:2,slv:3,slv0:3,slv1:3,slv2:3,slv3:3,slv4:3,gld:4,dq:5};
       const d = (o[a.type]||9)-(o[b.type]||9);
       return d!==0 ? d : a.name.localeCompare(b.name);
     });
   });
 
-  for (let i=0;i<8;i++) {
-    for (let li=1;li<sorted.length;li++) {
-      const g = groups.get(sorted[li]), prev = groups.get(sorted[li-1]);
-      const po = new Map(); prev.forEach((n,i) => po.set(n.id,i));
+  /* Barycenter crossing reduction — 30 iterations, both forward and backward */
+  for (let iter=0; iter<30; iter++) {
+    /* Forward pass: sort each layer based on parent positions in previous layer */
+    for (let li=1; li<sorted.length; li++) {
+      const g = groups.get(sorted[li]);
+      const prevG = groups.get(sorted[li-1]);
+      const prevPos = new Map(); prevG.forEach((n,i) => prevPos.set(n.id, i));
       g.forEach(n => {
-        const p = (parents.get(n.id)||[]).filter(pp => po.has(pp));
-        if (p.length) pos.set(n.id, p.reduce((s,pp) => s+po.get(pp),0)/p.length);
+        const p = (parents.get(n.id)||[]).filter(pp => prevPos.has(pp));
+        if (p.length) pos.set(n.id, p.reduce((s,pp) => s + prevPos.get(pp), 0) / p.length);
+        else pos.set(n.id, 999);
       });
-      g.sort((a,b) => (pos.get(a.id)||0)-(pos.get(b.id)||0));
+      g.sort((a,b) => (pos.get(a.id)||0) - (pos.get(b.id)||0));
+    }
+    /* Backward pass: sort each layer based on child positions in next layer */
+    for (let li=sorted.length-2; li>=0; li--) {
+      const g = groups.get(sorted[li]);
+      const nextG = groups.get(sorted[li+1]);
+      const nextPos = new Map(); nextG.forEach((n,i) => nextPos.set(n.id, i));
+      g.forEach(n => {
+        const c = (children.get(n.id)||[]).filter(cc => nextPos.has(cc));
+        if (c.length) {
+          const bary = c.reduce((s,cc) => s + nextPos.get(cc), 0) / c.length;
+          const pOld = pos.get(n.id);
+          /* Blend parent-based and child-based position */
+          pos.set(n.id, pOld !== undefined && pOld !== 999 ? (pOld + bary) / 2 : bary);
+        }
+      });
+      g.sort((a,b) => (pos.get(a.id)||0) - (pos.get(b.id)||0));
     }
   }
 
-  const NW=320,NH=36,HG=120,VG=12;
+  const NW=320, NH=36, HG=100, VG=10;
   const np = new Map();
-  sorted.forEach(l => {
-    const g = groups.get(l), th = g.length*NH+(g.length-1)*VG, sy = -th/2;
-    g.forEach((n,i) => { np.set(n.id, {x:l*(NW+HG), y:sy+i*(NH+VG), w:NW, h:NH, node:n}); });
+  sorted.forEach((l, ci) => {
+    const g = groups.get(l), th = g.length*NH + (g.length-1)*VG, sy = -th/2;
+    g.forEach((n,i) => { np.set(n.id, {x: ci*(NW+HG), y: sy + i*(NH+VG), w:NW, h:NH, node:n}); });
   });
-  return { nodePositions:np, visibleEdges:vEdges, visibleNodes:vis };
+  return { nodePositions:np, visibleEdges:vEdges, visibleNodes:vis, layerMeta, groups, sorted, NW, HG };
 }
 
 /* ─── Components ─── */
 function EdgePath({from,to,color,highlight,dim}) {
-  const x1=from.x+from.w+2,y1=from.y+from.h/2,x2=to.x-2,y2=to.y+to.h/2,mx=(x1+x2)/2;
+  const x1=from.x+from.w+2, y1=from.y+from.h/2, x2=to.x-2, y2=to.y+to.h/2;
+  const dx = x2 - x1;
+  /* Control point offset: 40% of horizontal distance, clamped */
+  const cpOff = Math.min(Math.max(dx * 0.4, 40), 160);
   return <g>
-    <path d={`M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`} fill="none"
-      stroke={highlight?color:"#334155"} strokeWidth={highlight?2:1}
-      strokeDasharray={highlight?"6 3":"4 3"}
-      strokeOpacity={dim?0.06:highlight?0.8:0.25} style={{transition:"all 0.2s"}} />
-    {highlight && <polygon points={`${x2},${y2} ${x2-6},${y2-3.5} ${x2-6},${y2+3.5}`} fill={color} opacity={0.8}/>}
+    <path d={`M${x1},${y1} C${x1+cpOff},${y1} ${x2-cpOff},${y2} ${x2},${y2}`} fill="none"
+      stroke={highlight?color:"#334155"} strokeWidth={highlight?1.8:0.8}
+      strokeDasharray={highlight?"":"3 2"}
+      strokeOpacity={dim?0.04:highlight?0.85:0.18} style={{transition:"all 0.3s"}} />
+    {highlight && <polygon points={`${x2},${y2} ${x2-5},${y2-3} ${x2-5},${y2+3}`} fill={color} opacity={0.8}/>}
   </g>;
 }
 
@@ -208,7 +250,7 @@ function NodeBox({pos,isFocus,isConn,isDim,isSH,isSD,onHover,onSelect}) {
 }
 
 function DiagramCanvas({graph,collapsed,searchTerm,activeFilter}) {
-  const {nodePositions:np,visibleEdges:ve,visibleNodes:vn} = useMemo(() => {
+  const layoutResult = useMemo(() => {
     let fn = graph.nodes;
     if (activeFilter && activeFilter!=="all") {
       const rel = new Set();
@@ -218,6 +260,7 @@ function DiagramCanvas({graph,collapsed,searchTerm,activeFilter}) {
     }
     return layoutDAG(fn, graph.edges, collapsed);
   }, [graph,collapsed,activeFilter]);
+  const {nodePositions:np,visibleEdges:ve,visibleNodes:vn,layerMeta,groups,sorted,NW,HG} = layoutResult;
 
   const [hov,setHov] = useState(null);
   const [sel,setSel] = useState(null);
@@ -278,6 +321,24 @@ function DiagramCanvas({graph,collapsed,searchTerm,activeFilter}) {
 
     <svg style={{position:"absolute",left:0,top:0,width:"100%",height:"100%"}}>
       <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
+        {/* Column backgrounds + headers */}
+        {layerMeta && sorted && sorted.map((l, ci) => {
+          const meta = layerMeta.get(l);
+          const g = groups.get(l);
+          if (!meta || !g || !g.length) return null;
+          const colX = ci * ((NW||320) + (HG||100));
+          /* Find vertical extent of nodes in this column */
+          let minY = Infinity, maxY = -Infinity;
+          g.forEach(n => { const p = np.get(n.id); if (p) { minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y + p.h); }});
+          if (minY === Infinity) return null;
+          const pad = 16;
+          return <g key={`col-${ci}`}>
+            <rect x={colX - pad} y={minY - 40} width={(NW||320) + pad*2} height={maxY - minY + 40 + pad}
+              rx={12} fill={meta.color} fillOpacity={0.04} stroke={meta.color} strokeOpacity={0.12} strokeWidth={1} />
+            <text x={colX + (NW||320)/2} y={minY - 22} textAnchor="middle" fill={meta.color} fontSize={11}
+              fontWeight={700} fontFamily="'JetBrains Mono',monospace" opacity={0.6}>{meta.label}</text>
+          </g>;
+        })}
         {ve.map((e,i)=>{const f=np.get(e.from),t=np.get(e.to);if(!f||!t)return null;const hl=fid&&conn.has(e.from)&&conn.has(e.to);return<EdgePath key={i} from={f} to={t} color={(TYPE_CONFIG[t.node?.type]||TYPE_CONFIG.model).color} highlight={hl} dim={fid&&!hl}/>;})}
         {Array.from(np.entries()).map(([id,pos])=>
           <NodeBox key={id} pos={pos} isFocus={fid===id} isConn={conn.has(id)} isDim={fid&&!conn.has(id)} isSH={sm?.has(id)} isSD={sm&&!sm.has(id)}
