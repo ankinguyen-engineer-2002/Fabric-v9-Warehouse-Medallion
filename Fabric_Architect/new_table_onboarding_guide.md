@@ -1,81 +1,81 @@
-# Onboarding Guide — Theem bang ETL moi vao Pipeline
-> Huong dan tu A-Z cho DA/DE moi: tao bang, dang ky metadata, test, tu dong chay trong pipeline
-> Khong can tao Stored Procedure, khong can sua Pipeline
+# Onboarding Guide -- Adding a New Table to the ETL Pipeline
+> A-to-Z guide for new DA/DE: create a table, register metadata, test, and run automatically in the pipeline
+> No need to create a Stored Procedure, no need to modify the Pipeline
 
 ---
 
-## Tong quan
+## Overview
 
-Kien truc hien tai la **metadata-driven**: pipeline doc `sp_registry` de biet can load bang nao, kieu gi, tu dau. Viec cua ban chi la:
+The current architecture is **metadata-driven**: the pipeline reads `sp_registry` to know which tables to load, what type, and from where. Your job is simply:
 
 ```
-1. Tao VIEW (chua logic ETL)
-2. INSERT 1 dong vao sp_registry (dang ky bang)
-3. Test thu bang tay
-4. Xong — pipeline tu dong pick up lan chay tiep theo
+1. Create a VIEW (containing the ETL logic)
+2. INSERT 1 row into sp_registry (register the table)
+3. Test manually
+4. Done -- the pipeline automatically picks it up on the next run
 ```
 
-**Khong can**: tao Stored Procedure, sua pipeline JSON, deploy gi them.
+**No need to**: create a Stored Procedure, edit pipeline JSON, or deploy anything else.
 
 ---
 
-## Buoc 0 — Xac dinh layer
+## Step 0 -- Determine the Layer
 
-| Layer | Khi nao dung | Source doc tu dau |
+| Layer | When to use | Source reads from |
 |-------|-------------|-------------------|
-| **bronze** | Mirror data tho tu source, khong transform | Lakehouse tables (qua 3-part naming) |
-| **bronze (ref_)** | Reference/dimension data it thay doi | Lakehouse tables |
-| **silver** | Join, transform, business rules tu bronze | Bronze tables (cung Warehouse) |
-| **gold** | Aggregate, KPI, BI-ready tu silver | Silver tables (cung Warehouse) |
+| **bronze** | Mirror raw data from source, no transformation | Lakehouse tables (via 3-part naming) |
+| **bronze (ref_)** | Reference/dimension data that rarely changes | Lakehouse tables |
+| **silver** | Join, transform, apply business rules from bronze | Bronze tables (same Warehouse) |
+| **gold** | Aggregate, KPI, BI-ready from silver | Silver tables (same Warehouse) |
 
 ---
 
-## Buoc 1 — Chon naming
+## Step 1 -- Choose Naming
 
-### Bang
+### Table
 
-| Layer | Pattern | Vi du |
-|-------|---------|-------|
+| Layer | Pattern | Example |
+|-------|---------|---------|
 | bronze | `brz_{source_system}__{entity}` | `brz_saleshistory_afi__invoicedetail` |
 | bronze (ref) | `ref_{entity}` | `ref_customer_account` |
 | silver | `slv_{business_concept}` | `slv_actual_demand_monthly` |
-| gold | `gld_fact_{subject}` hoac `gld_dim_{subject}` | `gld_fact_forecast_kpi` |
+| gold | `gld_fact_{subject}` or `gld_dim_{subject}` | `gld_fact_forecast_kpi` |
 
 ### View
 
-| Layer | Pattern | Vi du |
-|-------|---------|-------|
+| Layer | Pattern | Example |
+|-------|---------|---------|
 | bronze | `bronze.vw_brz_{name}` | `bronze.vw_brz_saleshistory_afi__invoicedetail` |
 | bronze (ref) | `bronze.vw_ref_{name}` | `bronze.vw_ref_customer_account` |
 | silver | `silver.vw_slv_{name}` | `silver.vw_slv_actual_demand_monthly` |
 | gold | `gold.vw_gld_{name}` | `gold.vw_gld_fact_forecast_kpi` |
 
-> **Quy tac**: 2 dau gach duoi `__` ngan cach source system va entity. 1 dau gach duoi `_` ngan cach cac tu trong ten.
+> **Rule**: Double underscores `__` separate the source system from the entity. Single underscores `_` separate words within a name.
 
 ---
 
-## Buoc 2 — Chon load_type
+## Step 2 -- Choose load_type
 
-| load_type | Mo ta | Khi nao dung | Yeu cau them |
-|-----------|-------|-------------|--------------|
-| `overwrite` | Xoa bang cu, tao lai tu VIEW | Data nho, hoac muon full refresh moi lan | (khong can gi them) |
-| `incremental` | Chi INSERT dong moi (theo watermark) | Data lon, chi them moi, khong sua cu | `watermark_column` |
-| `upsert` | DELETE dong cu + INSERT dong moi (theo PK) | Data co update, can merge | `primary_key` |
-| `datekey` | DELETE + INSERT theo ngay cu the | Fact tables theo ngay | `date_key` |
-| `daterange` | DELETE + INSERT N ngay gan nhat | Fact tables can refresh window | `date_key` + `date_range_days` |
-| `identity` | Chi INSERT dong co PK > MAX hien tai | Append-only, PK tang dan | `primary_key` |
-| `cdc` | Apply change data capture | Source co CDC log | `primary_key` |
-| `scd2` | Slowly Changing Dimension Type 2 | Dimension can track lich su | `primary_key` |
+| load_type | Description | When to use | Additional requirements |
+|-----------|-------------|-------------|------------------------|
+| `overwrite` | Drop the old table, recreate from VIEW | Small data, or when you want a full refresh every time | (none) |
+| `incremental` | Only INSERT new rows (based on watermark) | Large data, append-only, no updates to existing rows | `watermark_column` |
+| `upsert` | DELETE old rows + INSERT new rows (based on PK) | Data with updates, needs merge | `primary_key` |
+| `datekey` | DELETE + INSERT for a specific date | Fact tables by date | `date_key` |
+| `daterange` | DELETE + INSERT for the most recent N days | Fact tables that need a refresh window | `date_key` + `date_range_days` |
+| `identity` | Only INSERT rows with PK > current MAX | Append-only, auto-incrementing PK | `primary_key` |
+| `cdc` | Apply change data capture | Source has CDC log | `primary_key` |
+| `scd2` | Slowly Changing Dimension Type 2 | Dimensions that need history tracking | `primary_key` |
 
-> **90% truong hop** dung `overwrite`. Chi dung cac loai khac khi data qua lon hoac co yeu cau dac biet.
+> **90% of cases** use `overwrite`. Only use other types when data is too large or there are special requirements.
 
 ---
 
-## Buoc 3 — Tao VIEW
+## Step 3 -- Create the VIEW
 
-VIEW chua **toan bo logic ETL**. Generic SP chi doc VIEW roi ghi vao TABLE.
+The VIEW contains **all of the ETL logic**. The generic SP simply reads the VIEW and writes to the TABLE.
 
-### 3a. Bronze — mirror tu source
+### 3a. Bronze -- mirror from source
 
 ```sql
 CREATE OR ALTER VIEW bronze.vw_brz_{source}__{entity}
@@ -84,7 +84,7 @@ SELECT *
 FROM Enterprise_Lakehouse.{source_schema}.{source_table};
 ```
 
-**Vi du thuc te:**
+**Real-world example:**
 ```sql
 CREATE OR ALTER VIEW bronze.vw_brz_saleshistory_afi__invoicedetail
 AS
@@ -92,9 +92,9 @@ SELECT *
 FROM Enterprise_Lakehouse.SalesHistory_AFI.InvoiceDetail;
 ```
 
-> **Luu y**: `Enterprise_Lakehouse` la ten Lakehouse trong cung Workspace. Dung 3-part naming: `{Lakehouse}.{Schema}.{Table}`.
+> **Note**: `Enterprise_Lakehouse` is the Lakehouse name within the same Workspace. Use 3-part naming: `{Lakehouse}.{Schema}.{Table}`.
 
-### 3b. Bronze (ref) — reference data
+### 3b. Bronze (ref) -- reference data
 
 ```sql
 CREATE OR ALTER VIEW bronze.vw_ref_customer_account
@@ -107,9 +107,9 @@ SELECT
 FROM Enterprise_Lakehouse.SupplyChain_DW.DimCustomers;
 ```
 
-> **Tip**: CAST cac cot sang dung data type, dat alias theo naming convention (`id_`, `name_`, `code_`, `qty_`, `amt_`, `dt_`, `is_`).
+> **Tip**: CAST columns to the correct data type and use aliases following the naming convention (`id_`, `name_`, `code_`, `qty_`, `amt_`, `dt_`, `is_`).
 
-### 3c. Silver — join + transform
+### 3c. Silver -- join + transform
 
 ```sql
 CREATE OR ALTER VIEW silver.vw_slv_actual_demand_monthly
@@ -124,9 +124,9 @@ JOIN bronze.ref_calendar cal
 GROUP BY inv.id_customer, cal.year_month;
 ```
 
-> **Silver view doc tu bronze tables** (hoac silver tables khac). Khong doc truc tiep tu Lakehouse.
+> **Silver views read from bronze tables** (or other silver tables). They do not read directly from the Lakehouse.
 
-### 3d. Gold — aggregate, KPI
+### 3d. Gold -- aggregate, KPI
 
 ```sql
 CREATE OR ALTER VIEW gold.vw_gld_fact_forecast_kpi
@@ -147,33 +147,33 @@ LEFT JOIN silver.slv_actual_demand_monthly act
 
 ---
 
-## Buoc 4 — Dang ky vao sp_registry
+## Step 4 -- Register in sp_registry
 
-Day la buoc **quan trong nhat**. INSERT 1 dong vao `meta.sp_registry` de pipeline biet bang cua ban ton tai.
+This is the **most important step**. INSERT 1 row into `meta.sp_registry` so the pipeline knows your table exists.
 
-### Template day du:
+### Full template:
 
 ```sql
 INSERT INTO meta.sp_registry (
-    sp_name,              -- Luon la 'meta.usp_generic_load'
-    view_name,            -- Ten VIEW ban vua tao (schema.view_name)
-    target_schema,        -- Schema chua TABLE (bronze/silver/gold)
-    target_table,         -- Ten TABLE se duoc tao
+    sp_name,              -- Always 'meta.usp_generic_load'
+    view_name,            -- Name of the VIEW you just created (schema.view_name)
+    target_schema,        -- Schema containing the TABLE (bronze/silver/gold)
+    target_table,         -- Name of the TABLE to be created
     layer,                -- 'BRZ', 'REF', 'SLV', 'GLD'
     load_type,            -- overwrite/incremental/upsert/...
     frequency,            -- 'daily', 'monthly', 'hourly', 'weekly'
-    scheduled_hour,       -- Gio chay (UTC), thuong la 2
-    execution_order,      -- Thu tu trong layer (1 = mac dinh)
+    scheduled_hour,       -- Run hour (UTC), typically 2
+    execution_order,      -- Order within the layer (1 = default)
     is_active,            -- 1 = active, 0 = skip
-    source_objects,       -- JSON array cac source tables (cho lineage)
-    project,              -- Ten project (vd: 'supplychain', 'forecast')
-    cron_expression,      -- Cron schedule (vd: '0 2 * * *')
-    -- Cac cot optional (de NULL neu khong can):
-    depends_on,           -- JSON array cac silver tables phu thuoc
-    watermark_column,     -- Cot dung lam watermark (incremental)
-    primary_key,          -- Cot PK (upsert/scd2/identity/cdc)
-    date_key,             -- Cot date (datekey/daterange)
-    date_range_days       -- So ngay (daterange)
+    source_objects,       -- JSON array of source tables (for lineage)
+    project,              -- Project name (e.g., 'supplychain', 'forecast')
+    cron_expression,      -- Cron schedule (e.g., '0 2 * * *')
+    -- Optional columns (set to NULL if not needed):
+    depends_on,           -- JSON array of dependent silver tables
+    watermark_column,     -- Column used as watermark (incremental)
+    primary_key,          -- PK column (upsert/scd2/identity/cdc)
+    date_key,             -- Date column (datekey/daterange)
+    date_range_days       -- Number of days (daterange)
 )
 VALUES (
     'meta.usp_generic_load',
@@ -193,7 +193,7 @@ VALUES (
 );
 ```
 
-### Vi du cu the theo tung layer:
+### Specific examples for each layer:
 
 #### Bronze (overwrite, daily):
 ```sql
@@ -227,7 +227,7 @@ INSERT INTO meta.sp_registry (
 );
 ```
 
-#### Silver (overwrite, daily, co depends_on):
+#### Silver (overwrite, daily, with depends_on):
 ```sql
 INSERT INTO meta.sp_registry (
     sp_name, view_name, target_schema, target_table,
@@ -245,7 +245,7 @@ INSERT INTO meta.sp_registry (
 );
 ```
 
-> **`depends_on`**: chi can khai bao cho **silver** tables phu thuoc silver tables khac. Pipeline se tu tinh wave va chay dung thu tu. Bronze va gold khong can depends_on.
+> **`depends_on`**: only needs to be declared for **silver** tables that depend on other silver tables. The pipeline automatically computes waves and runs in the correct order. Bronze and gold do not need depends_on.
 
 #### Gold (overwrite, daily):
 ```sql
@@ -264,7 +264,7 @@ INSERT INTO meta.sp_registry (
 );
 ```
 
-#### Incremental (co watermark):
+#### Incremental (with watermark):
 ```sql
 INSERT INTO meta.sp_registry (
     sp_name, view_name, target_schema, target_table,
@@ -285,42 +285,42 @@ INSERT INTO meta.sp_registry (
 
 ---
 
-## Buoc 5 — Test thu bang tay
+## Step 5 -- Test Manually
 
-Chay truc tiep tren Warehouse de kiem tra truoc khi pipeline tu dong load:
+Run directly on the Warehouse to verify before the pipeline automatically loads:
 
 ```sql
--- Chay 1 lan de tao TABLE + verify data
+-- Run once to create the TABLE and verify data
 EXEC meta.usp_generic_load
     @target_schema = 'bronze',
     @target_table  = 'brz_wholesale_codis_afi__comast';
 ```
 
-### Kiem tra ket qua:
+### Check the results:
 
 ```sql
--- 1. Bang da duoc tao?
+-- 1. Was the table created?
 SELECT COUNT(*) FROM bronze.brz_wholesale_codis_afi__comast;
 
--- 2. Log da ghi?
+-- 2. Was the log recorded?
 SELECT TOP 1 * FROM meta.sp_run_history
 WHERE sp_name = 'bronze.brz_wholesale_codis_afi__comast'
 ORDER BY start_time DESC;
 
--- 3. sp_registry da update?
+-- 3. Was sp_registry updated?
 SELECT last_load_date, rows_loaded, next_run_time
 FROM meta.sp_registry
 WHERE target_table = 'brz_wholesale_codis_afi__comast';
 ```
 
-> **Neu loi**: doc `error_message` trong `sp_run_history`. Thuong gap: VIEW sai ten cot, source table khong ton tai, data type mismatch.
+> **If there is an error**: check `error_message` in `sp_run_history`. Common issues: VIEW has wrong column names, source table does not exist, data type mismatch.
 
 ---
 
-## Buoc 6 (Optional) — Them DQ rules
+## Step 6 (Optional) -- Add DQ Rules
 
 ```sql
--- Kiem tra cot khong NULL
+-- Check column is not NULL
 INSERT INTO meta.dq_rules (
     rule_id, rule_name, target_schema, target_table,
     check_type, column_name, severity, is_active, layer
@@ -331,7 +331,7 @@ INSERT INTO meta.dq_rules (
     'completeness', 'id_customer', 'CRITICAL', 1, 'BRZ'
 );
 
--- Kiem tra so dong toi thieu
+-- Check minimum row count
 INSERT INTO meta.dq_rules (
     rule_id, rule_name, target_schema, target_table,
     check_type, severity, threshold, is_active, layer
@@ -343,70 +343,70 @@ INSERT INTO meta.dq_rules (
 );
 ```
 
-| check_type | Kiem tra gi | Columns can |
-|------------|------------|-------------|
-| `completeness` | Cot khong duoc NULL | `column_name` |
-| `row_count` | So dong >= threshold | `threshold` |
+| check_type | What it checks | Required columns |
+|------------|----------------|------------------|
+| `completeness` | Column must not be NULL | `column_name` |
+| `row_count` | Row count >= threshold | `threshold` |
 
 ---
 
-## Buoc 7 — Xong! Pipeline tu dong pick up
+## Step 7 -- Done! The Pipeline Automatically Picks It Up
 
-**Khong can lam gi them.** Lan chay pipeline tiep theo:
+**No further action needed.** On the next pipeline run:
 
-1. `pl_bronze_forecast` Lookup doc `sp_registry` → thay bang moi cua ban → load
-2. `pl_silver_forecast` compute waves → tinh lai DAG → chay dung thu tu
-3. `pl_gold_forecast` Lookup → load gold tables
-4. `usp_finalize_pipeline` tu dong rebuild lineage (bao gom bang moi)
+1. `pl_bronze_forecast` Lookup reads `sp_registry` -> finds your new table -> loads it
+2. `pl_silver_forecast` computes waves -> recalculates the DAG -> runs in the correct order
+3. `pl_gold_forecast` Lookup -> loads gold tables
+4. `usp_finalize_pipeline` automatically rebuilds lineage (including the new table)
 
 ### Smart skip:
-- Neu `frequency = 'daily'` va `cron = '0 2 * * *'`: chay moi ngay
-- Neu `frequency = 'monthly'` va `cron = '0 2 1 * *'`: tu dong skip 29/30 ngay
+- If `frequency = 'daily'` and `cron = '0 2 * * *'`: runs every day
+- If `frequency = 'monthly'` and `cron = '0 2 1 * *'`: automatically skips 29/30 days
 
 ---
 
-## Checklist tom tat
+## Summary Checklist
 
 ```
-[ ] 1. Xac dinh layer: bronze / silver / gold
-[ ] 2. Dat ten theo naming convention
-[ ] 3. Chon load_type (overwrite la mac dinh)
-[ ] 4. CREATE VIEW voi logic ETL
-[ ] 5. INSERT vao meta.sp_registry
-[ ] 6. EXEC meta.usp_generic_load — test thu
-[ ] 7. Kiem tra: SELECT COUNT, sp_run_history, sp_registry
+[ ] 1. Determine the layer: bronze / silver / gold
+[ ] 2. Name according to the naming convention
+[ ] 3. Choose load_type (overwrite is the default)
+[ ] 4. CREATE VIEW with ETL logic
+[ ] 5. INSERT into meta.sp_registry
+[ ] 6. EXEC meta.usp_generic_load -- test it
+[ ] 7. Verify: SELECT COUNT, sp_run_history, sp_registry
 [ ] 8. (Optional) INSERT DQ rules
-[ ] 9. (Optional) Khai bao depends_on (chi silver)
-[ ] Done — pipeline tu dong load lan tiep theo
+[ ] 9. (Optional) Declare depends_on (silver only)
+[ ] Done -- the pipeline automatically loads on the next run
 ```
 
 ---
 
-## Cron cheat sheet
+## Cron Cheat Sheet
 
-| Cron | Nghia |
-|------|-------|
-| `0 2 * * *` | 2AM moi ngay |
-| `0 2 * * 1` | 2AM thu 2 hang tuan |
+| Cron | Meaning |
+|------|---------|
+| `0 2 * * *` | 2AM every day |
+| `0 2 * * 1` | 2AM every Monday |
 | `0 2 * * 1-5` | 2AM weekdays |
-| `0 2 1 * *` | 2AM ngay 1 moi thang |
-| `0 */4 * * *` | Moi 4 gio |
-| `*/15 6-22 * * 1-5` | Moi 15 phut, 6AM-10PM, weekdays |
+| `0 2 1 * *` | 2AM on the 1st of every month |
+| `0 */4 * * *` | Every 4 hours |
+| `*/15 6-22 * * 1-5` | Every 15 minutes, 6AM-10PM, weekdays |
 
 ---
 
 ## FAQ
 
-### Q: Toi can tao Stored Procedure rieng khong?
-**Khong.** `meta.usp_generic_load` xu ly tat ca 8 load patterns. Ban chi can tao VIEW + dang ky.
+### Q: Do I need to create a separate Stored Procedure?
+**No.** `meta.usp_generic_load` handles all 8 load patterns. You only need to create a VIEW and register it.
 
-### Q: Toi can sua pipeline khong?
-**Khong.** Pipeline doc `sp_registry` dong (Lookup query). Bang moi tu dong xuat hien.
+### Q: Do I need to modify the pipeline?
+**No.** The pipeline reads `sp_registry` dynamically (Lookup query). New tables appear automatically.
 
-### Q: Silver table cua toi phu thuoc silver table khac thi sao?
-Khai bao `depends_on` trong `sp_registry`. Pipeline tinh wave tu dong — table khong phu thuoc gi chay truoc (wave 0), table phu thuoc chay sau (wave 1, 2, ...).
+### Q: What if my silver table depends on another silver table?
+Declare `depends_on` in `sp_registry`. The pipeline computes waves automatically -- tables with no dependencies run first (wave 0), dependent tables run after (wave 1, 2, ...).
 
-### Q: Lam sao biet bang cua toi da chay thanh cong?
+### Q: How do I know if my table ran successfully?
 ```sql
 SELECT sp_name, status, rows_affected, start_time, duration_seconds
 FROM meta.sp_run_history
@@ -414,22 +414,22 @@ WHERE sp_name = '{schema}.{table_name}'
 ORDER BY start_time DESC;
 ```
 
-### Q: Muon tam tat bang khong chay nua?
+### Q: How do I temporarily disable a table from running?
 ```sql
 UPDATE meta.sp_registry SET is_active = 0
 WHERE target_table = '{table_name}';
 ```
 
-### Q: Muon xoa bang hoan toan?
+### Q: How do I completely remove a table?
 ```sql
--- 1. Xoa khoi registry
+-- 1. Remove from registry
 DELETE FROM meta.sp_registry WHERE target_table = '{table_name}';
--- 2. Xoa DQ rules (neu co)
+-- 2. Remove DQ rules (if any)
 DELETE FROM meta.dq_rules WHERE target_table = '{table_name}';
--- 3. Xoa TABLE + VIEW
+-- 3. Drop TABLE + VIEW
 DROP TABLE IF EXISTS {schema}.{table_name};
 DROP VIEW IF EXISTS {schema}.vw_{table_name};
 ```
 
-### Q: `source_objects` dung lam gi?
-Dung de **tu dong build lineage** (bang `sp_lineage`). Ghi chinh xac ten cac tables ma VIEW cua ban SELECT FROM. Format JSON array: `'["schema.table1","schema.table2"]'`.
+### Q: What is `source_objects` used for?
+It is used to **automatically build lineage** (the `sp_lineage` table). Enter the exact names of the tables that your VIEW selects from. Format as a JSON array: `'["schema.table1","schema.table2"]'`.

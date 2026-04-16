@@ -1,45 +1,45 @@
 # Scheduling & Concurrency Guide
 > Pipeline trigger, table frequency, cron scheduling, smart skip, concurrency control
-> Kiến trúc hiện tại + multi data mart
+> Current architecture + multi data mart
 
 ---
 
-## 1. Cơ chế scheduling hiện tại — Cron + Smart Skip ĐÃ KÍCH HOẠT
+## 1. Current Scheduling Mechanism -- Cron + Smart Skip ACTIVATED
 
-### Tổng quan
+### Overview
 
-Pipeline Lookup đã có **schedule filter** — chỉ load tables ĐẾN HẠN chạy. Monthly tables tự skip khi chưa đến kỳ.
+The Pipeline Lookup already has a **schedule filter** -- it only loads tables that are DUE to run. Monthly tables automatically skip when their period has not arrived.
 
-**Cron expression** trong `sp_registry.cron_expression` quyết định tần suất mỗi table.
-**next_run_time** được `usp_log_run` tự SET sau mỗi lần chạy.
-**Pipeline Lookup** check: `next_run_time IS NULL OR next_run_time <= GETUTCDATE()` → chỉ tables đến hạn mới chạy.
+**Cron expression** in `sp_registry.cron_expression` determines the frequency for each table.
+**next_run_time** is automatically SET by `usp_log_run` after each run.
+**Pipeline Lookup** checks: `next_run_time IS NULL OR next_run_time <= GETUTCDATE()` -- only tables that are due will run.
 
 ```
-Pipeline trigger (manual hoặc schedule)
-    ↓
+Pipeline trigger (manual or scheduled)
+    |
 Lookup: SELECT target_schema, target_table
         FROM sp_registry WHERE is_active = 1
-    ↓
-ForEach: EXEC meta.usp_generic_load cho MỌI table
-    ↓
-generic SP: DROP + CTAS (overwrite) hoặc INSERT (incremental)
-    ↓
+    |
+ForEach: EXEC meta.usp_generic_load for ALL tables
+    |
+generic SP: DROP + CTAS (overwrite) or INSERT (incremental)
+    |
 usp_log_run: SET next_run_time = DATEADD(frequency)
 ```
 
-**Kết quả**: trigger 1 lần → 28 tables ĐỀU CHẠY → monthly tables cũng bị overwrite mỗi ngày nếu pipeline trigger daily.
+**Result**: trigger once -- all 28 tables RUN -- monthly tables also get overwritten every day if the pipeline triggers daily.
 
-### sp_registry hiện tại (28 tables)
+### Current sp_registry (28 tables)
 
-| Frequency | Số tables | Loại | Thực tế đang xảy ra |
-|-----------|----------|------|---------------------|
-| `daily` | 18 | BRZ (7), SLV (8), GLD (2), REF (1) | Chạy mỗi trigger ✅ đúng |
-| `monthly` | 10 | REF (10) | Chạy mỗi trigger ❌ lãng phí CU |
+| Frequency | Table count | Type | What actually happens |
+|-----------|------------|------|----------------------|
+| `daily` | 18 | BRZ (7), SLV (8), GLD (2), REF (1) | Runs every trigger -- correct |
+| `monthly` | 10 | REF (10) | Runs every trigger -- wastes CU |
 
-### `ufn_should_run` — tồn tại nhưng CHƯA DÙNG
+### `ufn_should_run` -- exists but NOT IN USE
 
 ```sql
--- Function này đã tạo nhưng pipeline Lookup KHÔNG gọi nó
+-- This function was created but the pipeline Lookup does NOT call it
 CREATE FUNCTION meta.ufn_should_run(@sp_name VARCHAR(200))
 RETURNS INT
 AS
@@ -53,56 +53,56 @@ BEGIN
 END
 ```
 
-### `next_run_time` — được SET nhưng CHƯA ai CHECK
+### `next_run_time` -- is SET but NOBODY CHECKS it
 
-Khi SP chạy xong, `usp_log_run` tính next_run_time:
+When the SP finishes running, `usp_log_run` calculates next_run_time:
 ```sql
 next_run_time = CASE
-    WHEN frequency = 'daily'   → tomorrow 00:00 UTC
-    WHEN frequency = 'hourly'  → +1 hour
-    WHEN frequency = 'weekly'  → +1 week
-    WHEN frequency = 'monthly' → +1 month
+    WHEN frequency = 'daily'   -> tomorrow 00:00 UTC
+    WHEN frequency = 'hourly'  -> +1 hour
+    WHEN frequency = 'weekly'  -> +1 week
+    WHEN frequency = 'monthly' -> +1 month
 END
 ```
 
-Hiện tại: monthly tables có `next_run_time = 2026-05-15` nhưng pipeline KHÔNG check → vẫn load mỗi trigger.
+Currently: monthly tables have `next_run_time = 2026-05-15` but the pipeline does NOT check -- still loads every trigger.
 
 ---
 
-## 2. Hai tầng scheduling — Pipeline vs Table
+## 2. Two Scheduling Tiers -- Pipeline vs Table
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  TẦNG 1: PIPELINE SCHEDULE (Fabric level)              │
-│  "Khi nào master pipeline trigger?"                     │
-│  → Fabric Pipeline Schedule: daily 2AM / hourly / cron  │
-│  → Hoặc manual Run                                      │
-│  → Config: Fabric Portal → Pipeline → Schedule tab      │
-│  → KHÔNG liên quan sp_registry                          │
-└─────────────────────────────┬───────────────────────────┘
-                              ↓ trigger
-┌─────────────────────────────────────────────────────────┐
-│  TẦNG 2: TABLE FREQUENCY (application level)            │
-│  "Table nào THỰC SỰ cần chạy trong trigger này?"       │
-│  → sp_registry.frequency + next_run_time                │
-│  → ufn_should_run gate                                  │
-│  → Pipeline trigger 10 lần nhưng monthly skip 9 lần    │
-│  → HIỆN TẠI CHƯA KÍCH HOẠT (pipeline không gọi gate)  │
-└─────────────────────────────────────────────────────────┘
++-----------------------------------------------------------+
+|  TIER 1: PIPELINE SCHEDULE (Fabric level)                 |
+|  "When does the master pipeline trigger?"                 |
+|  -> Fabric Pipeline Schedule: daily 2AM / hourly / cron   |
+|  -> Or manual Run                                         |
+|  -> Config: Fabric Portal -> Pipeline -> Schedule tab     |
+|  -> NOT related to sp_registry                            |
++-----------------------------+-----------------------------+
+                              | trigger
++-----------------------------------------------------------+
+|  TIER 2: TABLE FREQUENCY (application level)              |
+|  "Which tables ACTUALLY need to run in this trigger?"     |
+|  -> sp_registry.frequency + next_run_time                 |
+|  -> ufn_should_run gate                                   |
+|  -> Pipeline triggers 10 times but monthly skips 9 times  |
+|  -> CURRENTLY NOT ACTIVATED (pipeline does not call gate) |
++-----------------------------------------------------------+
 ```
 
 ---
 
-## 3. Cách kích hoạt smart skip (đổi pipeline Lookup)
+## 3. How to Activate Smart Skip (change pipeline Lookup)
 
-### Hiện tại (chạy TẤT CẢ):
+### Current (runs ALL):
 ```sql
 SELECT target_schema, target_table
 FROM SupplyChain_Warehouse.meta.sp_registry
 WHERE layer IN ('BRZ','REF') AND is_active = 1
 ```
 
-### Sau khi kích hoạt (smart skip):
+### After activation (smart skip):
 ```sql
 SELECT target_schema, target_table
 FROM SupplyChain_Warehouse.meta.sp_registry
@@ -110,18 +110,18 @@ WHERE layer IN ('BRZ','REF') AND is_active = 1
   AND (next_run_time IS NULL OR next_run_time <= GETUTCDATE())
 ```
 
-**Thêm 1 dòng WHERE** → monthly tables tự skip khi chưa đến kỳ.
+**Add 1 WHERE clause** -- monthly tables automatically skip when their period has not arrived.
 
-### Ảnh hưởng:
-- daily tables: `next_run_time = tomorrow` → mỗi ngày trigger → pass ✅
-- monthly tables: `next_run_time = next month` → skip 29/30 ngày ✅
-- hourly tables: `next_run_time = +1h` → mỗi giờ trigger → pass ✅
-- Lần đầu (`next_run_time = NULL`): luôn chạy ✅
+### Impact:
+- daily tables: `next_run_time = tomorrow` -- each daily trigger passes
+- monthly tables: `next_run_time = next month` -- skips 29/30 days
+- hourly tables: `next_run_time = +1h` -- each hourly trigger passes
+- First run (`next_run_time = NULL`): always runs
 
-### Tiết kiệm CU:
-- 10 monthly tables × ~5s mỗi lần = 50s/trigger lãng phí
-- 30 triggers/tháng × 50s = 25 phút CU lãng phí/tháng
-- Nhỏ nhưng tích lũy khi scale N marts × N tables
+### CU Savings:
+- 10 monthly tables x ~5s each = 50s/trigger wasted
+- 30 triggers/month x 50s = 25 minutes of wasted CU/month
+- Small but accumulates when scaling N marts x N tables
 
 ---
 
@@ -131,126 +131,126 @@ WHERE layer IN ('BRZ','REF') AND is_active = 1
 
 ```
 pl_sc_master: concurrency = 1
-  → Chỉ 1 instance chạy tại 1 thời điểm
-  → Nếu trigger lần 2 khi lần 1 đang chạy → queue (đợi)
-  → Tránh: 2 pipelines cùng DROP + CTAS 1 table
+  -> Only 1 instance runs at a time
+  -> If triggered a 2nd time while the 1st is still running -> queue (wait)
+  -> Prevents: 2 pipelines simultaneously DROP + CTAS on the same table
 ```
 
-**Config**: đã set `"concurrency": 1` trong pipeline definition.
+**Config**: already set `"concurrency": 1` in the pipeline definition.
 
 ### 4.2 ForEach-level concurrency
 
 ```
 pl_bronze_forecast: ForEach batchCount = 8
-  → 8 tables load song song cùng lúc
-  → Fabric WH dual compute pool: READ (view) + WRITE (CTAS) tách biệt
-  → Snapshot conflict khi 8 DROP+CTAS đồng thời → retry 3×60s handle
+  -> 8 tables load in parallel simultaneously
+  -> Fabric WH dual compute pool: READ (view) + WRITE (CTAS) separated
+  -> Snapshot conflict when 8 DROP+CTAS run concurrently -> retry 3x60s handles it
 ```
 
-### 4.3 Mart-level concurrency (multi-mart tương lai)
+### 4.3 Mart-level concurrency (future multi-mart)
 
 ```
 pl_sc_master: ForEach marts isSequential=false, batch=10
-  → 10 marts chạy parallel
-  → Mỗi mart riêng biệt: bronze/silver/gold riêng
-  → Cross-mart deps chạy SAU khi tất cả marts xong
+  -> 10 marts run in parallel
+  -> Each mart is independent: its own bronze/silver/gold
+  -> Cross-mart deps run AFTER all marts complete
 ```
 
-### 4.4 Snapshot conflict — nguyên nhân + giải pháp
+### 4.4 Snapshot conflict -- cause + solution
 
 ```
-Nguyên nhân:
-  Table A: DROP → CREATE TABLE AS SELECT... (đang write)
-  Table B: DROP → CREATE TABLE AS SELECT FROM Table A (đang read Table A)
-  → Conflict: Table A đang bị modify trong khi Table B đang read nó
+Cause:
+  Table A: DROP -> CREATE TABLE AS SELECT... (writing)
+  Table B: DROP -> CREATE TABLE AS SELECT FROM Table A (reading Table A)
+  -> Conflict: Table A is being modified while Table B is reading it
 
-Giải pháp hiện tại:
-  Pipeline retry = 3 lần, interval = 60 giây
-  → Lần 1 fail → đợi 60s → retry → Table A đã xong → success
+Current solution:
+  Pipeline retry = 3 times, interval = 60 seconds
+  -> 1st attempt fails -> wait 60s -> retry -> Table A already done -> success
 
-Giải pháp tối ưu (tương lai):
-  Bronze batch = 8 (nhỏ hơn → ít conflict)
-  Silver: parent-child DAG → wave-by-wave (tables cùng wave không depend nhau)
-  Gold: batch = 2 (ít tables)
+Optimal solution (future):
+  Bronze batch = 8 (smaller -> fewer conflicts)
+  Silver: parent-child DAG -> wave-by-wave (tables in the same wave do not depend on each other)
+  Gold: batch = 2 (few tables)
 ```
 
 ### 4.5 Semantic Model refresh concurrency
 
 ```
-SM refresh: 1 lần cuối pipeline
-  → Direct Lake mode: chỉ sync metadata (~1-2s), không import data
-  → Không conflict với table load (đã xong trước khi SM refresh)
-  → Nếu N SMs: ForEach parallel batch=N
+SM refresh: 1 time at the end of the pipeline
+  -> Direct Lake mode: only syncs metadata (~1-2s), does not import data
+  -> No conflict with table load (already finished before SM refresh)
+  -> If N SMs: ForEach parallel batch=N
 ```
 
 ---
 
-## 5. Trigger scenarios và ảnh hưởng
+## 5. Trigger Scenarios and Impact
 
-### Scenario A: Daily 2AM (recommend production hiện tại)
+### Scenario A: Daily 2AM (recommended for current production)
 
 ```
 Schedule: daily 02:00 UTC
-Duration: ~20 phút
-Tables chạy: 28/28 (hiện tại, chưa smart skip)
-              18/28 (sau smart skip — 10 monthly skip)
-CU estimate: ~50 CU/ngày
-SM refresh: 1 lần/ngày
+Duration: ~20 minutes
+Tables run: 28/28 (currently, without smart skip)
+            18/28 (after smart skip -- 10 monthly skip)
+CU estimate: ~50 CU/day
+SM refresh: 1 time/day
 ```
 
-### Scenario B: Hourly (khi cần data fresher)
+### Scenario B: Hourly (when fresher data is needed)
 
 ```
-Schedule: every 1 hour (6AM-10PM = 16 triggers/ngày)
-Duration: ~20 phút mỗi trigger
-Tables chạy (với smart skip):
-  - hourly tables: mỗi trigger ✅
-  - daily tables: 1/16 triggers ✅ (skip 15)
-  - monthly tables: ~0/16 ✅ (skip tất cả trừ kỳ)
-CU estimate: 16 × ~10 CU (mostly skip) = ~160 CU/ngày
-  So với daily: 3x cost nhưng data fresh hơn 16x
+Schedule: every 1 hour (6AM-10PM = 16 triggers/day)
+Duration: ~20 minutes per trigger
+Tables run (with smart skip):
+  - hourly tables: every trigger
+  - daily tables: 1/16 triggers (skip 15)
+  - monthly tables: ~0/16 (skip all except on schedule)
+CU estimate: 16 x ~10 CU (mostly skip) = ~160 CU/day
+  Compared to daily: 3x cost but data is 16x fresher
 ```
 
 ### Scenario C: Every 15 minutes
 
 ```
-Schedule: */15 * * * * (96 triggers/ngày)
-Rủi ro: pipeline overlap nếu duration > 15 phút
-Giải pháp: concurrency=1 → queue
-CU estimate: 96 × ~5 CU (mostly skip) = ~480 CU/ngày
-Chỉ hợp lý khi: có tables frequency='realtime' (5-10 phút)
+Schedule: */15 * * * * (96 triggers/day)
+Risk: pipeline overlap if duration > 15 minutes
+Solution: concurrency=1 -> queue
+CU estimate: 96 x ~5 CU (mostly skip) = ~480 CU/day
+Only makes sense when: there are tables with frequency='realtime' (5-10 minutes)
 ```
 
-### Scenario D: Multi-schedule (recommend multi-mart production)
+### Scenario D: Multi-schedule (recommended for multi-mart production)
 
 ```
 Pipeline 1: pl_sc_master_batch (daily 2AM)
-  → ALL tables, ALL marts
-  → Full run: bronze → silver → gold → SM
+  -> ALL tables, ALL marts
+  -> Full run: bronze -> silver -> gold -> SM
 
 Pipeline 2: pl_sc_master_hot (every 1 hour, 7AM-9PM)
-  → CHỈ tables frequency='hourly'
-  → Lookup thêm: WHERE frequency = 'hourly'
-  → Light run: chỉ vài tables → fast
+  -> ONLY tables with frequency='hourly'
+  -> Lookup adds: WHERE frequency = 'hourly'
+  -> Light run: only a few tables -> fast
 
 Pipeline 3: pl_sc_master_realtime (every 15 min) [future]
-  → CHỈ tables frequency='realtime'
-  → 1-2 incremental tables
-  → Ultra-light: ~30s per run
+  -> ONLY tables with frequency='realtime'
+  -> 1-2 incremental tables
+  -> Ultra-light: ~30s per run
 ```
 
 ---
 
-## 6. Cách setup schedule trên Fabric
+## 6. How to Set Up a Schedule on Fabric
 
 ### Via Fabric Portal (UI):
 ```
-1. Fabric Portal → Workspace → pl_sc_master
+1. Fabric Portal -> Workspace -> pl_sc_master
 2. Click "Schedule" tab
 3. Scheduled run: ON
 4. Repeat: Daily
 5. Time: 02:00 AM
-6. Timezone: SE Asia Standard Time (UTC+7) hoặc UTC
+6. Timezone: SE Asia Standard Time (UTC+7) or UTC
 7. Start: today
 8. End: No end date
 ```
@@ -278,46 +278,46 @@ curl -X POST "https://api.fabric.microsoft.com/v1/workspaces/{ws}/items/{pipelin
 
 ---
 
-## 7. Implementation Status — ĐÃ HOÀN THÀNH
+## 7. Implementation Status -- COMPLETED
 
-### Đã tạo:
+### Created:
 
-| Object | Loại | Chi tiết |
-|--------|------|----------|
+| Object | Type | Details |
+|--------|------|---------|
 | `sp_registry.cron_expression` | Column | VARCHAR(100), cron syntax per table |
-| `meta.ufn_cron_is_due(@cron)` | Function | Parse cron → return 1 nếu now match |
+| `meta.ufn_cron_is_due(@cron)` | Function | Parses cron -> returns 1 if now matches |
 
-### Đã config:
+### Configured:
 
-| Tables | Cron | Nghĩa |
-|--------|------|-------|
-| 18 daily (BRZ+SLV+GLD+REF) | `0 2 * * *` | 2:00 AM UTC mỗi ngày |
-| 10 monthly (REF) | `0 2 1 * *` | 2:00 AM UTC ngày 1 mỗi tháng |
+| Tables | Cron | Meaning |
+|--------|------|---------|
+| 18 daily (BRZ+SLV+GLD+REF) | `0 2 * * *` | 2:00 AM UTC every day |
+| 10 monthly (REF) | `0 2 1 * *` | 2:00 AM UTC on the 1st of every month |
 
-### Đã sửa pipeline (tên mới từ 2026-04-16):
+### Pipeline modified (new names as of 2026-04-16):
 
-| Pipeline | Tên cũ | Lookup filter thêm |
-|----------|--------|-------------------|
+| Pipeline | Previous name | Additional Lookup filter |
+|----------|--------------|--------------------------|
 | pl_bronze_forecast | pl_bronze_forecast | `AND (r.cron_expression IS NULL OR r.next_run_time IS NULL OR r.next_run_time <= GETUTCDATE())` |
-| pl_gold_forecast | pl_gold_forecast | Tương tự |
-| pl_silver_wave_forecast | pl_silver_wave_forecast | Silver dùng DAG waves (không filter cron trực tiếp) |
+| pl_gold_forecast | pl_gold_forecast | Same as above |
+| pl_silver_wave_forecast | pl_silver_wave_forecast | Silver uses DAG waves (does not filter cron directly) |
 
-> **Naming convention**: `pl_{layer}_{project}`. Master giữ `pl_sc_master` (duy nhất). Child pipelines đổi suffix theo project (forecast, inventory, ...).
+> **Naming convention**: `pl_{layer}_{project}`. Master keeps `pl_sc_master` (unique). Child pipelines change the suffix by project (forecast, inventory, ...).
 
 ### Concurrency:
-- `pl_sc_master`: **concurrency = 1** (chỉ 1 instance chạy, trigger tiếp → queue)
-- ForEach bronze: **batch = 6** (giảm từ 8 → 6, giảm snapshot conflict)
+- `pl_sc_master`: **concurrency = 1** (only 1 instance runs, next trigger -> queue)
+- ForEach bronze: **batch = 6** (reduced from 8 -> 6, reduces snapshot conflicts)
 - ForEach gold: **batch = 2**
 - ForEach silver wave: **batch = 8**
 
 ### Snapshot conflict mitigation (2026-04-16):
 
-**Vấn đề**: 8 tables bronze load song song → cùng INSERT/UPDATE `sp_run_history` → snapshot isolation conflict → table báo failed dù data đã load xong.
+**Problem**: 8 bronze tables loading in parallel -> all INSERT/UPDATE into `sp_run_history` simultaneously -> snapshot isolation conflict -> table reports failed even though data was already loaded.
 
-**Giải pháp 3 lớp**:
-1. **Giảm batchCount 8 → 6**: ít concurrent writes hơn → giảm xác suất conflict
-2. **Retry trong `usp_log_run`**: WHILE retry < 3 + TRY/CATCH + WAITFOR DELAY 2s giữa mỗi retry. Nếu INSERT/UPDATE conflict → tự retry, không crash SP.
-3. **Pipeline retry**: `exec_generic` activity đã có retry=3, interval=60s → nếu SP vẫn fail thì pipeline tự retry
+**3-layer solution**:
+1. **Reduce batchCount 8 -> 6**: fewer concurrent writes -> lower probability of conflict
+2. **Retry inside `usp_log_run`**: WHILE retry < 3 + TRY/CATCH + WAITFOR DELAY 2s between each retry. If INSERT/UPDATE conflicts -> auto retry, SP does not crash.
+3. **Pipeline retry**: `exec_generic` activity already has retry=3, interval=60s -> if SP still fails then pipeline auto retries
 
 ```sql
 -- usp_log_run retry logic (simplified):
@@ -334,9 +334,9 @@ BEGIN
 END
 ```
 
-### Đổi tần suất 1 table:
+### Changing the frequency of a single table:
 ```sql
--- Ví dụ: đổi ref_warehouse sang weekly
+-- Example: change ref_warehouse to weekly
 UPDATE meta.sp_registry
 SET cron_expression = '0 2 * * 1',  -- 2AM Monday
     frequency = 'weekly'
@@ -345,17 +345,17 @@ WHERE target_table = 'ref_warehouse';
 
 ### Cron cheat sheet:
 ```
-*/15 * * * *          mỗi 15 phút
-0 * * * *             mỗi giờ đầu
-0 */5 * * *           mỗi 5 giờ
-0 2 * * *             2AM mỗi ngày
-0 8,14 * * *          8AM + 2PM mỗi ngày
-0 2 * * 1             2AM mỗi thứ 2
+*/15 * * * *          every 15 minutes
+0 * * * *             every hour on the hour
+0 */5 * * *           every 5 hours
+0 2 * * *             2AM every day
+0 8,14 * * *          8AM + 2PM every day
+0 2 * * 1             2AM every Monday
 0 2 * * 1-5           2AM weekdays
-0 2 1 * *             2AM ngày 1 mỗi tháng
-0 2 15 * *            2AM ngày 15 mỗi tháng
-*/15 6-22 * * 1-5     mỗi 15p, 6AM-10PM, weekdays
+0 2 1 * *             2AM on the 1st of every month
+0 2 15 * *            2AM on the 15th of every month
+*/15 6-22 * * 1-5     every 15 min, 6AM-10PM, weekdays
 ```
 | usp_generic_load | Frequency-agnostic |
-| Views | Không liên quan scheduling |
-| Meta tables | Đã đủ columns |
+| Views | Not related to scheduling |
+| Meta tables | All columns are present |

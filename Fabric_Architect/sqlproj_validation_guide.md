@@ -1,40 +1,40 @@
 # .sqlproj Validation Guide
-> Build-time SQL validation: bat loi truoc khi deploy, khong doi runtime moi biet
-> 3 phuong an: tu nhe den full Enterprise
+> Build-time SQL validation: catch errors before deploy, don't wait until runtime
+> 3 approaches: from lightweight to full Enterprise
 
 ---
 
-## Van de hien tai
+## Current Problem
 
-v9 **khong co build-time validation**. Loi chi phat hien khi pipeline chay:
+v9 **has no build-time validation**. Errors are only discovered when the pipeline runs:
 
 ```
-Developer sua VIEW → push Git → deploy
+Developer edits VIEW → push Git → deploy
     ↓
-Pipeline trigger → SP chay CTAS tu VIEW
+Pipeline trigger → SP runs CTAS from VIEW
     ↓
 RUNTIME ERROR: "Invalid column name 'xyz'"
     ↓
-Table fail → phat hien loi (muon)
+Table fail → error discovered (too late)
 ```
 
-Enterprise team (US) co .sqlproj validation — loi phat hien **truoc khi deploy**:
+Enterprise team (US) has .sqlproj validation — errors are discovered **before deploy**:
 
 ```
-Developer sua VIEW → push Git → Azure Pipeline build
+Developer edits VIEW → push Git → Azure Pipeline build
     ↓
-DacFx doc tat ca .sql files → validate references
+DacFx reads all .sql files → validate references
     ↓
 BUILD FAIL: "unresolved reference to [xyz]"
     ↓
-Khong deploy → developer fix truoc (som)
+No deploy → developer fixes first (early)
 ```
 
 ---
 
-## Enterprise dang lam the nao
+## How Enterprise Currently Does It
 
-### Cau truc
+### Structure
 
 ```
 data-edw-fabric/
@@ -46,7 +46,7 @@ data-edw-fabric/
 │   └── ETL_Framework.sqlproj
 ├── Retail_Warehouse/
 │   └── Retail_Warehouse.sqlproj
-├── ... (17 .sqlproj tong cong)
+├── ... (17 .sqlproj total)
 └── azure-pipelines/
     └── azure-pipelines.yml          ← CI pipeline
 ```
@@ -61,7 +61,7 @@ data-edw-fabric/
 </ProjectReference>
 ```
 
-Nghia la: SupplyChain_Warehouse **phu thuoc** Source_Data. Neu Source_Data doi cot → SupplyChain build FAIL.
+Meaning: SupplyChain_Warehouse **depends on** Source_Data. If Source_Data changes a column → SupplyChain build FAILS.
 
 ### SqlCmdVariable — multi-environment
 
@@ -72,7 +72,7 @@ Nghia la: SupplyChain_Warehouse **phu thuoc** Source_Data. Neu Source_Data doi c
 </SqlCmdVariable>
 ```
 
-Trong SQL dung `$(Source_Data)` thay vi ten database cung:
+In SQL, use `$(Source_Data)` instead of a hardcoded database name:
 ```sql
 SELECT * FROM [$(Source_Data)].schema.table
 -- DEV: [Source_Data_DEV].schema.table
@@ -82,7 +82,7 @@ SELECT * FROM [$(Source_Data)].schema.table
 ### CI Pipeline
 
 ```yaml
-# azure-pipelines.yml (don gian hoa)
+# azure-pipelines.yml (simplified)
 steps:
   - task: UseDotNet@2
     inputs:
@@ -91,18 +91,18 @@ steps:
   - script: dotnet build **/*.sqlproj --configuration Release
 ```
 
-Push code → build 17 projects → fail neu bat ky reference nao sai.
+Push code → build 17 projects → fail if any reference is incorrect.
 
 ---
 
-## 3 Phuong an cho v9
+## 3 Approaches for v9
 
-### Phuong an 1: GitHub Actions SQL Lint (nhe nhat)
+### Approach 1: GitHub Actions SQL Lint (lightest)
 
-**Do kho**: De
-**Thoi gian setup**: 30 phut
-**Bat duoc loi gi**: Syntax errors, basic SQL issues
-**Khong bat duoc**: Reference errors (column khong ton tai)
+**Difficulty**: Easy
+**Setup time**: 30 minutes
+**Errors caught**: Syntax errors, basic SQL issues
+**Not caught**: Reference errors (non-existent columns)
 
 ```yaml
 # .github/workflows/sql-lint.yml
@@ -120,30 +120,30 @@ jobs:
         run: sqlfluff lint Fabric_Architect/**/*.sql --dialect tsql
 ```
 
-**Uu diem**: Setup nhanh, chay moi PR
-**Nhuoc diem**: Chi bat syntax, khong biet column co ton tai khong
+**Pros**: Quick setup, runs on every PR
+**Cons**: Only catches syntax errors, cannot detect whether a column exists
 
 ---
 
-### Phuong an 2: SQL Database Project (recommend)
+### Approach 2: SQL Database Project (recommended)
 
-**Do kho**: Trung binh
-**Thoi gian setup**: 2-3 gio
-**Bat duoc loi gi**: Reference errors trong cung Warehouse (column, table, view khong ton tai)
-**Khong bat duoc**: Cross-database (source Lakehouse)
+**Difficulty**: Medium
+**Setup time**: 2-3 hours
+**Errors caught**: Reference errors within the same Warehouse (non-existent columns, tables, views)
+**Not caught**: Cross-database (Lakehouse sources)
 
-#### Buoc 1: Ket noi Fabric Git
+#### Step 1: Connect Fabric Git
 
 ```
 Fabric Portal → SupplyChain_Warehouse → Settings → Git integration
     → Connect to GitHub repo
-    → Fabric tu dong export tat ca objects ra .sql files
+    → Fabric automatically exports all objects as .sql files
 ```
 
-Fabric se tao cau truc:
+Fabric will create the following structure:
 ```
 SupplyChain_Warehouse/
-├── SupplyChain_Warehouse.sqlproj     (tu dong tao)
+├── SupplyChain_Warehouse.sqlproj     (auto-generated)
 ├── bronze/
 │   ├── Tables/brz_*.sql
 │   └── Views/vw_brz_*.sql
@@ -159,7 +159,7 @@ SupplyChain_Warehouse/
     └── Functions/*.sql
 ```
 
-#### Buoc 2: Tao GitHub Action build
+#### Step 2: Create GitHub Action build
 
 ```yaml
 # .github/workflows/build-sqlproj.yml
@@ -180,29 +180,29 @@ jobs:
         run: dotnet build SupplyChain_Warehouse/*.sqlproj --configuration Release
 ```
 
-#### Buoc 3: Test
+#### Step 3: Test
 
 ```bash
-# Local test (can .NET SDK 8)
+# Local test (requires .NET SDK 8)
 dotnet build SupplyChain_Warehouse.sqlproj
 
-# Ket qua:
-# Build succeeded → tat ca references OK
-# Build FAILED → chi ra dong/file bi loi
+# Result:
+# Build succeeded → all references OK
+# Build FAILED → points to the exact line/file with errors
 ```
 
-**Uu diem**: Bat loi reference chinh xac, tich hop Git workflow
-**Nhuoc diem**: Khong validate cross-database (Lakehouse sources)
+**Pros**: Catches reference errors accurately, integrates with Git workflow
+**Cons**: Does not validate cross-database (Lakehouse sources)
 
 ---
 
-### Phuong an 3: Full Enterprise (ProjectReference)
+### Approach 3: Full Enterprise (ProjectReference)
 
-**Do kho**: Kho hon
-**Thoi gian setup**: 1 ngay
-**Bat duoc loi gi**: Tat ca — bao gom cross-database references
+**Difficulty**: Harder
+**Setup time**: 1 day
+**Errors caught**: Everything — including cross-database references
 
-#### Them ProjectReference
+#### Add ProjectReference
 
 ```xml
 <!-- SupplyChain_Warehouse.sqlproj -->
@@ -214,46 +214,46 @@ dotnet build SupplyChain_Warehouse.sqlproj
 </ItemGroup>
 ```
 
-#### Doi 3-part naming sang SqlCmdVariable
+#### Change 3-part naming to SqlCmdVariable
 
 ```sql
--- Truoc:
+-- Before:
 SELECT * FROM Enterprise_Lakehouse.SalesHistory_AFI.InvoiceDetail;
 
--- Sau:
+-- After:
 SELECT * FROM [$(Enterprise_Lakehouse)].SalesHistory_AFI.InvoiceDetail;
 ```
 
-#### Tao .sqlproj cho Lakehouse
+#### Create .sqlproj for Lakehouse
 
-Can tao 1 .sqlproj mo ta schema cua Enterprise_Lakehouse (chi can table definitions, khong can data).
+You need to create a .sqlproj describing the schema of Enterprise_Lakehouse (only table definitions are needed, not data).
 
-**Uu diem**: Giong Enterprise 100%, bat moi loi
-**Nhuoc diem**: Can maintain .sqlproj cho Lakehouse, doi tat ca VIEW sang `$(...)` syntax
+**Pros**: Identical to Enterprise at 100%, catches all errors
+**Cons**: Requires maintaining a .sqlproj for Lakehouse, requires changing all VIEWs to `$(...)` syntax
 
 ---
 
-## So sanh 3 phuong an
+## Comparison of 3 Approaches
 
-| | PA 1: Lint | PA 2: .sqlproj | PA 3: Full ProjectRef |
+| | Approach 1: Lint | Approach 2: .sqlproj | Approach 3: Full ProjectRef |
 |-|------------|---------------|----------------------|
-| **Do kho** | De | Trung binh | Kho |
-| **Setup** | 30 phut | 2-3 gio | 1 ngay |
-| **Bat syntax** | Co | Co | Co |
-| **Bat reference loi** | Khong | Co (cung DB) | Co (cross-DB) |
-| **Bat cross-DB** | Khong | Khong | Co |
-| **Can Fabric Git** | Khong | Co | Co |
-| **Khi nao nen dung** | < 30 tables | 30-100 tables | 100+ tables, nhieu team |
+| **Difficulty** | Easy | Medium | Hard |
+| **Setup** | 30 minutes | 2-3 hours | 1 day |
+| **Catches syntax** | Yes | Yes | Yes |
+| **Catches reference errors** | No | Yes (same DB) | Yes (cross-DB) |
+| **Catches cross-DB** | No | No | Yes |
+| **Requires Fabric Git** | No | Yes | Yes |
+| **When to use** | < 30 tables | 30-100 tables | 100+ tables, multiple teams |
 
 ---
 
-## Recommend
+## Recommendation
 
-| Quy mo | Nen dung |
+| Scale | Recommended |
 |--------|----------|
-| **Hien tai (28 tables, 1 team)** | Chua can — runtime detection du nhanh |
-| **50+ tables** | Phuong an 2 (.sqlproj) |
-| **100+ tables, nhieu team** | Phuong an 3 (Full ProjectRef) |
-| **Tich hop Enterprise CI/CD** | Phuong an 3 (bat buoc) |
+| **Current (28 tables, 1 team)** | Not needed yet — runtime detection is fast enough |
+| **50+ tables** | Approach 2 (.sqlproj) |
+| **100+ tables, multiple teams** | Approach 3 (Full ProjectRef) |
+| **Integrate with Enterprise CI/CD** | Approach 3 (required) |
 
-Khi san sang, bat dau tu **Phuong an 2**: ket noi Fabric Git → Fabric tu dong export .sql → tao GitHub Action build.
+When ready, start with **Approach 2**: connect Fabric Git → Fabric automatically exports .sql → create GitHub Action build.

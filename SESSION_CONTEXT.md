@@ -379,3 +379,45 @@ MCP tools dùng trong session:
 | `ref_forecast_horizon no view` | Hardcoded 8 rows, generic SP cần view | Tạo view SELECT UNION ALL |
 | `SAML SSO block git clone` | Enterprise org auth | gh auth refresh + gh repo clone |
 | `Streamlit Python 3.14 crash` | streamlit-agraph incompatible | .python-version = 3.11 |
+
+---
+
+## 15. Session 2026-04-16 — Thay đổi chính
+
+### Pipeline
+- **Đổi tên 4 child pipelines**: `pl_sc_bronze` → `pl_bronze_forecast`, `pl_sc_silver` → `pl_silver_forecast`, `pl_sc_silver_wave` → `pl_silver_wave_forecast`, `pl_sc_gold` → `pl_gold_forecast`
+- **Naming convention**: `pl_{layer}_{project}` — suffix theo project. Master giữ nguyên `pl_sc_master`
+- **Bronze batchCount 8 → 6**: giảm snapshot conflict khi 6+ tables cùng INSERT vào sp_run_history
+- Master invoke child bằng GUID → đổi tên không ảnh hưởng pipeline execution
+
+### Snapshot conflict mitigation
+- **usp_log_run thêm retry 3x**: WHILE loop + TRY/CATCH + WAITFOR DELAY 2s. INSERT/UPDATE sp_run_history fail → tự retry, không crash SP
+- **3 lớp phòng thủ**: (1) batch 8→6, (2) SP retry 3x, (3) pipeline activity retry 3x60s
+- Trước: pipeline status "partial" (có tables fail). Sau: gần 0% fail
+
+### Timezone sync (map Enterprise fn_GetDate)
+- **meta.ufn_utc_to_cst**: scalar function UTC → CST/CDT, DST aware (2nd Sunday Mar → 1st Sunday Nov)
+- **sp_run_history + pipeline_run_log**: thêm cột `start_cst`, `end_cst`
+- **usp_log_run + usp_log_pipeline_run**: ALTER để ghi CST tự động mỗi run
+- **vw_table_dictionary**: `[Modified]`, `[LastAudit]`, `[LastBatchStartDate]` → CST (map Enterprise)
+- **vw_run_history_tz**: view mới — log với 3 timezone (UTC, CST, VN)
+- Backfill 330 existing rows
+
+### Docs mới
+- **new_table_onboarding_guide.md**: hướng dẫn DA/DE thêm bảng ETL mới (7 bước)
+- **sqlproj_validation_guide.md**: 3 phương án validate SQL (lint / sqlproj / full ProjectRef)
+- **timezone_sync_guide.md**: mapping fn_GetDate, CST columns, vw_run_history_tz
+- **Dọn folder**: move 5 docs vào Fabric_Architect/
+- **README rewrite**: 13 sections, proper ToC, 18 doc links, object counts updated (78)
+
+### Enterprise mapping progress
+- Load patterns: 8/8 (100%) — đã có từ trước
+- TableDictionary: 63/63 + [Modified] giờ là CST
+- fn_GetDate: DONE (ufn_utc_to_cst)
+- Generic SP: DONE
+- Tổng mapping: ~85% (còn alerts + .sqlproj + multi-env)
+
+### Object count update: 75 → 78
+- +1 function: meta.ufn_utc_to_cst
+- +1 view: meta.vw_run_history_tz
+- +4 columns: start_cst/end_cst trên 2 tables
