@@ -43,7 +43,7 @@ flowchart LR
         B["bronze\n18 tables · 18 views\nraw mirror"]
         S["silver\n8 tables · 8 views\ntransform + join"]
         G["gold\n2 tables · 2 views\nBI-ready"]
-        M["meta\n7 tables · 9 SPs · 2 views · 2 functions\nconfig · log · DQ · DAG"]
+        M["meta\n7 tables · 9 SPs · 3 views · 3 functions\nconfig · log · DQ · DAG"]
         B --> S --> G
     end
 
@@ -59,7 +59,7 @@ flowchart LR
 | **bronze** | Raw mirror from source systems | 18 tables + 18 views | `VIEW` reads source via 3-part naming → Generic SP does DROP + CTAS |
 | **silver** | Clean, conform, join, business rules | 8 tables + 8 views | `VIEW` reads bronze/silver → Generic SP does DROP + CTAS (DAG wave order) |
 | **gold** | Business-ready facts & dimensions | 2 tables + 2 views | `VIEW` reads silver → Generic SP does DROP + CTAS |
-| **meta** | System control plane | 7 tables + 9 SPs + 2 views + 2 fn | Config + log + DQ + DAG engine + lineage |
+| **meta** | System control plane | 7 tables + 9 SPs + 3 views + 3 fn | Config + log + DQ + DAG + lineage + timezone |
 
 ### Warehouse Structure
 
@@ -86,11 +86,13 @@ SupplyChain_Warehouse/
     │              usp_compute_slv_waves, usp_run_silver_dag,
     │              usp_debug_loop, usp_finalize_pipeline,
     │              usp_log_pipeline_run                        (9)
-    ├── Views/     vw_table_dictionary, vw_slv_dag_waves       (2)
-    └── Functions/ ufn_should_run, ufn_cron_is_due             (2)
+    ├── Views/     vw_table_dictionary, vw_slv_dag_waves,
+    │              vw_run_history_tz                            (3)
+    └── Functions/ ufn_should_run, ufn_cron_is_due,
+                   ufn_utc_to_cst                              (3)
 ```
 
-> **76 total objects** across 4 schemas. Per-table SPs have been deleted — all 28 tables loaded by 1 generic SP.
+> **78 total objects** across 4 schemas. Per-table SPs have been deleted — all 28 tables loaded by 1 generic SP.
 
 ### Key Features
 
@@ -368,7 +370,7 @@ flowchart TD
 | **Auto lineage** | **v9 ahead** | Enterprise does not have auto-built lineage |
 | **DQ config-driven** | **v9 ahead** | Enterprise DQ is simpler (row count only) |
 | **Alerts/email** | **Not implemented** | Enterprise has `usp_DataWarehouseDataFeedAlert_Fabric` |
-| **fn_GetDate timezone** | **Not implemented** | Enterprise has multi-timezone (EST/CST/PST + DST) |
+| **fn_GetDate timezone** | **Implemented (CST)** | `meta.ufn_utc_to_cst` — DST aware, maps to TableDictionary `[Modified]` |
 | **.sqlproj validation** | **Not implemented** | Enterprise has build-time schema validation |
 | **Multi-environment** | **Not implemented** | Enterprise has Dev → Prod via publish profiles |
 
@@ -459,6 +461,8 @@ flowchart LR
 |------|-------------|
 | [new_table_onboarding_guide.md](Fabric_Architect/new_table_onboarding_guide.md) | **Start here** — Step-by-step: add new ETL table (for DA/DE) |
 | [scheduling_and_concurrency.md](Fabric_Architect/scheduling_and_concurrency.md) | Scheduling: cron, smart skip, concurrency, snapshot conflict mitigation |
+| [sqlproj_validation_guide.md](Fabric_Architect/sqlproj_validation_guide.md) | .sqlproj validation: 3 approaches (lint / sqlproj / full ProjectRef) |
+| [timezone_sync_guide.md](Fabric_Architect/timezone_sync_guide.md) | Timezone sync: UTC + CST + VN, map Enterprise fn_GetDate |
 | [generic_sp_migration_plan.md](Fabric_Architect/generic_sp_migration_plan.md) | Migration history: 28 per-table SPs → 1 generic SP |
 
 ### Templates (generic, apply to any project)
