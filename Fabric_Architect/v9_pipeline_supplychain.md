@@ -8,30 +8,33 @@ This document is a complete execution walkthrough of the master pipeline. It tra
 
 ## Trigger: pl_sc_master Starts
 
-When `pl_sc_master` (ID: 319a8160) is triggered (manually or on schedule), it executes 7 activities sequentially: log_start, 3 child pipelines, finalize, and Semantic Model refresh:
+When `pl_sc_master` (ID: 319a8160) is triggered (manually or on schedule), it executes 9 activities sequentially: log_start, 3 child pipelines, 3 DQ gates, finalize, and Semantic Model refresh:
 
 ```mermaid
 flowchart LR
     T["Trigger\n(manual or schedule)"]
     LS["Step 1: log_start\n(SqlServerStoredProcedure)\nEXEC meta.usp_log_pipeline_run\nINSERT pipeline_run_log\nstatus='running'"]
     B["Step 2: pl_bronze_forecast\n(1bdbaebb)"]
-    S["Step 3: pl_silver_forecast\n(46437ae6)"]
-    G["Step 4: pl_gold_forecast\n(94fc130e)"]
-    FN["Step 5: finalize\n(SqlServerStoredProcedure)\nEXEC meta.usp_finalize_pipeline\nbuilds lineage + updates\npipeline_run_log to 'success'"]
-    SM["Step 6: refresh_sm\n(PBISemanticModelRefresh)\nRefresh SC_Control_Tower\nDirect Lake metadata sync\n7 tables refreshed"]
+    DQ1["Step 3: dq_bronze\n(InvokePipeline)\npl_dq_check layer='bronze'"]
+    S["Step 4: pl_silver_forecast\n(46437ae6)"]
+    DQ2["Step 5: dq_silver\n(InvokePipeline)\npl_dq_check layer='silver'"]
+    G["Step 6: pl_gold_forecast\n(94fc130e)"]
+    DQ3["Step 7: dq_gold\n(InvokePipeline)\npl_dq_check layer='gold'"]
+    FN["Step 8: finalize\n(SqlServerStoredProcedure)\nEXEC meta.usp_finalize_pipeline\nbuilds lineage + updates\npipeline_run_log to 'success'"]
+    SM["Step 9: refresh_sm\n(PBISemanticModelRefresh)\nRefresh SC_Control_Tower\nDirect Lake metadata sync\n7 tables refreshed"]
 
     T --> LS -->|"on success"| B
-    B -->|"on success"| DQ1["DQ: bronze ⚠"]
+    B -->|"on success"| DQ1
     DQ1 -->|"on success"| S
-    S -->|"on success"| DQ2["DQ: silver ⚠"]
+    S -->|"on success"| DQ2
     DQ2 -->|"on success"| G
-    G -->|"on success"| DQ3["DQ: gold ⚠"]
+    G -->|"on success"| DQ3
     DQ3 -->|"on success"| FN -->|"on success"| SM
 ```
 
-> ⚠ DQ gates shown for completeness. Currently experimental — `meta.usp_check_dq` has a known WHILE loop limitation in Fabric WH. DQ checks currently run via Python script, not yet integrated into pipeline activities.
+> DQ gates (dq_bronze, dq_silver, dq_gold) invoke pl_dq_check pipeline with layer parameter. CRITICAL DQ failure stops pipeline.
 
-If any child pipeline fails, execution stops. Silver does not run if bronze fails. Gold does not run if silver fails. The `log_start` activity records the pipeline run at the beginning, the `finalize` activity rebuilds lineage and updates the run log with final status, and the `refresh_sm` activity syncs the Semantic Model's Direct Lake metadata with the latest gold tables.
+If any child pipeline or DQ gate fails, execution stops. Silver does not run if bronze fails. Gold does not run if silver fails. The `log_start` activity records the pipeline run at the beginning, the `finalize` activity rebuilds lineage and updates the run log with final status, and the `refresh_sm` activity syncs the Semantic Model's Direct Lake metadata with the latest gold tables.
 
 ---
 
@@ -430,6 +433,8 @@ flowchart TD
 
 **What changes in the pipeline**: Nothing. The Lookup dynamically reads sp_registry. The ForEach calls `meta.usp_generic_load` for each table. Adding a view + 1 registry row is sufficient.
 
+> **DQ recommendation**: When adding a new table, consider adding DQ rules to `meta.dq_rules` (e.g., completeness, row_count, freshness checks). DQ rules are optional but recommended -- the dq_bronze/dq_silver/dq_gold gates will automatically pick up any new rules for the corresponding layer on the next pipeline run.
+
 ### Adding a Silver Table (Simplified -- No SP Needed)
 
 ```mermaid
@@ -471,8 +476,9 @@ T+00:02    -> ForEach batch=8: first 8 SPs start in parallel
 T+00:10    ->   8 more SPs start as slots free up
 T+00:20    ->   remaining 2 SPs start
 T+03:00    -> All 18 bronze SPs complete (3 retried once for snapshot conflicts)
-T+03:00  -> [DQ: bronze ⚠ — not yet integrated, would run meta.usp_check_dq for bronze rules]
-T+03:00  -> pl_bronze_forecast completes, master invokes pl_silver_forecast (46437ae6)
+T+03:00  -> pl_bronze_forecast completes
+T+03:00  -> dq_bronze: pl_dq_check (22 rules, ~1 min)
+T+03:01  -> dq_bronze completes, master invokes pl_silver_forecast (46437ae6)
 T+03:01    -> SP: EXEC meta.usp_compute_slv_waves (computes 3 waves, writes 8 rows)
 T+03:02    -> Lookup wave 0: returns 3 SPs
 T+03:02    -> ForEach wave 0: 3 SPs start in parallel
@@ -484,23 +490,25 @@ T+07:18    -> Lookup wave 2: returns 1 SP
 T+07:18    -> ForEach wave 2: 1 SP runs
 T+07:23    -> Wave 2 completes (naive_forecast_monthly at 5s)
 T+07:24    -> No more waves (Lookup returned only 3 distinct waves)
-T+09:00  -> [DQ: silver ⚠ — not yet integrated, would run meta.usp_check_dq for silver rules]
-T+09:00    -> pl_silver_forecast completes, master invokes pl_gold_forecast (94fc130e)
+T+09:00  -> pl_silver_forecast completes
+T+09:00  -> dq_silver: pl_dq_check (8 rules, ~1 min)
+T+09:01  -> dq_silver completes, master invokes pl_gold_forecast (94fc130e)
 T+09:01    -> Lookup: returns 2 sp_names
 T+09:01    -> ForEach batch=2: both SPs start in parallel
 T+09:44    -> Both gold SPs complete (slowest: forecast_kpi at 43s)
-T+09:44  -> [DQ: gold ⚠ — not yet integrated, would run meta.usp_check_dq for gold rules]
-T+09:45  -> finalize: EXEC meta.usp_finalize_pipeline
+T+10:00  -> dq_gold: pl_dq_check (4 rules, ~1 min)
+T+10:01  -> dq_gold completes
+T+10:01  -> finalize: EXEC meta.usp_finalize_pipeline
              -> EXEC meta.usp_build_lineage (rebuild 52 lineage edges)
              -> Count success/failed SPs from sp_run_history
              -> UPDATE pipeline_run_log SET status='success', end_time, tables_succeeded, tables_failed
-T+09:46  -> refresh_sm: PBISemanticModelRefresh
+T+10:02  -> refresh_sm: PBISemanticModelRefresh
              -> POST https://api.powerbi.com/v1.0/myorg/groups/{ws}/datasets/{id}/refreshes
              -> Refreshes 7 tables in SC_Control_Tower (5 dims + 2 facts)
              -> Direct Lake metadata sync with latest Parquet files
-T+10:00  pl_sc_master completes successfully
+T+10:16  pl_sc_master completes successfully
 
-Total: ~16 minutes for 1.47 billion rows across 28 tables + SM refresh
+Total: ~16 minutes for 1.47 billion rows across 28 tables + 3 DQ gates + SM refresh
 ```
 
 ---
@@ -536,4 +544,4 @@ If `usp_compute_slv_waves` assigns SPs to wrong waves (e.g., due to incorrect de
 
 ---
 
-*This document reflects the production state as of 2026-04-14, based on successful pipeline Run #3.*
+*This document reflects the production state as of 2026-04-17, based on successful pipeline Run #3.*

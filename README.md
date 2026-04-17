@@ -16,19 +16,20 @@ A complete architecture template for building **enterprise data warehouses** on 
 
 ### Operations & Usage
 4. [Adding a New Table](#adding-a-new-table) — Quick-start for DA/DE (2 steps)
-5. [Scheduling & Concurrency](#scheduling--concurrency) — Cron, smart skip, snapshot conflict mitigation
-6. [Naming Convention](#naming-convention) — Tables, views, columns, pipelines
+5. [Data Quality Gates](#data-quality-gates) — DQ checks between layers, severity-based gating, examples
+6. [Scheduling & Concurrency](#scheduling--concurrency) — Cron, smart skip, snapshot conflict mitigation
+7. [Naming Convention](#naming-convention) — Tables, views, columns, pipelines
 
 ### Scale & Enterprise
-7. [Multi Data Mart Scale](#multi-data-mart-scale) — N marts parallel, cross-mart dependencies
-8. [Enterprise Compatibility](#enterprise-compatibility) — TableDictionary mapping, load pattern alignment
-9. [Semantic Model](#semantic-model) — Direct Lake, auto-refresh
-10. [Multi-Environment Roadmap](#multi-environment-roadmap) — DEV → TEST → PROD
+8. [Multi Data Mart Scale](#multi-data-mart-scale) — N marts parallel, cross-mart dependencies
+9. [Enterprise Compatibility](#enterprise-compatibility) — TableDictionary mapping, load pattern alignment
+10. [Semantic Model](#semantic-model) — Direct Lake, auto-refresh
+11. [Multi-Environment Roadmap](#multi-environment-roadmap) — DEV → TEST → PROD
 
 ### Reference
-11. [Fabric Warehouse Constraints](#fabric-warehouse-constraints) — Known limitations + workarounds
-12. [Tech Stack](#tech-stack) — All technologies used
-13. [Documentation Index](#documentation-index) — All docs with links
+12. [Fabric Warehouse Constraints](#fabric-warehouse-constraints) — Known limitations + workarounds
+13. [Tech Stack](#tech-stack) — All technologies used
+14. [Documentation Index](#documentation-index) — All docs with links
 
 ---
 
@@ -82,16 +83,16 @@ SupplyChain_Warehouse/
     │              dq_results, sp_lineage, pipeline_run_log,
     │              slv_dag_waves_runtime                       (7)
     ├── SPs/       usp_generic_load, usp_log_run (retry 3x),
-    │              usp_check_dq, usp_build_lineage,
-    │              usp_compute_slv_waves, usp_run_silver_dag,
-    │              usp_debug_loop, usp_finalize_pipeline,
-    │              usp_log_pipeline_run                        (9)
+    │              usp_check_dq, usp_check_dq_single,
+    │              usp_build_lineage, usp_compute_slv_waves,
+    │              usp_run_silver_dag, usp_debug_loop,
+    │              usp_finalize_pipeline, usp_log_pipeline_run (10)
     ├── Views/     vw_table_dictionary, vw_run_history_tz        (2)
     └── Functions/ ufn_should_run, ufn_cron_is_due,
                    ufn_utc_to_cst                              (3)
 ```
 
-> **77 total objects** across 4 schemas. Per-table SPs have been deleted — all 28 tables loaded by 1 generic SP.
+> **78 total objects** across 4 schemas. Per-table SPs have been deleted — all 28 tables loaded by 1 generic SP.
 
 ### Key Features
 
@@ -102,22 +103,23 @@ SupplyChain_Warehouse/
 - **Parent-child pipeline** — parallel within wave, sequential between waves (Microsoft recommended)
 - **Smart scheduling** — cron + next_run_time filter, monthly tables auto-skip when not due
 - **Snapshot conflict mitigation** — retry 3x in usp_log_run + reduced batch concurrency
-- **Config-driven DQ** — rules in table, severity-based gating
+- **Config-driven DQ** — 30 rules in table, severity-based gating, integrated as pipeline gates between layers
 - **Auto-built lineage** — `source_objects` JSON → 52 source-to-target edges, rebuilt every run
 
 ---
 
 ## Pipeline Architecture
 
-### 5 Pipelines
+### 6 Pipelines
 
 | Pipeline | Type | Role |
 |----------|------|------|
-| `pl_sc_master` | Master | log_start → bronze → silver → gold → finalize → refresh_sm |
+| `pl_sc_master` | Master | log_start → bronze → dq → silver → dq → gold → dq → finalize → refresh_sm |
 | `pl_bronze_forecast` | Child | Lookup sp_registry → ForEach(batch=6) → EXEC usp_generic_load |
 | `pl_silver_forecast` | Child | compute_waves → ForEach wave → invoke pl_silver_wave_forecast |
 | `pl_silver_wave_forecast` | Grandchild | Lookup SPs for wave → ForEach(batch=8) → EXEC usp_generic_load |
 | `pl_gold_forecast` | Child | Lookup sp_registry → ForEach(batch=2) → EXEC usp_generic_load |
+| `pl_dq_check` | DQ Gate | Lookup dq_rules by layer → ForEach(batch=10) → EXEC usp_check_dq_single |
 
 > **Naming**: `pl_{layer}_{project}` for children. Master stays `pl_sc_master` (unique). Invoke by GUID — renaming is safe.
 
@@ -127,11 +129,16 @@ SupplyChain_Warehouse/
 flowchart LR
     M["pl_sc_master\nconcurrency=1"] --> LS["log_start\nusp_log_pipeline_run"]
     LS --> B["pl_bronze_forecast\nForEach batch=6"]
-    B --> S["pl_silver_forecast\nDAG waves"]
-    S --> G["pl_gold_forecast\nForEach batch=2"]
-    G --> FN["finalize\nusp_finalize_pipeline\nbuild lineage + log"]
+    B --> DQB["dq_bronze\n22 rules"]
+    DQB --> S["pl_silver_forecast\nDAG waves"]
+    S --> DQS["dq_silver\n8 rules"]
+    DQS --> G["pl_gold_forecast\nForEach batch=2"]
+    G --> DQG["dq_gold\n4 rules"]
+    DQG --> FN["finalize\nusp_finalize_pipeline\nbuild lineage + log"]
     FN --> SM["refresh_sm\nSC_Control_Tower\nDirect Lake"]
 ```
+
+> **DQ gating**: CRITICAL rule fails → pipeline stops, downstream layers do NOT run. WARNING fails → logged only.
 
 ### Bronze & Gold — Lookup + Parallel ForEach
 
@@ -288,6 +295,126 @@ VALUES (..., '["silver.slv_upstream_table"]');
 ```
 
 > **Full step-by-step guide**: See [new_table_onboarding_guide.md](Fabric_Architect/new_table_onboarding_guide.md) — covers all layers, load types, DQ rules, testing, FAQ.
+
+---
+
+## Data Quality Gates
+
+DQ checks run **between every layer** in the master pipeline. If a CRITICAL check fails, the pipeline stops — downstream layers do not run on bad data.
+
+### How It Works
+
+```mermaid
+flowchart LR
+    B["bronze load\n18 tables"] --> DQB["dq_bronze\n22 rules"]
+    DQB -->|"ALL PASS"| S["silver load\n8 tables"]
+    DQB -->|"CRITICAL FAIL"| STOP1["STOP"]
+    S --> DQS["dq_silver\n8 rules"]
+    DQS -->|"ALL PASS"| G["gold load\n2 tables"]
+    DQS -->|"CRITICAL FAIL"| STOP2["STOP"]
+    G --> DQG["dq_gold\n4 rules"]
+    DQG -->|"ALL PASS"| FN["finalize + SM"]
+```
+
+### What Happens Step by Step
+
+1. **Bronze finishes** → master calls `pl_dq_check` with `layer = 'BRZ','REF'`
+2. `pl_dq_check` does a **Lookup**: `SELECT rule_id FROM meta.dq_rules WHERE layer IN ('BRZ','REF') AND is_active = 1` → returns 22 rule IDs
+3. **ForEach** (batch=10, parallel) calls `EXEC meta.usp_check_dq_single @rule_id = {each rule}` for every rule
+4. The SP reads the rule config, generates a SQL check, runs it, and writes PASS/FAIL to `meta.dq_results`
+5. If **CRITICAL** rule fails → SP throws error → pipeline stops
+6. If **WARNING** rule fails → logged only → pipeline continues
+
+### Example: Completeness Check (Rule 1)
+
+```
+Rule config in meta.dq_rules:
+  rule_id = 1
+  check_type = 'completeness'
+  target = bronze.brz_saleshistory_afi__invoicedetail
+  column = 'id_invoice'
+  severity = CRITICAL
+
+SP generates and runs:
+  SELECT SUM(CASE WHEN [id_invoice] IS NULL THEN 0 ELSE 1 END) * 100.0 / COUNT(*)
+  FROM [bronze].[brz_saleshistory_afi__invoicedetail]
+
+Result: 100.00% → PASS ✓
+```
+
+### Example: Row Count Check (Rule 13)
+
+```
+Rule config:
+  rule_id = 13
+  check_type = 'row_count'
+  target = bronze.brz_saleshistory_afi__invoicedetail
+  threshold = 1,000,000
+  severity = CRITICAL
+
+SP generates and runs:
+  SELECT COUNT(*) FROM [bronze].[brz_saleshistory_afi__invoicedetail]
+
+Result: 35,658,453 >= 1,000,000 → PASS ✓
+
+If result was 500 → FAIL → THROW error → pipeline STOPS, silver does NOT run
+```
+
+### Severity Behavior
+
+| Severity | On FAIL | Use case |
+|----------|---------|----------|
+| **CRITICAL** | Pipeline **stops** — downstream layers do not run | Key columns NULL, table empty/too small |
+| **WARNING** | Logged to `dq_results`, pipeline **continues** | Row count slightly low, non-essential checks |
+
+### Current Rules (30 total)
+
+| Layer | Rules | What they check |
+|-------|-------|----------------|
+| BRZ (8) | completeness | Key columns (`id_invoice`, `id_item_sku`, `id_order`) must not be NULL |
+| REF (8) | completeness + row_count | Key columns not NULL + minimum row counts (e.g., ref_calendar ≥ 10K) |
+| SLV (8) | completeness + row_count | Key columns not NULL + minimum row counts (e.g., slv_invoice ≥ 1M) |
+| GLD (4) | completeness + row_count | Key columns not NULL + minimum row counts (e.g., gld_fact ≥ 100K) |
+
+### Adding DQ Rules for a New Table
+
+When you add a new table, DQ does **not** auto-check it. Add rules manually:
+
+```sql
+-- Completeness: key column must not be NULL
+INSERT INTO meta.dq_rules (rule_id, rule_name, target_schema, target_table,
+    check_type, column_name, severity, is_active, layer)
+VALUES (
+    (SELECT ISNULL(MAX(rule_id),0)+1 FROM meta.dq_rules),
+    'new_table id_key not null',
+    'bronze', 'brz_new_table',
+    'completeness', 'id_key', 'CRITICAL', 1, 'BRZ'
+);
+
+-- Row count: minimum expected rows
+INSERT INTO meta.dq_rules (rule_id, rule_name, target_schema, target_table,
+    check_type, severity, threshold, is_active, layer)
+VALUES (
+    (SELECT ISNULL(MAX(rule_id),0)+1 FROM meta.dq_rules),
+    'new_table min 1K rows',
+    'bronze', 'brz_new_table',
+    'row_count', 'WARNING', 1000, 1, 'BRZ'
+);
+```
+
+No pipeline changes needed — `pl_dq_check` Lookup dynamically reads `dq_rules`.
+
+### 7 Supported Check Types
+
+| check_type | What it checks | Required columns |
+|------------|---------------|-----------------|
+| `completeness` | Column NOT NULL % ≥ threshold | `column_name` |
+| `row_count` | Table row count ≥ threshold | `threshold` |
+| `uniqueness` | No duplicate values in column | `column_name` |
+| `freshness` | Data loaded within N hours | `threshold` (hours) |
+| `referential_integrity` | FK exists in parent table | `params` (SQL) |
+| `validity` | Values in expected set | `params` (SQL) |
+| `custom_sql` | Any arbitrary SQL check | `params` (SQL returning 0=pass) |
 
 ---
 
@@ -486,6 +613,7 @@ flowchart LR
 |------|-------------|
 | [multi_mart_scale_architecture.md](Fabric_Architect/multi_mart_scale_architecture.md) | Multi Data Mart: N marts parallel, cross-mart deps, cost optimization |
 | [Enterprise_vs_Fabric_comparison.md](Fabric_Architect/Enterprise_vs_Fabric_comparison.md) | Enterprise vs v9: ETL framework, load patterns, CI/CD, naming |
+| [future_roadmap.md](Fabric_Architect/future_roadmap.md) | Future roadmap: production hardening, CI/CD, scale, enterprise integration |
 
 ### Context
 

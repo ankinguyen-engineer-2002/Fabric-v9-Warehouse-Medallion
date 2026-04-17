@@ -317,10 +317,24 @@ WHERE target_table = 'brz_wholesale_codis_afi__comast';
 
 ---
 
-## Step 6 (Optional) -- Add DQ Rules
+## Step 6 (Optional but Recommended) -- Add DQ Rules
+
+DQ rules run automatically **between layers** in the pipeline. If you don't add rules, your new table will load fine but **nobody checks if its data is correct**.
+
+### What DQ does in the pipeline
+
+```
+bronze load → pl_dq_check runs all BRZ/REF rules → if CRITICAL fails → pipeline STOPS
+silver load → pl_dq_check runs all SLV rules     → if CRITICAL fails → pipeline STOPS
+gold load   → pl_dq_check runs all GLD rules     → if CRITICAL fails → pipeline STOPS
+```
+
+The DQ pipeline (`pl_dq_check`) reads `meta.dq_rules` dynamically — adding a rule = INSERT 1 row. No pipeline changes needed.
+
+### Recommended: 2 rules per table
 
 ```sql
--- Check column is not NULL
+-- 1. Completeness: key column must not be NULL (CRITICAL = stops pipeline if fails)
 INSERT INTO meta.dq_rules (
     rule_id, rule_name, target_schema, target_table,
     check_type, column_name, severity, is_active, layer
@@ -331,7 +345,7 @@ INSERT INTO meta.dq_rules (
     'completeness', 'id_customer', 'CRITICAL', 1, 'BRZ'
 );
 
--- Check minimum row count
+-- 2. Row count: minimum expected rows (WARNING = logs only, does not stop pipeline)
 INSERT INTO meta.dq_rules (
     rule_id, rule_name, target_schema, target_table,
     check_type, severity, threshold, is_active, layer
@@ -343,10 +357,33 @@ INSERT INTO meta.dq_rules (
 );
 ```
 
+### Severity behavior
+
+| Severity | On FAIL | When to use |
+|----------|---------|-------------|
+| **CRITICAL** | Pipeline **stops** — downstream layers do not run | Key columns NULL, table empty |
+| **WARNING** | Logged to `dq_results`, pipeline **continues** | Row count slightly low |
+
+### All check types
+
 | check_type | What it checks | Required columns |
 |------------|----------------|------------------|
-| `completeness` | Column must not be NULL | `column_name` |
-| `row_count` | Row count >= threshold | `threshold` |
+| `completeness` | Column NOT NULL % ≥ threshold | `column_name` |
+| `row_count` | Row count ≥ threshold | `threshold` |
+| `uniqueness` | No duplicates in column | `column_name` |
+| `freshness` | Data loaded within N hours | `threshold` |
+| `referential_integrity` | FK exists in parent | `params` (SQL) |
+| `validity` | Values in expected set | `params` (SQL) |
+| `custom_sql` | Any SQL check | `params` (SQL returning 0=pass) |
+
+### How to check DQ results
+
+```sql
+SELECT rule_id, status, actual_value, expected_value, error_detail
+FROM meta.dq_results
+WHERE target_table = 'brz_wholesale_codis_afi__comast'
+ORDER BY check_time DESC;
+```
 
 ---
 
@@ -355,9 +392,10 @@ INSERT INTO meta.dq_rules (
 **No further action needed.** On the next pipeline run:
 
 1. `pl_bronze_forecast` Lookup reads `sp_registry` -> finds your new table -> loads it
-2. `pl_silver_forecast` computes waves -> recalculates the DAG -> runs in the correct order
-3. `pl_gold_forecast` Lookup -> loads gold tables
-4. `usp_finalize_pipeline` automatically rebuilds lineage (including the new table)
+2. `pl_dq_check` runs DQ rules for your table's layer (if you added rules in Step 6)
+3. `pl_silver_forecast` computes waves -> recalculates the DAG -> runs in the correct order
+4. `pl_gold_forecast` Lookup -> loads gold tables
+5. `usp_finalize_pipeline` automatically rebuilds lineage (including the new table)
 
 ### Smart skip:
 - If `frequency = 'daily'` and `cron = '0 2 * * *'`: runs every day

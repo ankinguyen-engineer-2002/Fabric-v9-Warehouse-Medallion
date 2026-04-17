@@ -43,7 +43,7 @@ flowchart LR
 | **Generic SP + 2-file-per-table** | Every data table has 2 objects: VIEW (ETL formula) + TABLE (materialized data). A single generic SP (`meta.usp_generic_load`) handles all loads. Supports 8 load patterns: overwrite, incremental, upsert, datekey, daterange, identity, cdc, scd2. |
 | **Metadata-driven** | Adding a new table = CREATE VIEW + INSERT 1 row in `meta.sp_registry`. No per-table SP needed. The pipeline picks it up automatically. No pipeline JSON changes. |
 | **DAG orchestration** | Silver SPs declare `depends_on` in sp_registry. `usp_compute_slv_waves` auto-computes execution waves. Pipeline runs waves sequentially, SPs within a wave in parallel. |
-| **Config-driven DQ** | DQ rules stored in `meta.dq_rules` table, not hardcoded. 7 check types. Add a rule = INSERT 1 row. |
+| **Config-driven DQ** | DQ rules stored in `meta.dq_rules` table, not hardcoded. 7 check types, 30 rules. Add a rule = INSERT 1 row. DQ is integrated as pipeline gates between layers using `pl_{prefix}_dq_check`. CRITICAL fail stops pipeline. |
 | **Auto-built lineage** | `source_objects` JSON in sp_registry is parsed by `usp_build_lineage` to generate a full lineage graph. |
 
 ---
@@ -135,6 +135,7 @@ flowchart LR
 | pl_{prefix}_silver | Parent: compute waves, iterate wave-by-wave | 1 SP + 10 Lookup + 10 ForEach = 21 activities |
 | pl_{prefix}_silver_wave | Child: run all SPs for a given wave in parallel | 1 Lookup + 1 ForEach(SP) |
 | pl_{prefix}_gold | Load all gold tables in parallel | 1 Lookup + 1 ForEach(SP) |
+| pl_{prefix}_dq_check | Run DQ rules for a given layer; fail on CRITICAL | 1 SP (usp_check_dq @layer) |
 
 ### 3.2 pl_{prefix}_master
 
@@ -158,7 +159,7 @@ flowchart LR
     FN -->|"on success"| SM
 ```
 
-> ⚠ DQ gates shown for completeness. Currently experimental — `meta.usp_check_dq` has a known WHILE loop limitation in Fabric WH. DQ checks currently run via Python script, not yet integrated into pipeline activities.
+> DQ gates are now live. Each gate invokes `pl_{prefix}_dq_check` with a `@layer` parameter. `pl_dq_check` calls `meta.usp_check_dq` for that layer's rules and fails the pipeline if any CRITICAL rule fails, stopping downstream layers.
 
 The master pipeline invokes each child pipeline sequentially using InvokePipeline activities, runs finalize to rebuild lineage and update the run log, then refreshes the Semantic Model. If any child fails, the master stops (no subsequent layers run). The `log_start` SP inserts a row into `pipeline_run_log` with status='running'. The `finalize` SP calls `usp_build_lineage` and updates the pipeline_run_log row with final status, counts, and end_time. The `refresh_sm` activity syncs the Direct Lake Semantic Model with the latest gold table data.
 
@@ -681,7 +682,7 @@ The `refresh_sm` activity in pl_{prefix}_master:
 | meta | 7 | 1 | 9 | 1 | 18 |
 | **Total** | **{total}** | **{total}** | **{total}** | **1** | **{grand_total}** |
 
-**Pipelines**: 5 (`pl_{prefix}_master`, `pl_{prefix}_bronze`, `pl_{prefix}_silver`, `pl_{prefix}_silver_wave`, `pl_{prefix}_gold`)
+**Pipelines**: 6 (`pl_{prefix}_master`, `pl_{prefix}_bronze`, `pl_{prefix}_silver`, `pl_{prefix}_silver_wave`, `pl_{prefix}_gold`, `pl_{prefix}_dq_check`)
 
 **Semantic Model**: 1 (Direct Lake, refreshed by pl_{prefix}_master)
 

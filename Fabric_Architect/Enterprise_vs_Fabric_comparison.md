@@ -68,7 +68,7 @@ flowchart TD
 | **SCD2** | `usp_SCD2_TableLoad` (built-in) | **Implemented** (scd2 load_type in generic SP) |
 | **View refresh** | `usp_RefreshCuratedTableFromView` | Overwrite pattern (DROP + CTAS from view) |
 | **Parquet** | `usp_CreateTableFromParquet` | N/A (reads via 3-part naming) |
-| **Audit** | `usp_Audit_FABRIC_Tables` | meta.usp_check_dq (config-driven, 2 check types) |
+| **Audit** | `usp_Audit_FABRIC_Tables` | meta.usp_check_dq (config-driven, 7 check types, 30 rules, integrated as pipeline gates) |
 | **Alerts** | `usp_DataWarehouseDataFeedAlert_Fabric` | Not implemented |
 | **Dynamic SQL** | SqlCmdVariables + dynamic routing | sp_executesql parameterized |
 
@@ -210,7 +210,7 @@ Developer manually fixes view
 | Audit log | `AuditLog` table (DateTime, User, Description, Command) | `sp_run_history` (run_id, sp_name, status, rows, duration) |
 | Timezone | `fn_GetDate` multi-timezone (EST/CST/PST + DST) | **`ufn_utc_to_cst`** — CST/CDT (DST aware). UTC core + CST in logs + VN via view |
 | Pipeline log | Not in framework (Azure Pipeline handles) | `pipeline_run_log` (auto by log_start + finalize) |
-| DQ | `usp_Audit_FABRIC_Tables` (row count validation) | `dq_rules` + `dq_results` (7 check types, config-driven) |
+| DQ | `usp_Audit_FABRIC_Tables` (row count validation) | Config-driven, 30 rules, integrated as pipeline gates (`pl_dq_check`). CRITICAL fail stops pipeline. |
 | Alerts | `usp_DataWarehouseDataFeedAlert_Fabric` (Teams/email) | Not implemented |
 | Lineage | Not built-in | `sp_lineage` (52 edges, auto-built) |
 | DAG | Not built-in | `depends_on` + `usp_compute_slv_waves` + parent-child pipeline |

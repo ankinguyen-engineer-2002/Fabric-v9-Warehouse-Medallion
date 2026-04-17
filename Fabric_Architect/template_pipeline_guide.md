@@ -28,7 +28,7 @@ flowchart LR
     DQ3 -->|"on success"| FN -->|"on success"| SM
 ```
 
-> ⚠ DQ gates shown for completeness. Currently experimental — `meta.usp_check_dq` has a known WHILE loop limitation in Fabric WH. DQ checks currently run via Python script, not yet integrated into pipeline activities.
+> DQ gates are now live. Each gate invokes `pl_{prefix}_dq_check` with a `@layer` parameter. `pl_dq_check` calls `meta.usp_check_dq` for that layer's rules and fails the pipeline if any CRITICAL rule fails, stopping downstream layers.
 
 If any child pipeline fails, execution stops. Silver does not run if bronze fails. Gold does not run if silver fails. The Semantic Model refresh runs only after all data layers and finalize succeed.
 
@@ -413,7 +413,7 @@ T+00:01  -> Invokes pl_{prefix}_bronze
 T+00:02    -> Lookup: SELECT N sp_names from sp_registry (via Lakehouse cross-DB)
 T+00:03    -> ForEach batch={batch_size}: SPs start in parallel
 T+{xx}     -> All bronze SPs complete (some may have retried for snapshot conflicts)
-T+{xx}   -> [DQ: bronze ⚠ — not yet integrated, would run meta.usp_check_dq for bronze rules]
+T+{xx}   -> Invokes pl_{prefix}_dq_check @layer='BRZ' (CRITICAL fail stops pipeline)
 T+{xx}   -> pl_{prefix}_bronze completes, master invokes pl_{prefix}_silver
 T+{xx}     -> SP: EXEC meta.usp_compute_slv_waves (computes waves)
 T+{xx}     -> Lookup wave 0 -> ForEach PARALLEL
@@ -421,11 +421,11 @@ T+{xx}     -> Wave 0 completes (slowest SP determines duration)
 T+{xx}     -> Lookup wave 1 -> ForEach PARALLEL
 T+{xx}     -> Wave 1 completes
 T+{xx}     -> (repeat for remaining waves; empty waves skip instantly)
-T+{xx}   -> [DQ: silver ⚠ — not yet integrated, would run meta.usp_check_dq for silver rules]
+T+{xx}   -> Invokes pl_{prefix}_dq_check @layer='SLV' (CRITICAL fail stops pipeline)
 T+{xx}   -> pl_{prefix}_silver completes, master invokes pl_{prefix}_gold
 T+{xx}     -> Lookup gold SPs -> ForEach PARALLEL
 T+{xx}     -> All gold SPs complete
-T+{xx}   -> [DQ: gold ⚠ — not yet integrated, would run meta.usp_check_dq for gold rules]
+T+{xx}   -> Invokes pl_{prefix}_dq_check @layer='GLD' (CRITICAL fail stops pipeline)
 T+{xx}   -> SP: finalize (build_lineage + update pipeline_run_log)
 T+{xx}   -> PBISemanticModelRefresh: refresh_sm (Direct Lake metadata sync)
 T+{xx}   pl_{prefix}_master completes successfully

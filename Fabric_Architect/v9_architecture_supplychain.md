@@ -18,7 +18,7 @@ flowchart LR
         B["bronze\n18 tables\nraw mirror from source"]
         S["silver\n8 tables\nclean + join + business rules"]
         G["gold\n2 tables\nBI-ready facts"]
-        M["meta\n7 tables + 9 SPs + 1 fn + 1 view\nconfig / log / DQ / DAG / generic load"]
+        M["meta\n7 tables + 10 SPs + 2 fn + 2 views\nconfig / log / DQ / DAG / generic load"]
         B --> S --> G
     end
 
@@ -34,7 +34,7 @@ flowchart LR
 | `bronze` | Raw mirror from Enterprise_Lakehouse | 18 Tables + 17 Views (ETL logic) |
 | `silver` | Clean, conform, join, apply business rules | 8 Tables + 8 Views |
 | `gold` | Business-ready facts/dimensions for Power BI | 2 Tables + 2 Views |
-| `meta` | System control plane | 7 Tables + 9 SPs (incl. usp_generic_load) + 1 Function + 1 View |
+| `meta` | System control plane | 7 Tables + 10 SPs (incl. usp_generic_load, usp_check_dq_single) + 2 Functions + 2 Views |
 
 ### 1.3 Design Principles
 
@@ -55,7 +55,7 @@ flowchart LR
 | Compute | PySpark Notebooks | T-SQL Stored Procedures |
 | ETL logic | Python variables (COLUMN_SQL, SQL_TRANSFORM) | CREATE VIEW statements |
 | Orchestration | Pipeline -> ForEach -> Notebook | Pipeline -> ForEach -> EXEC SP |
-| Metadata | utl_pipeline_metadata (1 table) | meta schema (7 tables + 8 SPs) |
+| Metadata | utl_pipeline_metadata (1 table) | meta schema (7 tables + 10 SPs) |
 | DAG | execution_order (static integer) | depends_on + auto wave computation |
 | DQ | Python nb_dq_engine (hardcoded) | Config-driven dq_rules table |
 
@@ -156,10 +156,11 @@ SupplyChain_Warehouse/
     |   +-- pipeline_run_log                         log: pipeline-level runs (auto by usp_log_pipeline_run + usp_finalize_pipeline)
     |   +-- slv_dag_waves_runtime           8 rows     runtime: wave computation results
     |
-    +-- Stored Procedures/ (9)
+    +-- Stored Procedures/ (10)
     |   +-- usp_generic_load              GENERIC SP: routes by load_type (8 patterns), replaces all 28 per-table SPs
     |   +-- usp_log_run                   log SP start/end/rows/status
-    |   +-- usp_check_dq                  DQ engine (read rules -> execute -> log)
+    |   +-- usp_check_dq                  DQ engine (read rules -> execute -> log) — legacy, replaced by usp_check_dq_single
+    |   +-- usp_check_dq_single           Single-rule DQ engine (no WHILE loop, called by pl_dq_check ForEach)
     |   +-- usp_build_lineage             parse source_objects -> build lineage
     |   +-- usp_compute_slv_waves         iterative DAG wave computation
     |   +-- usp_run_silver_dag            orchestrator backup (sequential)
@@ -167,11 +168,13 @@ SupplyChain_Warehouse/
     |   +-- usp_finalize_pipeline         builds lineage + updates pipeline_run_log to 'success'
     |   +-- usp_log_pipeline_run          logs pipeline start/end to pipeline_run_log
     |
-    +-- Functions/ (1)
+    +-- Functions/ (2)
     |   +-- ufn_should_run                check schedule gate (returns 1/0)
+    |   +-- ufn_cron_is_due               cron-style schedule evaluation
     |
-    +-- Views/ (1)
+    +-- Views/ (2)
         +-- vw_slv_dag_waves              legacy fixed 3-CTE view (replaced by SP)
+        +-- vw_run_history_tz             run history with timezone conversion
 ```
 
 ---
@@ -182,11 +185,12 @@ SupplyChain_Warehouse/
 
 | Pipeline | ID | Purpose | Activities |
 |----------|----|---------|------------|
-| pl_sc_master | 319a8160 | Orchestrate log_start -> bronze -> silver -> gold -> finalize -> refresh_sm | 1 SP + 3 InvokePipeline + 1 SP + 1 PBISemanticModelRefresh |
+| pl_sc_master | 319a8160 | Orchestrate log_start -> bronze -> dq_bronze -> silver -> dq_silver -> gold -> dq_gold -> finalize -> refresh_sm | 1 SP + 3 InvokePipeline + 3 InvokePipeline(DQ) + 1 SP + 1 PBISemanticModelRefresh |
 | pl_bronze_forecast | 1bdbaebb | Load all bronze/ref tables in parallel | 1 Lookup + 1 ForEach(SP) |
 | pl_silver_forecast | 46437ae6 | Parent: compute waves, iterate wave-by-wave via child pipeline | 1 SP + 1 Lookup + 1 ForEach(InvokePipeline) |
 | pl_silver_wave_forecast | 57a09720 | Child: run all SPs for a given wave in parallel | 1 Lookup + 1 ForEach(SP) batch=8 |
 | pl_gold_forecast | 94fc130e | Load all gold tables in parallel | 1 Lookup + 1 ForEach(SP) |
+| pl_dq_check | c32dc18d | DQ gate: Lookup dq_rules by layer -> ForEach(batch=5) -> EXEC usp_check_dq_single | 1 Lookup + 1 ForEach(SP) |
 
 ### 3.2 pl_sc_master (319a8160)
 
@@ -209,9 +213,9 @@ flowchart LR
     FN -->|"on success"| SM
 ```
 
-> ⚠ DQ gates shown for completeness. Currently experimental — `meta.usp_check_dq` has a known WHILE loop limitation in Fabric WH. DQ checks currently run via Python script, not yet integrated into pipeline activities.
+> DQ gates are now integrated into the pipeline via `pl_dq_check` (added 2026-04-17). Each gate invokes `pl_dq_check` with a layer parameter, which runs `usp_check_dq_single` per rule via ForEach(batch=5). CRITICAL failures THROW and halt the pipeline.
 
-The master pipeline starts with a `log_start` activity that inserts a row into `pipeline_run_log` (status='running'), then invokes each child pipeline sequentially using InvokePipeline activities, runs `finalize` to rebuild lineage and update the run log, and finally refreshes the Semantic Model. The pipeline now has **7 activities** (was 5 before SM refresh was added). If any child fails, the master stops (no subsequent layers run).
+The master pipeline starts with a `log_start` activity that inserts a row into `pipeline_run_log` (status='running'), then invokes each child pipeline sequentially using InvokePipeline activities with DQ gates between layers, runs `finalize` to rebuild lineage and update the run log, and finally refreshes the Semantic Model. The pipeline now has **9 activities** (log_start, bronze, dq_bronze, silver, dq_silver, gold, dq_gold, finalize, refresh_sm). If any child or DQ gate fails, the master stops (no subsequent layers run).
 
 ### 3.3 pl_bronze_forecast (1bdbaebb)
 
@@ -704,10 +708,10 @@ CREATE TABLE meta.dq_rules (
 | Aspect | Detail |
 |--------|--------|
 | **Purpose** | Stores the outcome of each DQ check execution -- pass/fail, actual value vs expected. |
-| **Auto-populated** | Yes, by `usp_check_dq`. |
+| **Auto-populated** | Yes, by `usp_check_dq_single` (or legacy `usp_check_dq`). |
 | **Manual input** | None. |
 | **Key columns** | `result_id`, `rule_id`, `check_time`, `status` (PASS/FAIL), `actual_value`, `expected_value`, `error_detail` |
-| **Written when** | Each time DQ checks are executed (currently via Python workaround). |
+| **Written when** | Each time DQ checks are executed via `pl_dq_check` pipeline. |
 
 ```sql
 CREATE TABLE meta.dq_results (
@@ -785,7 +789,7 @@ CREATE TABLE meta.slv_dag_waves_runtime (
 );
 ```
 
-### 8.2 Stored Procedures (9)
+### 8.2 Stored Procedures (10)
 
 #### meta.usp_generic_load
 
@@ -843,6 +847,14 @@ END
 | **Key logic** | WHILE loop iterates over dq_rules rows. For each rule, generates a SQL check based on check_type (completeness -> COUNT NULL, uniqueness -> COUNT DISTINCT vs COUNT, etc.), executes via sp_executesql, compares result to threshold, writes PASS/FAIL to dq_results. |
 | **Known bug** | The WHILE loop only executes 1 iteration in Fabric Warehouse. Root cause unknown (possibly a Fabric WH limitation with sp_executesql inside WHILE). Workaround: run DQ checks from Python/Pipeline instead of the SP. |
 
+#### meta.usp_check_dq_single
+
+| Aspect | Detail |
+|--------|--------|
+| **What it does** | Single-rule DQ engine. Processes 1 rule at a time, generates SQL, executes, writes to dq_results. CRITICAL fail -> THROW. No WHILE loop. |
+| **When called** | By `pl_dq_check` pipeline ForEach activity. Each iteration passes a single `@rule_id`. |
+| **Key logic** | Read dq_rules by rule_id -> generate SQL by check_type (completeness, uniqueness, row_count, freshness, referential_integrity, validity, custom_sql) -> sp_executesql -> write result to dq_results with retry 3x. If severity = CRITICAL and check fails, THROW to halt the pipeline. |
+
 #### meta.usp_build_lineage
 
 | Aspect | Detail |
@@ -891,7 +903,7 @@ END
 | **When called** | By the `finalize` activity (SqlServerStoredProcedure) as the last step of `pl_sc_master`. |
 | **Key logic** | EXEC meta.usp_build_lineage; count success/failed from sp_run_history; UPDATE pipeline_run_log SET status='success', end_time, tables_succeeded, tables_failed. |
 
-### 8.3 Function (1)
+### 8.3 Functions (2)
 
 #### meta.ufn_should_run
 
@@ -901,7 +913,15 @@ END
 | **When called** | In pipeline Lookup queries as a filter: `WHERE meta.ufn_should_run(sp_name) = 1`. |
 | **Key logic** | Simple scalar function. Reads is_active and next_run_time from sp_registry. |
 
-### 8.4 View (1)
+#### meta.ufn_cron_is_due
+
+| Aspect | Detail |
+|--------|--------|
+| **What it does** | Cron-style schedule evaluation function. Returns 1 if the current time matches the cron expression for a given SP. |
+| **When called** | As an alternative/complement to ufn_should_run for more granular scheduling. |
+| **Key logic** | Evaluates cron-style schedule parameters against GETUTCDATE(). |
+
+### 8.4 Views (2)
 
 #### meta.vw_slv_dag_waves
 
@@ -909,6 +929,13 @@ END
 |--------|--------|
 | **What it does** | Legacy view that computes silver waves using 3 hardcoded CTEs (max 3 waves). |
 | **Status** | Replaced by `usp_compute_slv_waves` (iterative SP, supports up to 30 waves). Kept for reference. |
+
+#### meta.vw_run_history_tz
+
+| Aspect | Detail |
+|--------|--------|
+| **What it does** | View over `sp_run_history` that converts UTC timestamps to a configured timezone for human-readable run history. |
+| **Status** | Active. Used for operational monitoring. |
 
 ---
 
@@ -939,20 +966,17 @@ The Data Quality system is **config-driven**. Rules are stored in `meta.dq_rules
 | Gold | 4 | row_count ranges, freshness checks |
 | **Total** | **30** | **30/30 PASS as of last run** |
 
-### 9.4 Known Bug: WHILE Loop in usp_check_dq
+### 9.4 Known Bug: WHILE Loop in usp_check_dq -- RESOLVED
 
-The `meta.usp_check_dq` stored procedure uses a WHILE loop to iterate over DQ rules and execute each one via `sp_executesql`. In Fabric Warehouse, this WHILE loop only executes **1 iteration** and then exits, regardless of the loop condition.
+The `meta.usp_check_dq` stored procedure used a WHILE loop to iterate over DQ rules and execute each one via `sp_executesql`. In Fabric Warehouse, this WHILE loop only executed **1 iteration** and then exited, regardless of the loop condition.
 
-**Root cause**: Unknown. Possibly a Fabric Warehouse limitation with `sp_executesql` inside WHILE loops, or a variable scoping issue specific to the Fabric engine.
+**Status**: **RESOLVED** (2026-04-17)
 
-**Impact**: The SP only checks the first DQ rule instead of all 30.
+**Root cause**: Fabric Warehouse limitation with `sp_executesql` inside WHILE loops.
 
-**Workaround**: Run DQ checks from Python using pyodbc. For each rule, generate the SQL client-side and execute it against the warehouse.
+**Fix**: `usp_check_dq_single` replaces the WHILE loop approach. Each rule is processed individually by the pipeline's ForEach activity (`pl_dq_check`), which calls `usp_check_dq_single` once per rule with batch=5 parallelism. DQ is now fully integrated into the pipeline as gates between layers (dq_bronze, dq_silver, dq_gold). CRITICAL failures THROW and halt the pipeline.
 
-**Future fix options**:
-1. Rewrite usp_check_dq to use CURSOR-less iteration (WHILE + MIN(id) WHERE id > @current)
-2. Integrate DQ into the pipeline as individual SP calls (one SP per check type)
-3. Use an external orchestrator (Python/Pipeline ForEach) to call individual DQ checks
+> Fixed 2026-04-17: usp_check_dq_single replaces WHILE loop. DQ now integrated into pipeline as gates between layers.
 
 ---
 
@@ -1041,14 +1065,14 @@ flowchart LR
 | bronze | 18 | 18 | 0 | -- | 36 |
 | silver | 8 | 8 | 0 | -- | 16 |
 | gold | 2 | 2 | 0 | -- | 4 |
-| meta | 7 | 2 | 9 | 1 | 19 |
-| **Total** | **35** | **30** | **9** | **1** | **75** |
+| meta | 7 | 2 | 10 | 2 | 22 |
+| **Total** | **35** | **30** | **10** | **2** | **78** |
 
-> **Change from previous version**: 28 per-table SPs (18 bronze + 8 silver + 2 gold) have been **deleted** and replaced by 1 generic SP (`meta.usp_generic_load`). meta SPs increased from 8 to 9. Total objects reduced from 100 to 75 (net -25).
+> **Change from previous version**: 28 per-table SPs (18 bronze + 8 silver + 2 gold) have been **deleted** and replaced by 1 generic SP (`meta.usp_generic_load`). meta SPs increased from 8 to 10. Total objects reduced from 100 to 78. Added usp_check_dq_single, ufn_cron_is_due, vw_run_history_tz (2026-04-17).
 
-**Pipelines**: 5 (`pl_sc_master`, `pl_bronze_forecast`, `pl_silver_forecast`, `pl_silver_wave_forecast`, `pl_gold_forecast`)
+**Pipelines**: 6 (`pl_sc_master`, `pl_bronze_forecast`, `pl_silver_forecast`, `pl_silver_wave_forecast`, `pl_gold_forecast`, `pl_dq_check`)
 
-**Grand total**: 75 warehouse objects + 5 pipelines = **80 managed artifacts**
+**Grand total**: 78 warehouse objects + 6 pipelines = **84 managed artifacts**
 
 ### Row Count Summary
 
@@ -1135,7 +1159,7 @@ flowchart LR
 | Until activity in Pipeline | Until loop fails with BadRequest in Fabric Pipeline | Parent-child pipeline pattern (pl_silver_forecast invokes pl_silver_wave_forecast per wave) |
 | Nested dynamic EXEC from Pipeline | SP calling sp_executesql called from Pipeline SP activity fails | Pipeline directly calls individual SPs via ForEach |
 | DECIMAL(10,4) for large numbers | Overflow on values like 1000000 | Use DECIMAL(18,2) |
-| sp_executesql in WHILE loop | Only 1 iteration executes | Run dynamic SQL from external client (Python) |
+| sp_executesql in WHILE loop | Only 1 iteration executes | Single-rule SP (usp_check_dq_single) + pipeline ForEach |
 
 ---
 
@@ -1154,7 +1178,7 @@ flowchart LR
 | Pipeline Lookup source | WarehouseSource + connectionSettings | "Failed to open resource" | **LakehouseTableSource + cross-DB query** |
 | Pipeline SP activity | Script activity type | "ReferenceName null" error | **SqlServerStoredProcedure + linkedService** |
 | Gold table naming | fact_* / dim_* (plain) | Name collision with v8 dbo/test_sp | **gld_fact_* / gld_dim_*** |
-| DQ engine SP | WHILE + sp_executesql loop | Only 1 iteration executes | **Python-side DQ execution** (workaround) |
+| DQ engine SP | WHILE + sp_executesql loop | Only 1 iteration executes | **usp_check_dq_single + pl_dq_check ForEach** (resolved 2026-04-17) |
 | DQ threshold column | DECIMAL(10,4) | Overflow on 1000000 | **DECIMAL(18,2)** |
 | Dynamic SQL variable | VARCHAR @sql | sp_executesql rejects VARCHAR | **NVARCHAR(4000)** |
 | NVARCHAR cast | CAST AS NVARCHAR (no length) | Defaults to 30 chars, truncates | **CAST AS NVARCHAR(200)** |
@@ -1199,4 +1223,4 @@ flowchart LR
 
 ---
 
-*This document was generated on 2026-04-14. It reflects the production state of SupplyChain_Warehouse v9 running on Microsoft Fabric F256.*
+*This document was generated on 2026-04-14, updated 2026-04-17. It reflects the production state of SupplyChain_Warehouse v9 running on Microsoft Fabric F256.*
