@@ -532,6 +532,10 @@ flowchart TD
 
 ## Multi-Environment Roadmap
 
+> **⚠ BLOCKED**: Requires Azure DevOps access (not yet granted as of 2026-04-18).
+> CI/CD setup (.sqlproj, SqlCmdVariable, PR gates, build validation) cannot proceed until access is provided.
+> See [future_roadmap.md](Fabric_Architect/future_roadmap.md) Phase 2 for full details.
+
 ```mermaid
 flowchart LR
     DEV["DEV Workspace\nOperational\nv9 complete"]
@@ -542,7 +546,8 @@ flowchart LR
 
 - **Fabric Git Integration**: Auto-exports all objects as .sqlproj + .sql files
 - **Deployment Pipelines**: DEV → TEST → PROD promotion (Fabric native)
-- **SqlCmdVariable**: Enterprise uses `$(Source_Data)`. Convert 3-part naming when PROD requires it
+- **SqlCmdVariable**: Enterprise uses `$(Source_Data)`. Convert 3-part naming via `sqlpackage publish` — **do NOT convert SQL files until deploy flow is ready** (Fabric cannot interpret `$(...)` directly)
+- **.sqlproj Build Validation**: `dotnet build *.sqlproj` catches schema errors before deploy. Matches Enterprise DacFx pattern
 
 ---
 
@@ -586,6 +591,8 @@ flowchart LR
 | File | Description |
 |------|-------------|
 | [new_table_onboarding_guide.md](Fabric_Architect/new_table_onboarding_guide.md) | **Start here** — Step-by-step: add new ETL table (for DA/DE) |
+| [runbook_operations.md](Fabric_Architect/runbook_operations.md) | **Operations** — Pipeline troubleshooting, common errors, re-run guide, health checks, escalation |
+| [alerting_setup_guide.md](Fabric_Architect/alerting_setup_guide.md) | **Alerting** — Power Automate + Teams: setup guide, Adaptive Card design, test commands |
 | [scheduling_and_concurrency.md](Fabric_Architect/scheduling_and_concurrency.md) | Scheduling: cron, smart skip, concurrency, snapshot conflict mitigation |
 | [sqlproj_validation_guide.md](Fabric_Architect/sqlproj_validation_guide.md) | .sqlproj validation: 3 approaches (lint / sqlproj / full ProjectRef) |
 | [timezone_sync_guide.md](Fabric_Architect/timezone_sync_guide.md) | Timezone sync: UTC + CST + VN, map Enterprise fn_GetDate |

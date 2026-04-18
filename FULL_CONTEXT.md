@@ -1188,12 +1188,14 @@ If need to rebuild from scratch:
 
 | Item | Priority | Detail |
 |------|----------|--------|
-| **Alerts/email** | Medium | Enterprise has `usp_DataWarehouseDataFeedAlert_Fabric`. Need to implement SLA monitoring + email alerts |
-| **.sqlproj CI/CD** | Medium | 3 approaches documented in sqlproj_validation_guide.md. Not yet implemented |
-| **Multi-environment** | High | DEV → TEST → PROD. Fabric Deployment Pipelines or Git sync |
+| **Alerts/email** | Medium | **BLOCKED — needs IT**. Tried Power Automate (Premium), Teams Webhook (no channel), Graph API (admin consent), Data Activator (401). App `616bb922` created. Design ready: alerting_setup_guide.md |
+| **.sqlproj CI/CD** | Medium | **BLOCKED — needs Azure DevOps access**. SqlCmdVariable `$(...)` pattern documented. DO NOT convert SQL until sqlpackage deploy flow ready |
+| **Multi-environment** | High | **BLOCKED — needs Azure DevOps access**. DEV → TEST → PROD via Fabric Deployment Pipelines |
 | **GitHub Actions secrets** | Low | Need Service Principal (AZURE_CLIENT_ID/SECRET/TENANT_ID) for auto CSV refresh |
 | ~~**DQ in pipeline**~~ | ~~Done~~ | ~~Fixed 2026-04-17: usp_check_dq_single + pl_dq_check + master pipeline integration~~ |
-| **Pipeline auto-trigger** | Low | Currently manual. Enable Fabric scheduled trigger when ready |
+| ~~**Pipeline auto-trigger**~~ | ~~Done~~ | ~~Enabled 2026-04-18: Fabric Schedule daily 2:00 AM UTC+7, end 2099~~ |
+| ~~**Runbook**~~ | ~~Done~~ | ~~Created 2026-04-18: runbook_operations.md — health check, errors, re-run, escalation~~ |
+| ~~**sp_run_history**~~ | ~~Done~~ | ~~Verified 2026-04-18: already append-only (120 rows, 28 SPs). No DELETE in usp_log_run~~ |
 | **Source-target reconciliation DQ** | Medium | Row count comparison source (Enterprise_Lakehouse) vs target (bronze). Not yet implemented |
 | **Business logic DQ** | Low | Domain-specific rules (forecast accuracy ranges, trend anomaly). Future phase |
 
