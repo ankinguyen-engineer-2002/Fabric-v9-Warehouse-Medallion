@@ -319,9 +319,13 @@ WHERE target_table = 'brz_wholesale_codis_afi__comast';
 
 ## Step 6 (Optional but Recommended) -- Add DQ Rules
 
-DQ rules run automatically **between layers** in the pipeline. If you don't add rules, your new table will load fine but **nobody checks if its data is correct**.
+DQ rules check data quality. Add rules = INSERT 1 row into `dq_rules`. No pipeline changes needed.
 
-### What DQ does in the pipeline
+> **Note (2026-04-18)**: DQ gates in `pl_sc_master` are currently **deactivated** for performance (~18 min vs ~27 min).
+> Rules still exist and can be run manually via `pl_dq_check` or reactivated in Portal (right-click → Activate).
+> Adding rules now is still recommended — they will be ready when DQ gates are reactivated.
+
+### What DQ does when activated
 
 ```
 bronze load → pl_dq_check runs all BRZ/REF rules → if CRITICAL fails → pipeline STOPS
