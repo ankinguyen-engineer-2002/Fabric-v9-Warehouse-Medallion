@@ -199,16 +199,19 @@ SupplyChain_Warehouse/
 flowchart LR
     M["pl_sc_master\nconcurrency=1"] --> LS["log_start\nusp_log_pipeline_run"]
     LS --> B["pl_bronze_forecast\nForEach batch=6"]
-    B --> DQB["dq_bronze\n22 rules"]
-    DQB --> S["pl_silver_forecast\nDAG waves"]
-    S --> DQS["dq_silver\n8 rules"]
-    DQS --> G["pl_gold_forecast\nForEach batch=2"]
-    G --> DQG["dq_gold\n4 rules"]
-    DQG --> FN["finalize\nusp_finalize_pipeline\nbuild lineage + log"]
+    B -.-> DQB["dq_bronze\n⏸ DEACTIVATED"]
+    DQB -.-> S["pl_silver_forecast\nDAG waves"]
+    B --> S
+    S -.-> DQS["dq_silver\n⏸ DEACTIVATED"]
+    DQS -.-> G["pl_gold_forecast\nForEach batch=2"]
+    S --> G
+    G -.-> DQG["dq_gold\n⏸ DEACTIVATED"]
+    DQG -.-> FN["finalize\nusp_finalize_pipeline\nbuild lineage + log"]
+    G --> FN
     FN --> SM["refresh_sm\nSC_Control_Tower\nDirect Lake"]
 ```
 
-> **DQ gating**: CRITICAL rule fails → pipeline stops, downstream layers do NOT run. WARNING fails → logged only.
+> **DQ gates**: Currently **deactivated** for performance (~18 min vs ~27 min). Activities exist in pipeline but skip. DQ rules (30 active) and `pl_dq_check` pipeline still exist — reactivate via Portal (right-click → Activate).
 
 ### Bronze & Gold — Lookup + Parallel ForEach
 
@@ -370,19 +373,23 @@ VALUES (..., '["silver.slv_upstream_table"]');
 
 ## Data Quality Gates
 
-DQ checks run **between every layer** in the master pipeline. If a CRITICAL check fails, the pipeline stops — downstream layers do not run on bad data.
+> **Status (2026-04-18)**: DQ gates are **deactivated** in pipeline for performance (~18 min vs ~27 min).
+> All DQ components exist (rules, SP, pipeline) and can be reactivated anytime.
+> See [Feature Status](#feature-status-32-features-total) for details.
 
-### How It Works
+DQ checks are designed to run **between every layer** in the master pipeline. If a CRITICAL check fails, the pipeline stops — downstream layers do not run on bad data.
+
+### How It Works (when activated)
 
 ```mermaid
 flowchart LR
-    B["bronze load\n18 tables"] --> DQB["dq_bronze\n22 rules"]
+    B["bronze load\n18 tables"] --> DQB["dq_bronze\n22 rules\n⏸ deactivated"]
     DQB -->|"ALL PASS"| S["silver load\n8 tables"]
     DQB -->|"CRITICAL FAIL"| STOP1["STOP"]
-    S --> DQS["dq_silver\n8 rules"]
+    S --> DQS["dq_silver\n8 rules\n⏸ deactivated"]
     DQS -->|"ALL PASS"| G["gold load\n2 tables"]
     DQS -->|"CRITICAL FAIL"| STOP2["STOP"]
-    G --> DQG["dq_gold\n4 rules"]
+    G --> DQG["dq_gold\n4 rules\n⏸ deactivated"]
     DQG -->|"ALL PASS"| FN["finalize + SM"]
 ```
 
