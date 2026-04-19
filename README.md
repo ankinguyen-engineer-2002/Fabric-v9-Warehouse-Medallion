@@ -13,23 +13,24 @@ A complete architecture template for building **enterprise data warehouses** on 
 1. [Architecture Overview](#architecture-overview) — Data flow, 4 schemas, warehouse structure
 2. [Pipeline Architecture](#pipeline-architecture) — Master orchestration, bronze/silver DAG/gold, connection topology
 3. [Generic SP Architecture](#generic-sp-architecture) — 8 load patterns, 1 SP for all tables
+4. [Feature Status](#feature-status-32-features-total) — All 32 features: active, deactivated, created, blocked
 
 ### Operations & Usage
-4. [Adding a New Table](#adding-a-new-table) — Quick-start for DA/DE (2 steps)
-5. [Data Quality Gates](#data-quality-gates) — DQ checks between layers, severity-based gating, examples
-6. [Scheduling & Concurrency](#scheduling--concurrency) — Cron, smart skip, snapshot conflict mitigation
-7. [Naming Convention](#naming-convention) — Tables, views, columns, pipelines
+5. [Adding a New Table](#adding-a-new-table) — Quick-start for DA/DE (2 steps)
+6. [Data Quality Gates](#data-quality-gates) — DQ checks between layers, severity-based gating, examples
+7. [Scheduling & Concurrency](#scheduling--concurrency) — Cron, smart skip, snapshot conflict mitigation
+8. [Naming Convention](#naming-convention) — Tables, views, columns, pipelines
 
 ### Scale & Enterprise
-8. [Multi Data Mart Scale](#multi-data-mart-scale) — N marts parallel, cross-mart dependencies
-9. [Enterprise Compatibility](#enterprise-compatibility) — TableDictionary mapping, load pattern alignment
-10. [Semantic Model](#semantic-model) — Direct Lake, auto-refresh
-11. [Multi-Environment Roadmap](#multi-environment-roadmap) — DEV → TEST → PROD
+9. [Multi Data Mart Scale](#multi-data-mart-scale) — N marts parallel, cross-mart dependencies
+10. [Enterprise Compatibility](#enterprise-compatibility) — TableDictionary mapping, load pattern alignment
+11. [Semantic Model](#semantic-model) — Direct Lake, auto-refresh
+12. [Multi-Environment Roadmap](#multi-environment-roadmap) — DEV → TEST → PROD
 
 ### Reference
-12. [Fabric Warehouse Constraints](#fabric-warehouse-constraints) — Known limitations + workarounds
-13. [Tech Stack](#tech-stack) — All technologies used
-14. [Documentation Index](#documentation-index) — All docs with links
+13. [Fabric Warehouse Constraints](#fabric-warehouse-constraints) — Known limitations + workarounds
+14. [Tech Stack](#tech-stack) — All technologies used
+15. [Documentation Index](#documentation-index) — All docs with links
 
 ---
 
@@ -109,24 +110,71 @@ SupplyChain_Warehouse/
 - **Cost monitoring** — CU consumption tracking per pipeline run (created, not in pipeline flow)
 - **Data contracts** — 674 source columns contracted for schema drift detection (created, not in pipeline flow)
 
-### Feature Status
+### Feature Status (32 features total)
 
-| Feature | Status | In pipeline? | Activate |
-|---------|--------|-------------|----------|
-| Generic SP (8 patterns) | ✅ Active | ✅ Yes | Always on |
-| DAG wave computation | ✅ Active | ✅ Yes | Always on |
-| Smart skip scheduling | ✅ Active | ✅ Yes | Always on |
-| Snapshot retry 3-layer | ✅ Active | ✅ Yes | Always on |
-| Auto lineage (52 edges) | ✅ Active | ✅ Yes | Always on |
-| Auto-trigger daily 2AM | ✅ Active | ✅ Schedule | Always on |
-| DQ gates (30 rules, completeness + row_count) | ⏸ Deactivated | ⏸ Activities exist, skip | Reactivate in Portal |
-| DQ expansion (+24 rules, uniqueness + freshness) | ⏸ is_active=0 | ⏸ Not picked up | `UPDATE dq_rules SET is_active=1 WHERE rule_id>30` |
-| Performance baseline (28 SPs) | ✅ Table exists | ❌ Not in flow | Re-deploy enhanced usp_finalize_pipeline |
-| Cost monitoring | ✅ Table exists | ❌ Not in flow | Re-deploy enhanced usp_finalize_pipeline |
-| Schema contracts (674 cols) | ✅ Table exists | ❌ Not in flow | Create pipeline step or validate via Python |
-| Multi-mart (project column) | ✅ Ready | ❌ Not in flow | Add project filter to pipeline Lookups |
-| Alerting (email/Teams) | ⚠ Blocked IT | ❌ | Needs admin approval |
-| CI/CD (.sqlproj) | ⚠ Blocked | ❌ | Needs Azure DevOps access |
+**A. Core Engine (8) — always active:**
+
+| Feature | Object | Status |
+|---------|--------|--------|
+| Generic SP (8 load patterns) | `usp_generic_load` | ✅ Active |
+| Metadata-driven config | `sp_registry` (28 tables) | ✅ Active |
+| DAG wave computation | `usp_compute_slv_waves` + `slv_dag_waves_runtime` | ✅ Active |
+| Parent-child pipeline | `pl_silver_forecast` → `pl_silver_wave_forecast` | ✅ Active |
+| Auto lineage (52 edges) | `usp_build_lineage` + `sp_lineage` | ✅ Active |
+| Execution logging | `usp_log_run` + `sp_run_history` (retry 3x) | ✅ Active |
+| Pipeline logging | `usp_log_pipeline_run` + `pipeline_run_log` | ✅ Active |
+| Finalize | `usp_finalize_pipeline` (lineage + log) | ✅ Active |
+
+**B. Scheduling (4) — always active:**
+
+| Feature | Object | Status |
+|---------|--------|--------|
+| Cron scheduling | `ufn_cron_is_due` + `cron_expression` | ✅ Active |
+| Smart skip | `ufn_should_run` + `next_run_time` | ✅ Active |
+| Auto-trigger daily 2AM UTC+7 | Fabric Schedule | ✅ Active |
+| Snapshot retry 3-layer | SP retry 3x/2s + pipeline retry 3x/60s | ✅ Active |
+
+**C. Timezone + Enterprise (4) — always active:**
+
+| Feature | Object | Status |
+|---------|--------|--------|
+| UTC→CST timezone (DST aware) | `ufn_utc_to_cst` | ✅ Active |
+| TableDictionary (63/63 cols) | `vw_table_dictionary` | ✅ Active |
+| Run history 3 timezones | `vw_run_history_tz` | ✅ Active |
+| Multi-mart project column | `sp_registry.project` | ✅ Ready (1 mart) |
+
+**D. Data Quality (8) — deactivated for performance:**
+
+| Feature | Object | Status | Activate |
+|---------|--------|--------|----------|
+| DQ engine (7 check types) | `usp_check_dq_single` | ✅ SP exists | Always ready |
+| DQ core rules (30) | `dq_rules` 1-30 | ✅ is_active=1 | Ready |
+| DQ expansion rules (24) | `dq_rules` 31-54 | ⏸ is_active=0 | `UPDATE SET is_active=1 WHERE rule_id>30` |
+| DQ pipeline | `pl_dq_check` | ✅ Pipeline exists | Invoke manually |
+| DQ gate bronze | `dq_bronze` in pl_sc_master | ⏸ Deactivated | Right-click → Activate |
+| DQ gate silver | `dq_silver` in pl_sc_master | ⏸ Deactivated | Right-click → Activate |
+| DQ gate gold | `dq_gold` in pl_sc_master | ⏸ Deactivated | Right-click → Activate |
+| DQ results log | `dq_results` | ✅ Table exists | Has history |
+
+**E. Phase 3 Advanced (6) — created, not in pipeline flow:**
+
+| Feature | Object | Status | Activate |
+|---------|--------|--------|----------|
+| Performance baseline | `performance_baseline` (28 SPs) | ✅ Data exists | Re-deploy enhanced finalize SP |
+| Cost monitoring | `pipeline_cost_log` (1 row) | ✅ Data exists | Re-deploy enhanced finalize SP |
+| Schema contracts | `schema_contracts` (674 cols) + `usp_validate_schema_contracts` | ✅ Table + SP | Pipeline step or Python |
+| Legacy DQ SP | `usp_check_dq` | ✅ Exists | Replaced by usp_check_dq_single |
+| Legacy silver runner | `usp_run_silver_dag` | ✅ Exists | Backup sequential |
+| Debug utility | `usp_debug_loop` | ✅ Exists | Debug only |
+
+**F. Blocked (2) — needs IT/DevOps:**
+
+| Feature | Status | Blocker |
+|---------|--------|---------|
+| Alerting (email/Teams) | ⚠ Design ready | IT: Mail.Send / Teams / Power Automate |
+| CI/CD (.sqlproj + SqlCmdVariable) | ⚠ Design ready | Azure DevOps access |
+
+> **Pipeline runtime**: ~18-19 min (lean, DQ off) or ~27 min (full, DQ on). Full run: 28/28 tables, 1.47B rows, 0 failures.
 
 ---
 
