@@ -8,11 +8,12 @@
 
 Warehouse-native medallion architecture on Microsoft Fabric. Pure T-SQL, no Notebooks/PySpark.
 - **~85 objects**: 4 schemas (bronze/silver/gold/meta), 28 data tables, 10 meta tables, 30 views, 10 SPs, 3 functions
-- **6 pipelines**: parent-child DAG orchestration. DQ gates exist but **deactivated** for performance
+- **7 pipelines**: multi-mart architecture (ForEach projects → pl_sc_mart → bronze→silver→gold). DQ gates deactivated
 - **1 generic SP** handles 8 load patterns for all 28 tables
 - **Auto-trigger**: daily 2AM UTC+7
 - **10 meta tables**: 7 core + 3 Phase 3 (performance_baseline, pipeline_cost_log, schema_contracts)
-- **Pipeline runtime**: ~18-19 min (DQ off) or ~27 min (DQ on)
+- **Pipeline runtime**: ~20 min (multi-mart, DQ off) or ~27 min (DQ on)
+- **New pipeline**: `pl_sc_mart` (ID: `9a1e7a12-30ab-465c-a45d-b051619193ac`) — generic mart, chains bronze→silver→gold per project
 
 ---
 

@@ -36,7 +36,7 @@
 
 ## Phase 3: Scale (khi them mart thu 2 hoac > 50 tables)
 
-- [x] ~~**P3.11 — Multi-mart**~~ **CREATED 2026-04-18** — project column set. **Not in pipeline flow**
+- [x] ~~**P3.11 — Multi-mart**~~ **DONE 2026-04-18** — LIVE. pl_sc_master ForEach → pl_sc_mart → bronze→silver→gold. 7 pipelines. Tested 28/28, 20.3 min
 - [x] ~~**P3.12 — Data contracts**~~ **CREATED 2026-04-18** — 674 columns, 10 tables. **Not in pipeline flow**
 - [x] ~~**P3.13 — DQ expansion**~~ **CREATED 2026-04-18** — 24 rules (uniqueness+freshness). **Deactivated** (is_active=0). DQ gates in pipeline deactivated
 - [x] ~~**P3.14 — Cost monitoring**~~ **CREATED 2026-04-18** — table ready. **Not in pipeline flow** (finalize reverted)

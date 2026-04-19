@@ -849,10 +849,10 @@ SELECT * FROM meta.sp_lineage ORDER BY lineage_id;
 
 ### Approach A: Create via Fabric UI
 
-#### Pipeline 1: pl_bronze_forecast
+#### Pipeline 1: pl_sc_bronze
 
 1. Open Fabric workspace, click **New** -> **Data Pipeline**
-2. Name: `pl_bronze_forecast`
+2. Name: `pl_sc_bronze`
 3. Add **Lookup** activity:
    - Name: `get_bronze_sps`
    - Source type: **Lakehouse** (select SupplyChain_Lakehouse)
@@ -875,9 +875,9 @@ SELECT * FROM meta.sp_lineage ORDER BY lineage_id;
    - Parameters: `@target_schema = @item().target_schema`, `@target_table = @item().target_table`
    - Retry: **2**, Retry interval: **30** seconds
 
-#### Pipeline 2: pl_silver_forecast (PARENT)
+#### Pipeline 2: pl_sc_silver (PARENT)
 
-1. Create pipeline: `pl_silver_forecast`
+1. Create pipeline: `pl_sc_silver`
 2. Add **Stored Procedure** activity (first):
    - Name: `compute_waves`
    - Stored procedure: `meta.usp_compute_slv_waves`
@@ -892,13 +892,13 @@ SELECT * FROM meta.sp_lineage ORDER BY lineage_id;
    - Items: `@activity('get_distinct_waves').output.value`
 5. Inside ForEach, add **Invoke Pipeline** activity:
    - Name: `invoke_silver_wave`
-   - Pipeline: `pl_silver_wave_forecast`
+   - Pipeline: `pl_sc_silver_wave`
    - Parameter: `wave_number` = `@item().wave`
 6. Connect sequentially: compute_waves -> get_distinct_waves -> run_each_wave
 
-#### Pipeline 2b: pl_silver_wave_forecast (CHILD)
+#### Pipeline 2b: pl_sc_silver_wave (CHILD)
 
-1. Create pipeline: `pl_silver_wave_forecast`
+1. Create pipeline: `pl_sc_silver_wave`
 2. Add **Parameter**: `wave_number` (INT)
 3. Add **Lookup** activity:
    - Name: `get_wave_sps`
@@ -913,9 +913,9 @@ SELECT * FROM meta.sp_lineage ORDER BY lineage_id;
    - Stored procedure name: `meta.usp_generic_load`
    - Parameters: `@target_schema = @item().target_schema`, `@target_table = @item().target_table`
 
-#### Pipeline 3: pl_gold_forecast
+#### Pipeline 3: pl_sc_gold
 
-Same pattern as pl_bronze_forecast but with:
+Same pattern as pl_sc_bronze but with:
 - Query: `SELECT target_schema, target_table ... WHERE layer = 'GLD'`
 - Batch count: **2**
 
@@ -973,7 +973,7 @@ workspace_id = "<your-workspace-id>"
 
 # Create pipeline
 payload = {
-    "displayName": "pl_bronze_forecast",
+    "displayName": "pl_sc_bronze",
     "type": "DataPipeline",
     "definition": {
         "parts": [
@@ -1361,7 +1361,7 @@ Update `pl_sc_master` to add a 6th step after finalize:
 3. Connect: finalize -> refresh_sm (on success)
 
 The master pipeline now has **7 activities** (was 5):
-`[1] log_start -> [2] pl_bronze_forecast -> [3] pl_silver_forecast -> [4] pl_gold_forecast -> [5] finalize -> [6] refresh_sm`
+`[1] log_start -> [2] pl_sc_bronze -> [3] pl_sc_silver -> [4] pl_sc_gold -> [5] finalize -> [6] refresh_sm`
 
 ---
 

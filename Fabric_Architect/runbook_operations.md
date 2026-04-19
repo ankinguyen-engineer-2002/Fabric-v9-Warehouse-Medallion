@@ -9,17 +9,21 @@
 ```
 pl_sc_master (daily 2:00 AM UTC+7, concurrency=1)
 ├── log_start
-├── pl_bronze_forecast (batch=6) — 18 tables parallel
-├── pl_dq_check (bronze) — DQ gate
-├── pl_silver_wave_forecast (DAG waves, batch=8) — 8 tables
-├── pl_dq_check (silver) — DQ gate
-├── pl_gold_forecast (batch=2) — 2 tables
-├── pl_dq_check (gold) — DQ gate
+├── Lookup: DISTINCT project from sp_registry
+├── ForEach project (PARALLEL, batch=10):
+│     └── pl_sc_mart (@project_name)
+│           ├── pl_sc_bronze (batch=6, WHERE project=@project)
+│           ├── pl_sc_silver (DAG waves, batch=8)
+│           │     └── pl_sc_silver_wave (per wave, batch=8)
+│           └── pl_sc_gold (batch=2, WHERE project=@project)
 ├── finalize (build lineage + log)
 └── refresh_sm (Direct Lake semantic model)
+
+DQ gates (dq_bronze, dq_silver, dq_gold): DEACTIVATED — skip when run
 ```
 
-**Normal runtime**: ~19 minutes (full run, 28 tables)
+**Normal runtime**: ~20 minutes (full run, 28 tables, 1 mart)
+**Multi-mart**: N marts parallel = still ~20 min (max of all marts)
 
 ---
 
@@ -202,8 +206,8 @@ EXEC meta.usp_generic_load
 ```
 
 ### Option C: Re-run single layer
-1. Fabric Portal → Workspace → pl_bronze_forecast → Run
-2. Or pl_silver_wave_forecast / pl_gold_forecast
+1. Fabric Portal → Workspace → pl_sc_bronze → Run
+2. Or pl_sc_silver_wave / pl_sc_gold
 
 ### Smart skip note
 Monthly tables auto-skip if `next_run_time > now`. To force re-run a monthly table:
@@ -314,10 +318,13 @@ GROUP BY r.layer;
 | What | Where |
 |------|-------|
 | Pipeline schedule | Daily 2:00 AM UTC+7 (Bangkok/Hanoi) |
+| Pipelines | 7 (master, mart, bronze, silver, silver_wave, gold, dq_check) |
 | Pipeline name | pl_sc_master |
 | Warehouse | SupplyChain_Warehouse |
 | Total tables | 28 (18 daily + 10 monthly) |
-| Normal runtime | ~19 minutes |
+| Architecture | Multi-mart (ForEach projects → pl_sc_mart) |
+| Normal runtime | ~20 minutes |
+| Health check | `python3 scripts/health_check.py` (49 checks) |
 | DQ rules | 30 (8 CRITICAL, 22 WARNING) |
 | Concurrency | Master: 1, Bronze: 6, Silver: 8, Gold: 2 |
 | Retry | SP-level: 3x/2s, Pipeline-level: 3x/60s |

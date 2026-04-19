@@ -186,10 +186,10 @@ SupplyChain_Warehouse/
 | Pipeline | ID | Purpose | Activities |
 |----------|----|---------|------------|
 | pl_sc_master | 319a8160 | Orchestrate log_start -> bronze -> dq_bronze -> silver -> dq_silver -> gold -> dq_gold -> finalize -> refresh_sm | 1 SP + 3 InvokePipeline + 3 InvokePipeline(DQ) + 1 SP + 1 PBISemanticModelRefresh |
-| pl_bronze_forecast | 1bdbaebb | Load all bronze/ref tables in parallel | 1 Lookup + 1 ForEach(SP) |
-| pl_silver_forecast | 46437ae6 | Parent: compute waves, iterate wave-by-wave via child pipeline | 1 SP + 1 Lookup + 1 ForEach(InvokePipeline) |
-| pl_silver_wave_forecast | 57a09720 | Child: run all SPs for a given wave in parallel | 1 Lookup + 1 ForEach(SP) batch=8 |
-| pl_gold_forecast | 94fc130e | Load all gold tables in parallel | 1 Lookup + 1 ForEach(SP) |
+| pl_sc_bronze | 1bdbaebb | Load all bronze/ref tables in parallel | 1 Lookup + 1 ForEach(SP) |
+| pl_sc_silver | 46437ae6 | Parent: compute waves, iterate wave-by-wave via child pipeline | 1 SP + 1 Lookup + 1 ForEach(InvokePipeline) |
+| pl_sc_silver_wave | 57a09720 | Child: run all SPs for a given wave in parallel | 1 Lookup + 1 ForEach(SP) batch=8 |
+| pl_sc_gold | 94fc130e | Load all gold tables in parallel | 1 Lookup + 1 ForEach(SP) |
 | pl_dq_check | c32dc18d | DQ gate: Lookup dq_rules by layer -> ForEach(batch=5) -> EXEC usp_check_dq_single | 1 Lookup + 1 ForEach(SP) |
 
 ### 3.2 pl_sc_master (319a8160)
@@ -197,9 +197,9 @@ SupplyChain_Warehouse/
 ```mermaid
 flowchart LR
     LS["[1] log_start\n(SqlServerStoredProcedure)\nEXEC meta.usp_log_pipeline_run\nINSERT pipeline_run_log\nstatus='running'"]
-    B["[2] pl_bronze_forecast\n1bdbaebb"]
-    S["[3] pl_silver_forecast\n46437ae6"]
-    G["[4] pl_gold_forecast\n94fc130e"]
+    B["[2] pl_sc_bronze\n1bdbaebb"]
+    S["[3] pl_sc_silver\n46437ae6"]
+    G["[4] pl_sc_gold\n94fc130e"]
     FN["[5] finalize\n(SqlServerStoredProcedure)\nEXEC meta.usp_finalize_pipeline\nbuilds lineage + updates\npipeline_run_log to 'success'"]
     SM["[6] refresh_sm\n(PBISemanticModelRefresh)\nRefresh SC_Control_Tower\nDirect Lake metadata sync"]
 
@@ -217,7 +217,7 @@ flowchart LR
 
 The master pipeline starts with a `log_start` activity that inserts a row into `pipeline_run_log` (status='running'), then invokes each child pipeline sequentially using InvokePipeline activities with DQ gates between layers, runs `finalize` to rebuild lineage and update the run log, and finally refreshes the Semantic Model. The pipeline now has **9 activities** (log_start, bronze, dq_bronze, silver, dq_silver, gold, dq_gold, finalize, refresh_sm). If any child or DQ gate fails, the master stops (no subsequent layers run).
 
-### 3.3 pl_bronze_forecast (1bdbaebb)
+### 3.3 pl_sc_bronze (1bdbaebb)
 
 ```mermaid
 flowchart LR
@@ -233,9 +233,9 @@ flowchart LR
 
 **Retry policy**: Each SP activity has retry=2, interval=30 seconds. This handles snapshot isolation conflicts that occur when multiple DROP+CTAS operations run in parallel on overlapping Parquet files.
 
-### 3.4 pl_silver_forecast (46437ae6) -- PARENT Pipeline
+### 3.4 pl_sc_silver (46437ae6) -- PARENT Pipeline
 
-The silver pipeline uses a **parent-child pattern** (the Microsoft-recommended approach for dynamic iteration in Fabric Pipeline). The parent computes waves, looks up distinct wave numbers, and invokes the child pipeline `pl_silver_wave_forecast` once per wave in sequential order. Each child invocation runs all SPs for that wave in parallel.
+The silver pipeline uses a **parent-child pattern** (the Microsoft-recommended approach for dynamic iteration in Fabric Pipeline). The parent computes waves, looks up distinct wave numbers, and invokes the child pipeline `pl_sc_silver_wave` once per wave in sequential order. Each child invocation runs all SPs for that wave in parallel.
 
 ```mermaid
 flowchart TD
@@ -245,7 +245,7 @@ flowchart TD
 
     FE["[Step 3] ForEach wave\nisSequential = true\nItems: @activity('get_distinct_waves').output.value"]
 
-    IP["InvokeFabricPipeline\npl_silver_wave_forecast (57a09720)\nParameter: wave_number = @item().wave"]
+    IP["InvokeFabricPipeline\npl_sc_silver_wave (57a09720)\nParameter: wave_number = @item().wave"]
 
     CW --> LW --> FE
     FE --> IP
@@ -255,7 +255,7 @@ flowchart TD
 
 **Historical note**: An earlier design used 10 pre-built sequential Lookup+ForEach stages (wave 0 through wave 9). This was replaced by the parent-child pattern which is cleaner and does not impose a fixed wave limit.
 
-### 3.5 pl_silver_wave_forecast (57a09720) -- CHILD Pipeline
+### 3.5 pl_sc_silver_wave (57a09720) -- CHILD Pipeline
 
 ```mermaid
 flowchart LR
@@ -271,7 +271,7 @@ flowchart LR
 
 **Parameter**: `wave_number` (INT) -- passed from the parent pipeline's ForEach.
 
-### 3.6 pl_gold_forecast (94fc130e)
+### 3.6 pl_sc_gold (94fc130e)
 
 ```mermaid
 flowchart LR
@@ -522,7 +522,7 @@ flowchart TD
 
 The silver pipeline uses a **parent-child pattern** to handle DAG waves. This is the Microsoft-recommended approach because Fabric Pipeline does not allow nesting ForEach inside Until, nor ForEach inside another ForEach.
 
-**Current implementation**: The parent pipeline (`pl_silver_forecast`) computes waves, does a Lookup for distinct wave numbers, then uses a ForEach (isSequential=true) to invoke `pl_silver_wave_forecast` for each wave with a `wave_number` parameter. The child pipeline does its own Lookup for SPs in that wave and a ForEach (batch=8, parallel) to execute them.
+**Current implementation**: The parent pipeline (`pl_sc_silver`) computes waves, does a Lookup for distinct wave numbers, then uses a ForEach (isSequential=true) to invoke `pl_sc_silver_wave` for each wave with a `wave_number` parameter. The child pipeline does its own Lookup for SPs in that wave and a ForEach (batch=8, parallel) to execute them.
 
 **Historical note**: An earlier design used 10 pre-built sequential Lookup+ForEach stages (wave 0 through wave 9). This was replaced by the parent-child pattern which is cleaner and supports any number of waves without pipeline changes.
 
@@ -780,7 +780,7 @@ CREATE TABLE meta.pipeline_run_log (
 | **Auto-populated** | Yes, by `usp_compute_slv_waves`. DELETE + INSERT on each run. |
 | **Manual input** | None. |
 | **Key columns** | `sp_name`, `wave` (INT, 0-based) |
-| **Written when** | Every time the silver pipeline runs (Step 1 of pl_silver_forecast). |
+| **Written when** | Every time the silver pipeline runs (Step 1 of pl_sc_silver). |
 
 ```sql
 CREATE TABLE meta.slv_dag_waves_runtime (
@@ -868,7 +868,7 @@ END
 | Aspect | Detail |
 |--------|--------|
 | **What it does** | Computes execution waves for silver SPs based on their depends_on declarations. |
-| **When called** | As the first step of pl_silver_forecast pipeline, every time silver runs. |
+| **When called** | As the first step of pl_sc_silver pipeline, every time silver runs. |
 | **Key logic** | See Section 6.3 for full SQL. Iterative WHILE loop assigns wave 0 (no silver deps), wave 1 (all deps in wave 0), etc., up to max 30 waves. Results stored in slv_dag_waves_runtime. |
 
 #### meta.usp_run_silver_dag
@@ -1070,9 +1070,9 @@ flowchart LR
 
 > **Change from previous version**: 28 per-table SPs (18 bronze + 8 silver + 2 gold) have been **deleted** and replaced by 1 generic SP (`meta.usp_generic_load`). meta SPs increased from 8 to 10. Total objects reduced from 100 to 78. Added usp_check_dq_single, ufn_cron_is_due, vw_run_history_tz (2026-04-17).
 
-**Pipelines**: 6 (`pl_sc_master`, `pl_bronze_forecast`, `pl_silver_forecast`, `pl_silver_wave_forecast`, `pl_gold_forecast`, `pl_dq_check`)
+**Pipelines**: 6 (`pl_sc_master`, `pl_sc_bronze`, `pl_sc_silver`, `pl_sc_silver_wave`, `pl_sc_gold`, `pl_dq_check`)
 
-**Grand total**: 78 warehouse objects + 6 pipelines = **84 managed artifacts**
+**Grand total**: ~85 warehouse objects + 7 pipelines = **~92 managed artifacts**
 
 ### Row Count Summary
 
@@ -1156,7 +1156,7 @@ flowchart LR
 | NVARCHAR default length | CAST AS NVARCHAR defaults to 30 chars, truncates | CAST AS NVARCHAR(200) or use VARCHAR |
 | SetVariable self-reference | `x = x + 1` causes "self-referencing" error | Use 2 variables: `next_wave = current + 1`, then `current = next_wave` |
 | Warehouse as Lookup source | Pipeline Lookup does not support Warehouse natively | LakehouseTableSource + cross-DB 3-part naming |
-| Until activity in Pipeline | Until loop fails with BadRequest in Fabric Pipeline | Parent-child pipeline pattern (pl_silver_forecast invokes pl_silver_wave_forecast per wave) |
+| Until activity in Pipeline | Until loop fails with BadRequest in Fabric Pipeline | Parent-child pipeline pattern (pl_sc_silver invokes pl_sc_silver_wave per wave) |
 | Nested dynamic EXEC from Pipeline | SP calling sp_executesql called from Pipeline SP activity fails | Pipeline directly calls individual SPs via ForEach |
 | DECIMAL(10,4) for large numbers | Overflow on values like 1000000 | Use DECIMAL(18,2) |
 | sp_executesql in WHILE loop | Only 1 iteration executes | Single-rule SP (usp_check_dq_single) + pipeline ForEach |
@@ -1173,7 +1173,7 @@ flowchart LR
 | Wave computation | Recursive CTE | Not supported in Fabric WH | **SP iterative WHILE loop** (usp_compute_slv_waves) |
 | Wave view | 3 hardcoded CTEs | Max 3 waves | **SP + runtime table** (max 30 waves) |
 | Silver pipeline | SP orchestrator (usp_run_silver_dag) | All sequential, no parallelism | **Lookup+ForEach pattern** (parallel within wave) |
-| Silver pipeline loop | Until + SetVariable loop | BadRequest error in Fabric Pipeline | **Parent-child pattern** (pl_silver_forecast invokes pl_silver_wave_forecast) |
+| Silver pipeline loop | Until + SetVariable loop | BadRequest error in Fabric Pipeline | **Parent-child pattern** (pl_sc_silver invokes pl_sc_silver_wave) |
 | SetVariable increment | current_wave = current_wave + 1 | Self-reference error | **2 variables** (next_wave + current_wave) |
 | Pipeline Lookup source | WarehouseSource + connectionSettings | "Failed to open resource" | **LakehouseTableSource + cross-DB query** |
 | Pipeline SP activity | Script activity type | "ReferenceName null" error | **SqlServerStoredProcedure + linkedService** |
@@ -1209,14 +1209,14 @@ flowchart LR
 
 ### Run #2 -- FAILED (2026-04-14 14:07)
 
-| Status | FAILED at pl_silver_forecast |
+| Status | FAILED at pl_sc_silver |
 |--------|----------------------|
 | Error | BadRequest -- Until activity not supported in Fabric Pipeline |
 | Fix | Replaced Until loop with 10 sequential Lookup+ForEach wave stages |
 
 ### Run #1 -- FAILED (2026-04-14 13:56)
 
-| Status | FAILED at pl_silver_forecast |
+| Status | FAILED at pl_sc_silver |
 |--------|----------------------|
 | Error | BadRequest -- SqlServerStoredProcedure calling usp_run_silver_dag (nested dynamic EXEC) |
 | Fix | Changed silver pipeline from single SP orchestrator to Lookup+ForEach pattern |

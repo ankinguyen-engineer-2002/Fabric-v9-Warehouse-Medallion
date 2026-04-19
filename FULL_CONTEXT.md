@@ -103,10 +103,11 @@
 | Pipeline | ID |
 |----------|------|
 | pl_sc_master | `319a8160-3f3a-4b87-8ad6-75ac4f3ec184` |
-| pl_bronze_forecast | `1bdbaebb-7222-4e9c-a45d-3e632bba846d` |
-| pl_silver_forecast | `46437ae6-3a15-4697-957d-f1f44ba10633` |
-| pl_silver_wave_forecast | `57a09720-21a2-49b5-a472-1e19abd14f76` |
-| pl_gold_forecast | `94fc130e-f327-46a9-b7ba-cd2aa328c0da` |
+| pl_sc_mart (NEW) | `9a1e7a12-30ab-465c-a45d-b051619193ac` |
+| pl_sc_bronze | `1bdbaebb-7222-4e9c-a45d-3e632bba846d` |
+| pl_sc_silver | `46437ae6-3a15-4697-957d-f1f44ba10633` |
+| pl_sc_silver_wave | `57a09720-21a2-49b5-a472-1e19abd14f76` |
+| pl_sc_gold | `94fc130e-f327-46a9-b7ba-cd2aa328c0da` |
 
 ### Connection IDs (used in pipeline JSON)
 
@@ -305,8 +306,8 @@ SupplyChain_Warehouse/
         ├── vw_table_dictionary      Maps sp_registry → Enterprise 63-col TableDictionary + 6 v9 extras
         └── vw_run_history_tz        Execution log in 3 timezones (UTC/CST/VN)
 
-TOTALS: 35 tables + 30 views + 10 SPs + 3 functions = 78 objects
-        + 6 pipelines = 84 managed artifacts
+TOTALS: ~38 tables + 30 views + 11 SPs + 3 functions = ~85 objects
+        + 7 pipelines = 84 managed artifacts
         ~1.47 billion total rows
 ```
 
@@ -502,11 +503,12 @@ END
 
 | Pipeline | ID | Role |
 |----------|------|------|
-| pl_sc_master | 319a8160-3f3a-4b87-8ad6-75ac4f3ec184 | Master orchestrator (9 activities) |
-| pl_bronze_forecast | 1bdbaebb-7222-4e9c-a45d-3e632bba846d | Lookup+ForEach bronze/ref tables |
-| pl_silver_forecast | 46437ae6-3a15-4697-957d-f1f44ba10633 | Parent: compute waves, invoke child per wave |
-| pl_silver_wave_forecast | 57a09720-21a2-49b5-a472-1e19abd14f76 | Child: run SPs for 1 wave in parallel |
-| pl_gold_forecast | 94fc130e-f327-46a9-b7ba-cd2aa328c0da | Lookup+ForEach gold tables |
+| pl_sc_master | 319a8160-3f3a-4b87-8ad6-75ac4f3ec184 | Master: log → ForEach projects → finalize → SM |
+| pl_sc_mart | 9a1e7a12-30ab-465c-a45d-b051619193ac | Mart orchestrator: bronze → silver → gold per @project |
+| pl_sc_bronze | 1bdbaebb-7222-4e9c-a45d-3e632bba846d | Lookup+ForEach bronze/ref WHERE project=@project |
+| pl_sc_silver | 46437ae6-3a15-4697-957d-f1f44ba10633 | Parent: compute waves, invoke child per wave |
+| pl_sc_silver_wave | 57a09720-21a2-49b5-a472-1e19abd14f76 | Child: run SPs for 1 wave in parallel |
+| pl_sc_gold | 94fc130e-f327-46a9-b7ba-cd2aa328c0da | Lookup+ForEach gold WHERE project=@project |
 | **pl_dq_check** | **c32dc18d-d027-4672-9872-f73404cd7c6f** | **★ NEW: DQ gate — Lookup rules by layer → ForEach → usp_check_dq_single** |
 
 ### pl_sc_master (319a8160) — Master Orchestrator
@@ -524,7 +526,7 @@ Activities (9, sequential):
 - Concurrency: 1 (prevents overlap)
 - DQ CRITICAL fail → pipeline stops, downstream layers do NOT run
 
-### pl_bronze_forecast (1bdbaebb)
+### pl_sc_bronze (1bdbaebb)
 
 1. **Lookup** (LakehouseTableSource, cross-DB):
    ```sql
@@ -538,7 +540,7 @@ Activities (9, sequential):
    - EXEC meta.usp_generic_load @target_schema=@item().target_schema, @target_table=@item().target_table
    - Retry: 3x, interval: 60s
 
-### pl_silver_forecast (46437ae6) — PARENT
+### pl_sc_silver (46437ae6) — PARENT
 
 1. **compute_waves** (SqlServerStoredProcedure) → EXEC meta.usp_compute_slv_waves
 2. **get_distinct_waves** (Lookup, cross-DB):
@@ -546,10 +548,10 @@ Activities (9, sequential):
    SELECT DISTINCT wave FROM SupplyChain_Warehouse.meta.slv_dag_waves_runtime ORDER BY wave
    ```
 3. **ForEach wave** (isSequential=**true**):
-   - InvokePipeline: pl_silver_wave_forecast (57a09720)
+   - InvokePipeline: pl_sc_silver_wave (57a09720)
    - Parameter: wave_number = @item().wave
 
-### pl_silver_wave_forecast (57a09720) — CHILD
+### pl_sc_silver_wave (57a09720) — CHILD
 
 Parameter: `wave_number` (INT)
 
@@ -563,7 +565,7 @@ Parameter: `wave_number` (INT)
 2. **ForEach** (batch=**8**, PARALLEL):
    - EXEC meta.usp_generic_load
 
-### pl_gold_forecast (94fc130e)
+### pl_sc_gold (94fc130e)
 
 1. **Lookup** → WHERE layer = 'GLD' AND is_active = 1 → Returns 2 tables
 2. **ForEach** (batch=**2**, PARALLEL) → EXEC meta.usp_generic_load
@@ -618,14 +620,14 @@ SM refresh:
 ```
 T+00:00  pl_sc_master triggers
 T+00:00  → log_start: INSERT pipeline_run_log (status='running')
-T+00:00  → Invoke pl_bronze_forecast
+T+00:00  → Invoke pl_sc_bronze
 T+00:01    → Lookup: 18 tables from sp_registry
 T+00:02    → ForEach batch=6: first 6 SPs parallel
 T+03:00    → All 18 bronze complete (~1.35B rows, ~3 min)
 T+03:00  → dq_bronze: Invoke pl_dq_check (layer='BRZ','REF')
 T+03:01    → Lookup: 22 rules → ForEach batch=10 → usp_check_dq_single
 T+03:30    → DQ bronze PASS (22/22) — if any CRITICAL fails, pipeline stops here
-T+03:30  → Invoke pl_silver_forecast
+T+03:30  → Invoke pl_sc_silver
 T+03:31    → EXEC usp_compute_slv_waves (assigns 8 SPs to 3 waves)
 T+03:32    → ForEach wave (sequential):
 T+03:32      → Wave 0: 3 SPs parallel (slowest: forecast_demand 110s)
@@ -634,7 +636,7 @@ T+07:47      → Wave 2: 1 SP (naive_forecast 5s)
 T+07:53    → Silver complete (~67.5M rows, ~6 min)
 T+07:53  → dq_silver: Invoke pl_dq_check (layer='SLV')
 T+08:10    → DQ silver PASS (8/8)
-T+08:10  → Invoke pl_gold_forecast
+T+08:10  → Invoke pl_sc_gold
 T+08:11    → Lookup: 2 tables → ForEach batch=2: both parallel
 T+08:55    → Gold complete (~55.9M rows, ~1 min)
 T+08:55  → dq_gold: Invoke pl_dq_check (layer='GLD')
@@ -1125,7 +1127,7 @@ File: `.github/workflows/refresh_lineage_data.yml`
 - Created all 4 schemas, 7 meta tables, 9 SPs
 - Built 18 bronze views + tables, 8 silver views + tables, 2 gold tables
 - Migrated from 28 per-table SPs → 1 generic SP (meta.usp_generic_load)
-- Created 5 pipelines via Fabric REST API
+- Created 7 pipelines via Fabric REST API (5 original + pl_dq_check + pl_sc_mart)
 - Created SC_Control_Tower semantic model (Direct Lake)
 
 ### 2026-04-14 — DAG & Lineage
@@ -1151,7 +1153,7 @@ File: `.github/workflows/refresh_lineage_data.yml`
 - Object count: 77→78 (+1 SP: usp_check_dq_single), pipelines: 5→6 (+pl_dq_check)
 
 ### 2026-04-16 — Polish & Robustness
-- **Renamed 4 child pipelines**: pl_sc_bronze → pl_bronze_forecast, etc. (`pl_{layer}_{project}`)
+- **Renamed 4 child pipelines**: pl_sc_bronze → pl_sc_bronze, etc. (`pl_{layer}_{project}`)
 - **Bronze batch 8→6**: reduce snapshot conflict
 - **usp_log_run retry 3x**: WHILE + TRY/CATCH + WAITFOR DELAY 2s
 - **ufn_utc_to_cst**: DST aware timezone function
@@ -1178,7 +1180,7 @@ If need to rebuild from scratch:
 6. **Phase 3**: 2 gold views → EXEC meta.usp_generic_load
 7. **Phase 3.5**: Seed sp_registry (2 rows) + dq_rules
 8. **Phase 4**: EXEC meta.usp_build_lineage
-9. **Phase 5**: Create 5 pipelines via Fabric REST API (JSON definitions)
+9. **Phase 5: Create 7 pipelines via Fabric REST API (JSON definitions)
 10. **Phase 6**: Create SC_Control_Tower semantic model via API (TMDL)
 11. **Phase 7**: Deploy Streamlit lineage app
 
@@ -1247,4 +1249,4 @@ If need to rebuild from scratch:
 ---
 
 *Built with Claude Code + Fabric MCP Server. ~4 days from zero to production-ready.*
-*Tổng cộng ~1.47 tỷ rows, 78 objects, 6 pipelines, 1 generic SP, 8 load patterns, 30 DQ rules.*
+*Tổng cộng ~1.47 tỷ rows, ~85 objects, 7 pipelines, 1 generic SP, 8 load patterns, 54 DQ rules (30 active). Multi-mart architecture. Health check: 49/49 PASS.*

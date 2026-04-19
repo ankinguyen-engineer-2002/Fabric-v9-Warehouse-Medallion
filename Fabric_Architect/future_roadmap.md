@@ -92,7 +92,7 @@
 
 | # | Item | Why | Effort | How |
 |---|------|-----|--------|-----|
-| 11 | ~~**Multi-mart parallel**~~ | ~~N projects in 1 pipeline~~ | ~~2 days~~ | **CREATED 2026-04-18** — project='supplychain' set on all 28 tables. Design ready. Pipeline Lookup filter not yet added (1 mart only). **Not in pipeline flow** |
+| 11 | ~~**Multi-mart parallel**~~ | ~~N projects in 1 pipeline~~ | ~~2 days~~ | **DONE 2026-04-18** — Multi-mart LIVE. pl_sc_master → ForEach projects → pl_sc_mart(@project) → bronze→silver→gold. 7 pipelines. Tested: 28/28 success, 20.3 min. Thêm mart = INSERT sp_registry |
 | 12 | ~~**Data contracts**~~ | ~~Source schema change detection~~ | ~~3 days~~ | **CREATED 2026-04-18** — `meta.schema_contracts` (674 columns, 10 source tables) + `usp_validate_schema_contracts`. **Not in pipeline flow** — validate manually or via Python |
 | 13 | ~~**DQ expansion**~~ | ~~Activate remaining check types~~ | ~~1-2 days~~ | **CREATED 2026-04-18** — +24 rules (uniqueness + freshness). Total 54 rules, 4 check types. **Rules deactivated** (is_active=0). DQ gates in pipeline **deactivated** (activities exist but skip). Activate: set is_active=1 + reactivate pipeline activities |
 | 14 | ~~**Cost monitoring**~~ | ~~Track CU consumption~~ | ~~1 day~~ | **CREATED 2026-04-18** — `meta.pipeline_cost_log` table + enhanced `usp_finalize_pipeline`. **Not in pipeline flow** — finalize reverted to original. Enhanced SP ready to re-deploy |

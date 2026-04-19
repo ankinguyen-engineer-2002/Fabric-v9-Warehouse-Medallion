@@ -395,11 +395,14 @@ ORDER BY check_time DESC;
 
 **No further action needed.** On the next pipeline run:
 
-1. `pl_bronze_forecast` Lookup reads `sp_registry` -> finds your new table -> loads it
-2. `pl_dq_check` runs DQ rules for your table's layer (if you added rules in Step 6)
-3. `pl_silver_forecast` computes waves -> recalculates the DAG -> runs in the correct order
-4. `pl_gold_forecast` Lookup -> loads gold tables
-5. `usp_finalize_pipeline` automatically rebuilds lineage (including the new table)
+1. `pl_sc_master` discovers your project via `SELECT DISTINCT project FROM sp_registry`
+2. `pl_sc_mart` invokes bronze -> silver -> gold for your project
+3. `pl_sc_bronze` Lookup reads `sp_registry WHERE project=@project` -> finds your new table -> loads it
+4. `pl_sc_silver` computes waves -> recalculates the DAG -> runs in the correct order
+5. `pl_sc_gold` Lookup -> loads gold tables
+6. `usp_finalize_pipeline` automatically rebuilds lineage (including the new table)
+
+> **Health check**: After adding a table, run `python3 scripts/health_check.py` to verify (49 checks).
 
 ### Smart skip:
 - If `frequency = 'daily'` and `cron = '0 2 * * *'`: runs every day

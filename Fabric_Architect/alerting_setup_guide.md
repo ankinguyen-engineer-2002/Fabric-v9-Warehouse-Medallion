@@ -310,7 +310,7 @@ Click vao trigger **When an HTTP request is received**, dan JSON Schema vao:
 > **Luu y ve On Failure routing**:
 > - Moi activity trong pipeline deu co 4 outputs: Success, Failure, Completion, Skipped
 > - Can noi **On Failure** tu NHIEU activities ve cung `alert_pipeline_failure`
-> - Recommend: noi tu cac activity chinh: `pl_bronze_forecast`, `pl_silver_wave_forecast`, `pl_gold_forecast`, `dq_check` activities
+> - Recommend: noi tu cac activity chinh: `pl_sc_bronze`, `pl_sc_silver_wave`, `pl_sc_gold`, `dq_check` activities
 > - Cach noi: Click activity → keo duong do (X) → tha vao `alert_pipeline_failure`
 
 ### Step 7 — Publish Pipeline

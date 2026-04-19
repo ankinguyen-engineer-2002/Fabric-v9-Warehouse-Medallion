@@ -14,11 +14,11 @@ When `pl_sc_master` (ID: 319a8160) is triggered (manually or on schedule), it ex
 flowchart LR
     T["Trigger\n(manual or schedule)"]
     LS["Step 1: log_start\n(SqlServerStoredProcedure)\nEXEC meta.usp_log_pipeline_run\nINSERT pipeline_run_log\nstatus='running'"]
-    B["Step 2: pl_bronze_forecast\n(1bdbaebb)"]
+    B["Step 2: pl_sc_bronze\n(1bdbaebb)"]
     DQ1["Step 3: dq_bronze\n(InvokePipeline)\npl_dq_check layer='bronze'"]
-    S["Step 4: pl_silver_forecast\n(46437ae6)"]
+    S["Step 4: pl_sc_silver\n(46437ae6)"]
     DQ2["Step 5: dq_silver\n(InvokePipeline)\npl_dq_check layer='silver'"]
-    G["Step 6: pl_gold_forecast\n(94fc130e)"]
+    G["Step 6: pl_sc_gold\n(94fc130e)"]
     DQ3["Step 7: dq_gold\n(InvokePipeline)\npl_dq_check layer='gold'"]
     FN["Step 8: finalize\n(SqlServerStoredProcedure)\nEXEC meta.usp_finalize_pipeline\nbuilds lineage + updates\npipeline_run_log to 'success'"]
     SM["Step 9: refresh_sm\n(PBISemanticModelRefresh)\nRefresh SC_Control_Tower\nDirect Lake metadata sync\n7 tables refreshed"]
@@ -38,7 +38,7 @@ If any child pipeline or DQ gate fails, execution stops. Silver does not run if 
 
 ---
 
-## Step 1: pl_bronze_forecast Executes
+## Step 1: pl_sc_bronze Executes
 
 ### 1.1 Lookup Activity: Get Bronze SP List
 
@@ -172,11 +172,11 @@ the same resource."
 
 ---
 
-## Step 2: pl_silver_forecast Executes
+## Step 2: pl_sc_silver Executes
 
 ### 2.1 Step 1 of Silver: Compute DAG Waves
 
-The first activity in pl_silver_forecast is a SqlServerStoredProcedure that calls:
+The first activity in pl_sc_silver is a SqlServerStoredProcedure that calls:
 
 ```sql
 EXEC meta.usp_compute_slv_waves
@@ -233,9 +233,9 @@ The silver pipeline uses a **parent-child pattern**. After computing waves, the 
    FROM SupplyChain_Warehouse.meta.slv_dag_waves_runtime
    ORDER BY wave
    ```
-2. **ForEach** (Step 3, isSequential=**true**): For each wave, invokes child pipeline `pl_silver_wave_forecast` (57a09720) with parameter `wave_number = @item().wave`.
+2. **ForEach** (Step 3, isSequential=**true**): For each wave, invokes child pipeline `pl_sc_silver_wave` (57a09720) with parameter `wave_number = @item().wave`.
 
-The child pipeline (`pl_silver_wave_forecast`) then:
+The child pipeline (`pl_sc_silver_wave`) then:
 1. **Lookup**: `SELECT sp_name FROM SupplyChain_Warehouse.meta.slv_dag_waves_runtime WHERE wave = @pipeline().parameters.wave_number`
 2. **ForEach** (batch=8, PARALLEL): Executes each returned SP via SqlServerStoredProcedure.
 
@@ -301,7 +301,7 @@ This SP depends on `slv_actual_demand_monthly` (wave 1), which is why it runs in
 
 ### 2.6 Only 3 Waves in Current State
 
-The Lookup returns only 3 distinct waves (0, 1, 2), so the ForEach invokes `pl_silver_wave_forecast` exactly 3 times. If future silver tables create deeper dependency chains, additional waves are handled automatically without pipeline changes.
+The Lookup returns only 3 distinct waves (0, 1, 2), so the ForEach invokes `pl_sc_silver_wave` exactly 3 times. If future silver tables create deeper dependency chains, additional waves are handled automatically without pipeline changes.
 
 ### 2.7 Silver Execution Results (Run #3)
 
@@ -320,7 +320,7 @@ The Lookup returns only 3 distinct waves (0, 1, 2), so the ForEach invokes `pl_s
 
 ---
 
-## Step 3: pl_gold_forecast Executes
+## Step 3: pl_sc_gold Executes
 
 ### 3.1 Lookup Activity: Get Gold SP List
 
@@ -448,7 +448,7 @@ flowchart TD
 
 **What changes in the pipeline**: Nothing. The wave computation is dynamic. The parent-child pattern supports any number of waves. The new table is automatically placed in the correct wave based on its `depends_on` declaration.
 
-**Example**: If you add `slv_new_table` with `depends_on = '["silver.slv_naive_forecast_monthly"]'`, it would be auto-assigned to wave 3 (because slv_naive_forecast_monthly is in wave 2). The parent pipeline's ForEach would invoke `pl_silver_wave_forecast` for wave 3, and `meta.usp_generic_load` would load the new table.
+**Example**: If you add `slv_new_table` with `depends_on = '["silver.slv_naive_forecast_monthly"]'`, it would be auto-assigned to wave 3 (because slv_naive_forecast_monthly is in wave 2). The parent pipeline's ForEach would invoke `pl_sc_silver_wave` for wave 3, and `meta.usp_generic_load` would load the new table.
 
 ### Adding a Gold Table (Simplified -- No SP Needed)
 
@@ -470,15 +470,15 @@ flowchart TD
 ```
 T+00:00  pl_sc_master triggers
 T+00:00  -> log_start: EXEC meta.usp_log_pipeline_run (INSERT pipeline_run_log, status='running')
-T+00:00  -> Invokes pl_bronze_forecast (1bdbaebb)
+T+00:00  -> Invokes pl_sc_bronze (1bdbaebb)
 T+00:01    -> Lookup: SELECT 18 sp_names from sp_registry (via Lakehouse cross-DB)
 T+00:02    -> ForEach batch=8: first 8 SPs start in parallel
 T+00:10    ->   8 more SPs start as slots free up
 T+00:20    ->   remaining 2 SPs start
 T+03:00    -> All 18 bronze SPs complete (3 retried once for snapshot conflicts)
-T+03:00  -> pl_bronze_forecast completes
+T+03:00  -> pl_sc_bronze completes
 T+03:00  -> dq_bronze: pl_dq_check (22 rules, ~1 min)
-T+03:01  -> dq_bronze completes, master invokes pl_silver_forecast (46437ae6)
+T+03:01  -> dq_bronze completes, master invokes pl_sc_silver (46437ae6)
 T+03:01    -> SP: EXEC meta.usp_compute_slv_waves (computes 3 waves, writes 8 rows)
 T+03:02    -> Lookup wave 0: returns 3 SPs
 T+03:02    -> ForEach wave 0: 3 SPs start in parallel
@@ -490,9 +490,9 @@ T+07:18    -> Lookup wave 2: returns 1 SP
 T+07:18    -> ForEach wave 2: 1 SP runs
 T+07:23    -> Wave 2 completes (naive_forecast_monthly at 5s)
 T+07:24    -> No more waves (Lookup returned only 3 distinct waves)
-T+09:00  -> pl_silver_forecast completes
+T+09:00  -> pl_sc_silver completes
 T+09:00  -> dq_silver: pl_dq_check (8 rules, ~1 min)
-T+09:01  -> dq_silver completes, master invokes pl_gold_forecast (94fc130e)
+T+09:01  -> dq_silver completes, master invokes pl_sc_gold (94fc130e)
 T+09:01    -> Lookup: returns 2 sp_names
 T+09:01    -> ForEach batch=2: both SPs start in parallel
 T+09:44    -> Both gold SPs complete (slowest: forecast_kpi at 43s)
@@ -520,7 +520,7 @@ Total: ~16 minutes for 1.47 billion rows across 28 tables + 3 DQ gates + SM refr
 If a bronze SP fails after 2 retries:
 - The ForEach marks that iteration as failed
 - **Other SPs in the ForEach continue** (ForEach does not abort on individual failure by default)
-- pl_bronze_forecast marks as failed after ForEach completes
+- pl_sc_bronze marks as failed after ForEach completes
 - pl_sc_master stops -- silver and gold do NOT run
 - **sp_run_history** shows the failed run with error_message
 - **Fix**: Investigate error, fix issue, re-trigger pl_sc_master (all bronze re-runs, silver/gold follow)
@@ -531,7 +531,7 @@ If a silver SP fails within a wave:
 - Other SPs in the same wave continue (parallel ForEach)
 - The wave's ForEach marks as failed
 - Subsequent waves do NOT run (sequential between waves)
-- pl_silver_forecast fails, pl_gold_forecast does not run
+- pl_sc_silver fails, pl_sc_gold does not run
 - **Impact**: Any SP in a later wave that depends on the failed SP would also fail if it ran, so stopping is correct behavior
 
 ### Scenario 3: Wave Computation Produces Unexpected Results

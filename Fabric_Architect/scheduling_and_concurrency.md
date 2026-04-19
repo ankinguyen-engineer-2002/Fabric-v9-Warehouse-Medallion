@@ -141,7 +141,7 @@ pl_sc_master: concurrency = 1
 ### 4.2 ForEach-level concurrency
 
 ```
-pl_bronze_forecast: ForEach batchCount = 8
+pl_sc_bronze: ForEach batchCount = 8
   -> 8 tables load in parallel simultaneously
   -> Fabric WH dual compute pool: READ (view) + WRITE (CTAS) separated
   -> Snapshot conflict when 8 DROP+CTAS run concurrently -> retry 3x60s handles it
@@ -298,9 +298,9 @@ curl -X POST "https://api.fabric.microsoft.com/v1/workspaces/{ws}/items/{pipelin
 
 | Pipeline | Previous name | Additional Lookup filter |
 |----------|--------------|--------------------------|
-| pl_bronze_forecast | pl_bronze_forecast | `AND (r.cron_expression IS NULL OR r.next_run_time IS NULL OR r.next_run_time <= GETUTCDATE())` |
-| pl_gold_forecast | pl_gold_forecast | Same as above |
-| pl_silver_wave_forecast | pl_silver_wave_forecast | Silver uses DAG waves (does not filter cron directly) |
+| pl_sc_bronze | pl_sc_bronze | `AND (r.cron_expression IS NULL OR r.next_run_time IS NULL OR r.next_run_time <= GETUTCDATE())` |
+| pl_sc_gold | pl_sc_gold | Same as above |
+| pl_sc_silver_wave | pl_sc_silver_wave | Silver uses DAG waves (does not filter cron directly) |
 
 > **Naming convention**: `pl_{layer}_{project}`. Master keeps `pl_sc_master` (unique). Child pipelines change the suffix by project (forecast, inventory, ...).
 

@@ -23,12 +23,12 @@
 ### Pipeline flow
 ```
 pl_sc_master:
-  log_start → pl_bronze_forecast → pl_silver_forecast → pl_gold_forecast → finalize → refresh_sm
+  log_start → pl_sc_bronze → pl_sc_silver → pl_sc_gold → finalize → refresh_sm
 
-pl_bronze_forecast: Lookup sp_registry → ForEach → EXEC @item().sp_name
-pl_silver_forecast: compute_waves → ForEach wave → InvokePipeline child
-pl_silver_wave_forecast: Lookup wave SPs → ForEach → EXEC @item().sp_name
-pl_gold_forecast: Lookup sp_registry → ForEach → EXEC @item().sp_name
+pl_sc_bronze: Lookup sp_registry → ForEach → EXEC @item().sp_name
+pl_sc_silver: compute_waves → ForEach wave → InvokePipeline child
+pl_sc_silver_wave: Lookup wave SPs → ForEach → EXEC @item().sp_name
+pl_sc_gold: Lookup sp_registry → ForEach → EXEC @item().sp_name
 ```
 
 ### Views (ETL logic)

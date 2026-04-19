@@ -109,9 +109,9 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    B["pl_bronze_forecast\nWHERE project=@project"]
-    S["pl_silver_forecast\ncompute_waves\nWHERE project=@project"]
-    G["pl_gold_forecast\nWHERE project=@project"]
+    B["pl_sc_bronze\nWHERE project=@project"]
+    S["pl_sc_silver\ncompute_waves\nWHERE project=@project"]
+    G["pl_sc_gold\nWHERE project=@project"]
     B --> S --> G
 ```
 
@@ -364,9 +364,9 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    B["pl_bronze_forecast\nLookup WHERE project=@project\nForEach batch=8"]
-    S["pl_silver_forecast\ncompute_waves WHERE project=@project\nparent-child parallel"]
-    G["pl_gold_forecast\nLookup WHERE project=@project\nForEach batch=N"]
+    B["pl_sc_bronze\nLookup WHERE project=@project\nForEach batch=8"]
+    S["pl_sc_silver\ncompute_waves WHERE project=@project\nparent-child parallel"]
+    G["pl_sc_gold\nLookup WHERE project=@project\nForEach batch=N"]
     B --> S --> G
 ```
 
@@ -585,9 +585,9 @@ Pipeline mới nhận parameter `project_name`:
 
 ```
 pl_sc_mart (parameter: project_name):
-  [1] pl_bronze_forecast (Lookup WHERE project=@project → ForEach → generic SP)
-  [2] pl_silver_forecast (compute_waves WHERE project=@project → parent-child)
-  [3] pl_gold_forecast (Lookup WHERE project=@project → ForEach → generic SP)
+  [1] pl_sc_bronze (Lookup WHERE project=@project → ForEach → generic SP)
+  [2] pl_sc_silver (compute_waves WHERE project=@project → parent-child)
+  [3] pl_sc_gold (Lookup WHERE project=@project → ForEach → generic SP)
 ```
 
 Hoặc đơn giản hơn: InvokePipeline cho bronze/silver/gold với project parameter.

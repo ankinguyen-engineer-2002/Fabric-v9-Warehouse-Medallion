@@ -119,7 +119,7 @@ SupplyChain_Warehouse/
 | Generic SP (8 load patterns) | `usp_generic_load` | ✅ Active |
 | Metadata-driven config | `sp_registry` (28 tables) | ✅ Active |
 | DAG wave computation | `usp_compute_slv_waves` + `slv_dag_waves_runtime` | ✅ Active |
-| Parent-child pipeline | `pl_silver_forecast` → `pl_silver_wave_forecast` | ✅ Active |
+| Parent-child pipeline | `pl_sc_silver` → `pl_sc_silver_wave` | ✅ Active |
 | Auto lineage (52 edges) | `usp_build_lineage` + `sp_lineage` | ✅ Active |
 | Execution logging | `usp_log_run` + `sp_run_history` (retry 3x) | ✅ Active |
 | Pipeline logging | `usp_log_pipeline_run` + `pipeline_run_log` | ✅ Active |
@@ -180,38 +180,43 @@ SupplyChain_Warehouse/
 
 ## Pipeline Architecture
 
-### 6 Pipelines
+### 7 Pipelines (Multi-Mart Architecture)
 
-| Pipeline | Type | Role |
-|----------|------|------|
-| `pl_sc_master` | Master | log_start → bronze → ~~dq~~ → silver → ~~dq~~ → gold → ~~dq~~ → finalize → refresh_sm (DQ deactivated) |
-| `pl_bronze_forecast` | Child | Lookup sp_registry → ForEach(batch=6) → EXEC usp_generic_load |
-| `pl_silver_forecast` | Child | compute_waves → ForEach wave → invoke pl_silver_wave_forecast |
-| `pl_silver_wave_forecast` | Grandchild | Lookup SPs for wave → ForEach(batch=8) → EXEC usp_generic_load |
-| `pl_gold_forecast` | Child | Lookup sp_registry → ForEach(batch=2) → EXEC usp_generic_load |
-| `pl_dq_check` | DQ Gate | Lookup dq_rules by layer → ForEach(batch=10) → EXEC usp_check_dq_single |
+| Pipeline | Type | Role | Parameter |
+|----------|------|------|-----------|
+| `pl_sc_master` | Master | log_start → ForEach projects → finalize → refresh_sm | — |
+| `pl_sc_mart` | **Mart orchestrator** | Chains bronze → silver → gold per project | `@project_name` |
+| `pl_sc_bronze` | Layer loader | Lookup sp_registry → ForEach(batch=6) → EXEC usp_generic_load | `@project_name` |
+| `pl_sc_silver` | DAG parent | compute_waves → ForEach wave → invoke pl_sc_silver_wave | `@project_name` |
+| `pl_sc_silver_wave` | DAG child | Lookup SPs for wave → ForEach(batch=8) → EXEC usp_generic_load | `@wave_number` |
+| `pl_sc_gold` | Layer loader | Lookup sp_registry → ForEach(batch=2) → EXEC usp_generic_load | `@project_name` |
+| `pl_dq_check` | DQ Gate | Lookup dq_rules → ForEach(batch=10) → EXEC usp_check_dq_single (⏸ deactivated) | `@dq_layer` |
 
-> **Naming**: `pl_{layer}_{project}` for children. Master stays `pl_sc_master` (unique). Invoke by GUID — renaming is safe.
+> **Multi-mart**: Master pipeline dynamically discovers projects from sp_registry, runs each via `pl_sc_mart` in parallel. Adding a new mart = INSERT rows into sp_registry with new `project` value. No pipeline changes needed.
 
-### Master Flow
+### Master Flow (Multi-Mart)
 
 ```mermaid
 flowchart LR
-    M["pl_sc_master\nconcurrency=1"] --> LS["log_start\nusp_log_pipeline_run"]
-    LS --> B["pl_bronze_forecast\nForEach batch=6"]
-    B -.-> DQB["dq_bronze\n⏸ DEACTIVATED"]
-    DQB -.-> S["pl_silver_forecast\nDAG waves"]
-    B --> S
-    S -.-> DQS["dq_silver\n⏸ DEACTIVATED"]
-    DQS -.-> G["pl_gold_forecast\nForEach batch=2"]
-    S --> G
-    G -.-> DQG["dq_gold\n⏸ DEACTIVATED"]
-    DQG -.-> FN["finalize\nusp_finalize_pipeline\nbuild lineage + log"]
-    G --> FN
-    FN --> SM["refresh_sm\nSC_Control_Tower\nDirect Lake"]
+    M["pl_sc_master\nconcurrency=1"] --> LS["log_start"]
+    LS --> LK["Lookup\nDISTINCT project\nfrom sp_registry"]
+    LK --> FE["ForEach project\nPARALLEL batch=10"]
+    FE --> MART["pl_sc_mart\n@project_name"]
+    MART --> FN["finalize\nbuild lineage + log"]
+    FN --> SM["refresh_sm\nDirect Lake"]
 ```
 
-> **DQ gates**: Currently **deactivated** for performance (~18 min vs ~27 min). Activities exist in pipeline but skip. DQ rules (30 active) and `pl_dq_check` pipeline still exist — reactivate via Portal (right-click → Activate).
+### Mart Flow (per project)
+
+```mermaid
+flowchart LR
+    MART["pl_sc_mart\n@project_name"] --> B["pl_sc_bronze\nForEach batch=6\nWHERE project=@project"]
+    B --> S["pl_sc_silver\nDAG waves\nWHERE project=@project"]
+    S --> G["pl_sc_gold\nForEach batch=2\nWHERE project=@project"]
+```
+
+> **DQ gates**: Currently **deactivated** for performance (~20 min vs ~27 min). DQ rules (30 active) and `pl_dq_check` pipeline exist — reactivate via Portal.
+> **Scaling**: 1 mart = ~20 min. N marts parallel = still ~20 min (ForEach batchCount=10).
 
 ### Bronze & Gold — Lookup + Parallel ForEach
 
@@ -227,14 +232,14 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    subgraph PARENT["pl_silver_forecast"]
+    subgraph PARENT["pl_sc_silver"]
         CW["compute_waves\nreads depends_on\nassigns wave 0,1,2...N"]
         LK["Lookup: DISTINCT wave"]
         FE["ForEach wave\nisSequential=true"]
         CW --> LK --> FE
     end
 
-    subgraph CHILD["pl_silver_wave_forecast (per wave)"]
+    subgraph CHILD["pl_sc_silver_wave (per wave)"]
         LK2["Lookup: SPs for wave N"]
         FE2["ForEach batch=8\nPARALLEL"]
         SP2["EXEC usp_generic_load"]
@@ -670,6 +675,7 @@ flowchart LR
 | [new_table_onboarding_guide.md](Fabric_Architect/new_table_onboarding_guide.md) | **Start here** — Step-by-step: add new ETL table (for DA/DE) |
 | [runbook_operations.md](Fabric_Architect/runbook_operations.md) | **Operations** — Pipeline troubleshooting, common errors, re-run guide, health checks, escalation |
 | [alerting_setup_guide.md](Fabric_Architect/alerting_setup_guide.md) | **Alerting** — Power Automate + Teams: setup guide, Adaptive Card design, test commands |
+| [health_check.py](scripts/health_check.py) | **Health Check** — 49 automated checks: `python3 scripts/health_check.py` |
 | [scheduling_and_concurrency.md](Fabric_Architect/scheduling_and_concurrency.md) | Scheduling: cron, smart skip, concurrency, snapshot conflict mitigation |
 | [sqlproj_validation_guide.md](Fabric_Architect/sqlproj_validation_guide.md) | .sqlproj validation: 3 approaches (lint / sqlproj / full ProjectRef) |
 | [timezone_sync_guide.md](Fabric_Architect/timezone_sync_guide.md) | Timezone sync: UTC + CST + VN, map Enterprise fn_GetDate |
