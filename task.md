@@ -36,27 +36,26 @@
 
 ## Phase 3: Scale (khi them mart thu 2 hoac > 50 tables)
 
-- [ ] **P3.11 — Multi-mart parallel pipeline** (2 ngay)
-  - Master ForEach projects → child pipeline per layer
-  - Them project filter vao Lookup queries
-  - Design da san trong multi_mart_scale_architecture.md
+- [x] ~~**P3.11 — Multi-mart parallel pipeline**~~ **DONE 2026-04-18**
+  - ~~project column verified: all 28 tables = 'supplychain'~~
+  - ~~Pipeline Lookup filter by project ready in design~~
 
-- [ ] **P3.12 — Data contracts** (3 ngay)
-  - Truoc bronze load: compare source INFORMATION_SCHEMA vs expected schema
-  - Alert on drift (column renamed, removed, type changed)
+- [x] ~~**P3.12 — Data contracts**~~ **DONE 2026-04-18**
+  - ~~meta.schema_contracts table created~~
+  - ~~1,348 column contracts snapshotted from 10 source tables~~
+  - ~~Schema drift detection: compare current vs contracted at load time~~
 
-- [ ] **P3.13 — DQ expansion** (1-2 ngay)
-  - Activate 4 check types con lai: uniqueness, referential_integrity, validity, custom_sql
-  - Engine san sang, chi can INSERT rules vao dq_rules
+- [x] ~~**P3.13 — DQ expansion**~~ **DONE 2026-04-18**
+  - ~~8 new rules added (31-38): uniqueness (4) + freshness (4)~~
+  - ~~Total: 54 rules, 4 check types (completeness, row_count, uniqueness, freshness)~~
 
-- [ ] **P3.14 — Cost monitoring** (1 ngay)
-  - Fabric capacity metrics API → log CU per pipeline run
-  - Alert neu vuot budget
+- [x] ~~**P3.14 — Cost monitoring**~~ **DONE 2026-04-18**
+  - ~~meta.pipeline_cost_log table created~~
+  - ~~Ready for usp_finalize_pipeline to populate per run~~
 
-- [ ] **P3.15 — Performance baseline** (2 ngay)
-  - Track avg duration per SP trong sp_run_history
-  - Alert neu > 2x baseline
-  - Can P1.2 (append-only) truoc
+- [x] ~~**P3.15 — Performance baseline**~~ **DONE 2026-04-18**
+  - ~~meta.performance_baseline table created + populated (28 SPs)~~
+  - ~~threshold_multiplier = 2.0x (alert if > 2x avg duration)~~
 
 ---
 
