@@ -92,11 +92,11 @@
 
 | # | Item | Why | Effort | How |
 |---|------|-----|--------|-----|
-| 11 | **Multi-mart parallel** | N projects in 1 pipeline. Cost = max(mart) not sum(marts) | 2 days | Already designed in multi_mart_scale_architecture.md. Master ForEach projects → child pipelines per layer |
-| 12 | **Data contracts** | Source schema change detection before it breaks ETL | 3 days | Before bronze load: compare source INFORMATION_SCHEMA vs expected schema from sp_registry. Alert on drift |
-| 13 | ~~**DQ expansion**~~ | ~~Activate remaining check types~~ | ~~1-2 days~~ | **DONE 2026-04-18** — +8 rules (uniqueness on SLV/GLD PKs, freshness on SLV/GLD). 30→54 rules, 3→4 check types. Pipeline tested 54/54 PASS. 3 types reserved (referential_integrity, validity, custom_sql) |
-| 14 | **Cost monitoring** | Track CU consumption per pipeline run | 1 day | Fabric capacity metrics API → log CU per run → alert if over budget |
-| 15 | **Performance baseline** | Detect degradation before users complain | 2 days | Track avg duration per SP in sp_run_history. Alert if > 2x baseline. Requires append-only history (Phase 1 item 2) |
+| 11 | ~~**Multi-mart parallel**~~ | ~~N projects in 1 pipeline~~ | ~~2 days~~ | **CREATED 2026-04-18** — project='supplychain' set on all 28 tables. Design ready. Pipeline Lookup filter not yet added (1 mart only). **Not in pipeline flow** |
+| 12 | ~~**Data contracts**~~ | ~~Source schema change detection~~ | ~~3 days~~ | **CREATED 2026-04-18** — `meta.schema_contracts` (674 columns, 10 source tables) + `usp_validate_schema_contracts`. **Not in pipeline flow** — validate manually or via Python |
+| 13 | ~~**DQ expansion**~~ | ~~Activate remaining check types~~ | ~~1-2 days~~ | **CREATED 2026-04-18** — +24 rules (uniqueness + freshness). Total 54 rules, 4 check types. **Rules deactivated** (is_active=0). DQ gates in pipeline **deactivated** (activities exist but skip). Activate: set is_active=1 + reactivate pipeline activities |
+| 14 | ~~**Cost monitoring**~~ | ~~Track CU consumption~~ | ~~1 day~~ | **CREATED 2026-04-18** — `meta.pipeline_cost_log` table + enhanced `usp_finalize_pipeline`. **Not in pipeline flow** — finalize reverted to original. Enhanced SP ready to re-deploy |
+| 15 | ~~**Performance baseline**~~ | ~~Detect degradation~~ | ~~2 days~~ | **CREATED 2026-04-18** — `meta.performance_baseline` (28 SPs, 2x threshold) + enhanced `usp_finalize_pipeline`. **Not in pipeline flow** — same as P3.14 |
 
 ---
 
@@ -159,9 +159,9 @@
 | Alerts/Email | ❌ | Enterprise has usp_DataWarehouseDataFeedAlert_Fabric → Phase 1+4 |
 | CI/CD (.sqlproj) | ❌ | Enterprise has .sqlproj + DacFx + Azure Pipelines → Phase 2 (blocked: no Azure DevOps access) |
 | Multi-environment | ❌ | Enterprise has Dev/Prod publish profiles + SqlCmdVariable → Phase 2 (blocked: no Azure DevOps access) |
-| **Current** | **~91%** | 8/11 Enterprise features mapped |
-| **After Phase 2** | **~95%** | + CI/CD + multi-env |
-| **After Phase 4** | **100%** | + alerts/email |
+| **Current** | **~91%** | 8/11 Enterprise features mapped. Phase 3 features created but not in pipeline flow |
+| **After Phase 2** | **~95%** | + CI/CD + multi-env (blocked: Azure DevOps) |
+| **After Phase 4** | **100%** | + alerts/email (blocked: IT permissions) |
 
 ### v9 features that EXCEED Enterprise (Enterprise doesn't have):
 

@@ -36,26 +36,16 @@
 
 ## Phase 3: Scale (khi them mart thu 2 hoac > 50 tables)
 
-- [x] ~~**P3.11 — Multi-mart parallel pipeline**~~ **DONE 2026-04-18**
-  - ~~project column verified: all 28 tables = 'supplychain'~~
-  - ~~Pipeline Lookup filter by project ready in design~~
+- [x] ~~**P3.11 — Multi-mart**~~ **CREATED 2026-04-18** — project column set. **Not in pipeline flow**
+- [x] ~~**P3.12 — Data contracts**~~ **CREATED 2026-04-18** — 674 columns, 10 tables. **Not in pipeline flow**
+- [x] ~~**P3.13 — DQ expansion**~~ **CREATED 2026-04-18** — 24 rules (uniqueness+freshness). **Deactivated** (is_active=0). DQ gates in pipeline deactivated
+- [x] ~~**P3.14 — Cost monitoring**~~ **CREATED 2026-04-18** — table ready. **Not in pipeline flow** (finalize reverted)
+- [x] ~~**P3.15 — Performance baseline**~~ **CREATED 2026-04-18** — 28 SPs baselined. **Not in pipeline flow** (finalize reverted)
 
-- [x] ~~**P3.12 — Data contracts**~~ **DONE 2026-04-18**
-  - ~~meta.schema_contracts table created~~
-  - ~~1,348 column contracts snapshotted from 10 source tables~~
-  - ~~Schema drift detection: compare current vs contracted at load time~~
-
-- [x] ~~**P3.13 — DQ expansion**~~ **DONE 2026-04-18**
-  - ~~8 new rules added (31-38): uniqueness (4) + freshness (4)~~
-  - ~~Total: 54 rules, 4 check types (completeness, row_count, uniqueness, freshness)~~
-
-- [x] ~~**P3.14 — Cost monitoring**~~ **DONE 2026-04-18**
-  - ~~meta.pipeline_cost_log table created~~
-  - ~~Ready for usp_finalize_pipeline to populate per run~~
-
-- [x] ~~**P3.15 — Performance baseline**~~ **DONE 2026-04-18**
-  - ~~meta.performance_baseline table created + populated (28 SPs)~~
-  - ~~threshold_multiplier = 2.0x (alert if > 2x avg duration)~~
+> **Note**: All Phase 3 features are CREATED in warehouse (tables, SPs, rules exist) but NOT active in pipeline flow.
+> Pipeline runs lean at ~18-19 min. DQ gates deactivated (activities exist, skip when run).
+> To activate: re-enable DQ activities + set dq_rules is_active=1 + re-deploy enhanced finalize SP.
+> Tradeoff: ~18 min (lean) vs ~27 min (full DQ + cost + perf).
 
 ---
 

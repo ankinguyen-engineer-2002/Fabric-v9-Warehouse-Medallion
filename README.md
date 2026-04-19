@@ -103,8 +103,30 @@ SupplyChain_Warehouse/
 - **Parent-child pipeline** — parallel within wave, sequential between waves (Microsoft recommended)
 - **Smart scheduling** — cron + next_run_time filter, monthly tables auto-skip when not due
 - **Snapshot conflict mitigation** — retry 3x in usp_log_run + reduced batch concurrency
-- **Config-driven DQ** — 54 rules, 4 check types (completeness/row_count/freshness/uniqueness), severity-based gating, integrated as pipeline gates between layers
+- **Config-driven DQ** — 54 rules (30 active + 24 reserved), 4 check types (completeness/row_count/freshness/uniqueness). DQ gates exist in pipeline but **deactivated** for performance (~18 min vs ~27 min)
 - **Auto-built lineage** — `source_objects` JSON → 52 source-to-target edges, rebuilt every run
+- **Performance baseline** — 28 SPs baselined with 2x threshold alerting (created, not in pipeline flow)
+- **Cost monitoring** — CU consumption tracking per pipeline run (created, not in pipeline flow)
+- **Data contracts** — 674 source columns contracted for schema drift detection (created, not in pipeline flow)
+
+### Feature Status
+
+| Feature | Status | In pipeline? | Activate |
+|---------|--------|-------------|----------|
+| Generic SP (8 patterns) | ✅ Active | ✅ Yes | Always on |
+| DAG wave computation | ✅ Active | ✅ Yes | Always on |
+| Smart skip scheduling | ✅ Active | ✅ Yes | Always on |
+| Snapshot retry 3-layer | ✅ Active | ✅ Yes | Always on |
+| Auto lineage (52 edges) | ✅ Active | ✅ Yes | Always on |
+| Auto-trigger daily 2AM | ✅ Active | ✅ Schedule | Always on |
+| DQ gates (30 rules, completeness + row_count) | ⏸ Deactivated | ⏸ Activities exist, skip | Reactivate in Portal |
+| DQ expansion (+24 rules, uniqueness + freshness) | ⏸ is_active=0 | ⏸ Not picked up | `UPDATE dq_rules SET is_active=1 WHERE rule_id>30` |
+| Performance baseline (28 SPs) | ✅ Table exists | ❌ Not in flow | Re-deploy enhanced usp_finalize_pipeline |
+| Cost monitoring | ✅ Table exists | ❌ Not in flow | Re-deploy enhanced usp_finalize_pipeline |
+| Schema contracts (674 cols) | ✅ Table exists | ❌ Not in flow | Create pipeline step or validate via Python |
+| Multi-mart (project column) | ✅ Ready | ❌ Not in flow | Add project filter to pipeline Lookups |
+| Alerting (email/Teams) | ⚠ Blocked IT | ❌ | Needs admin approval |
+| CI/CD (.sqlproj) | ⚠ Blocked | ❌ | Needs Azure DevOps access |
 
 ---
 
@@ -114,7 +136,7 @@ SupplyChain_Warehouse/
 
 | Pipeline | Type | Role |
 |----------|------|------|
-| `pl_sc_master` | Master | log_start → bronze → dq → silver → dq → gold → dq → finalize → refresh_sm |
+| `pl_sc_master` | Master | log_start → bronze → ~~dq~~ → silver → ~~dq~~ → gold → ~~dq~~ → finalize → refresh_sm (DQ deactivated) |
 | `pl_bronze_forecast` | Child | Lookup sp_registry → ForEach(batch=6) → EXEC usp_generic_load |
 | `pl_silver_forecast` | Child | compute_waves → ForEach wave → invoke pl_silver_wave_forecast |
 | `pl_silver_wave_forecast` | Grandchild | Lookup SPs for wave → ForEach(batch=8) → EXEC usp_generic_load |
