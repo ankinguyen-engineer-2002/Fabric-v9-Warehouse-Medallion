@@ -44,7 +44,7 @@ flowchart LR
         B["bronze\n18 tables · 18 views\nraw mirror"]
         S["silver\n8 tables · 8 views\ntransform + join"]
         G["gold\n2 tables · 2 views\nBI-ready"]
-        M["meta\n7 tables · 9 SPs · 2 views · 3 functions\nconfig · log · DQ · DAG"]
+        M["meta\n10 tables · 10 SPs · 2 views · 3 functions\nconfig · log · DQ · DAG · contracts · cost"]
         B --> S --> G
     end
 
@@ -60,7 +60,7 @@ flowchart LR
 | **bronze** | Raw mirror from source systems | 18 tables + 18 views | `VIEW` reads source via 3-part naming → Generic SP does DROP + CTAS |
 | **silver** | Clean, conform, join, business rules | 8 tables + 8 views | `VIEW` reads bronze/silver → Generic SP does DROP + CTAS (DAG wave order) |
 | **gold** | Business-ready facts & dimensions | 2 tables + 2 views | `VIEW` reads silver → Generic SP does DROP + CTAS |
-| **meta** | System control plane | 7 tables + 9 SPs + 2 views + 3 fn | Config + log + DQ + DAG + lineage + timezone |
+| **meta** | System control plane | 10 tables + 10 SPs + 2 views + 3 fn | Config + log + DQ + DAG + lineage + timezone + contracts + cost + baseline |
 
 ### Warehouse Structure
 
@@ -103,7 +103,7 @@ SupplyChain_Warehouse/
 - **Parent-child pipeline** — parallel within wave, sequential between waves (Microsoft recommended)
 - **Smart scheduling** — cron + next_run_time filter, monthly tables auto-skip when not due
 - **Snapshot conflict mitigation** — retry 3x in usp_log_run + reduced batch concurrency
-- **Config-driven DQ** — 30 rules in table, severity-based gating, integrated as pipeline gates between layers
+- **Config-driven DQ** — 54 rules, 4 check types (completeness/row_count/freshness/uniqueness), severity-based gating, integrated as pipeline gates between layers
 - **Auto-built lineage** — `source_objects` JSON → 52 source-to-target edges, rebuilt every run
 
 ---

@@ -1,13 +1,13 @@
 # CLAUDE.md — Project Instructions for AI Assistants
 > SupplyChain Warehouse v9 — Microsoft Fabric, Pure T-SQL, Metadata-Driven
-> Last updated: 2026-04-18 | Score: 7.9/10 | Enterprise mapping: ~91%
+> Last updated: 2026-04-18 | Score: 8.2/10 | Enterprise mapping: ~91%
 
 ---
 
 ## Project Overview
 
 Warehouse-native medallion architecture on Microsoft Fabric. Pure T-SQL, no Notebooks/PySpark.
-- **78 objects**: 4 schemas (bronze/silver/gold/meta), 28 tables, 30 views, 10 SPs, 3 functions
+- **~85 objects**: 4 schemas (bronze/silver/gold/meta), 28 data tables, 10 meta tables, 30 views, 10 SPs, 3 functions
 - **6 pipelines**: parent-child DAG orchestration, DQ gates between layers
 - **1 generic SP** handles 8 load patterns for all 28 tables
 - **Auto-trigger**: daily 2AM UTC+7

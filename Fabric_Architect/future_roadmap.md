@@ -1,6 +1,6 @@
 # Future Roadmap — Updates, Scale & Optimization
 > Independent assessment from Principal Solution Architect & Data Engineer perspective
-> Created: 2026-04-17 | Updated: 2026-04-18 | Architecture v9 score: 7.9/10
+> Created: 2026-04-17 | Updated: 2026-04-18 | Architecture v9 score: 8.2/10
 
 ---
 
@@ -12,10 +12,10 @@
 | Code quality | 8/10 | Clean T-SQL, error handling, retry logic |
 | Documentation | 9/10 | FULL_CONTEXT.md, onboarding guide, 13 docs |
 | Scalability | 7/10 | Design scales (multi-mart planned), unproven > 28 tables |
-| Reliability | 8/10 | DQ gates (30 rules, 3 check types, pipeline-driven) + 3-layer retry. No rollback/backup |
+| Reliability | 8.5/10 | DQ gates (54 rules, 4 check types, pipeline-driven) + 3-layer retry + performance baseline + cost monitoring. No rollback/backup |
 | Security | 6/10 | Azure AD auth, no RLS, no schema change audit |
 | Operability | 6/10 | Runbook created, auto-trigger enabled. Alerting blocked (needs IT). Bus factor improving |
-| **Overall** | **7.9/10** | Architecture excellent. DQ solid. Ops improved (runbook + auto-trigger). Alerting blocked by IT |
+| **Overall** | **8.2/10** | Architecture excellent. DQ expanded (54 rules). Ops improved. Cost + perf monitoring active. Alerting blocked by IT |
 
 ---
 
@@ -27,7 +27,7 @@
 | 2 | Metadata-driven (sp_registry) | Single source of truth. Add table = 2 SQL statements |
 | 3 | DAG wave computation | Auto-scale max 30 waves. Correct dependency resolution |
 | 4 | Parent-child pipeline | MS recommended. Dynamic wave count, parallel within wave |
-| 5 | DQ gates between layers | 30 rules, 3 check types (completeness/row_count/freshness), pipeline-driven ForEach. CRITICAL → STOP, WARNING → log only. 30/30 PASS |
+| 5 | DQ gates between layers | 54 rules, 4 check types (completeness/row_count/freshness/uniqueness), pipeline-driven ForEach. CRITICAL → STOP, WARNING → log only. 54/54 PASS |
 | 6 | Pure T-SQL | Zero Spark cold-start. Deterministic deploy. Git-friendly |
 | 7 | Auto-built lineage | source_objects → 52 edges, rebuilt every run |
 | 8 | Smart skip scheduling | Monthly tables auto-skip. Saves compute |
@@ -48,7 +48,7 @@
 | 6 | No data contracts | Medium | Source schema change → silent failure or wrong data |
 | 7 | Overwrite = no history | Medium | 17/18 bronze tables DROP+CTAS. No rollback possible |
 | 8 | Warehouse lock-in | Low | Pure Fabric. Migration → full rewrite (acceptable if Fabric is company strategy) |
-| 9 | ~~DQ engine limited~~ **RESOLVED** | ~~Low~~ | 3/7 check types active (completeness, row_count, freshness). 30 rules, 30/30 PASS. Bug fixed 2026-04-17: WHILE loop → pipeline-driven `usp_check_dq_single` + `pl_dq_check`. 4 types reserved for future expansion |
+| 9 | ~~DQ engine limited~~ **RESOLVED** | ~~Low~~ | 4/7 check types active (completeness, row_count, freshness, uniqueness). 54 rules, 54/54 PASS. Phase 3 expansion 2026-04-18: +8 uniqueness/freshness rules. 3 types reserved (referential_integrity, validity, custom_sql) |
 | 10 | Manual sp_registry seeding | Low | No UI, no validation. Error-prone at scale |
 
 ---
@@ -94,7 +94,7 @@
 |---|------|-----|--------|-----|
 | 11 | **Multi-mart parallel** | N projects in 1 pipeline. Cost = max(mart) not sum(marts) | 2 days | Already designed in multi_mart_scale_architecture.md. Master ForEach projects → child pipelines per layer |
 | 12 | **Data contracts** | Source schema change detection before it breaks ETL | 3 days | Before bronze load: compare source INFORMATION_SCHEMA vs expected schema from sp_registry. Alert on drift |
-| 13 | **DQ expansion** | Activate remaining 4 check types | 1-2 days | Engine ready. Add: uniqueness on silver PKs, referential_integrity silver→bronze, validity on enum columns, custom_sql for complex rules. Freshness already active on gold |
+| 13 | ~~**DQ expansion**~~ | ~~Activate remaining check types~~ | ~~1-2 days~~ | **DONE 2026-04-18** — +8 rules (uniqueness on SLV/GLD PKs, freshness on SLV/GLD). 30→54 rules, 3→4 check types. Pipeline tested 54/54 PASS. 3 types reserved (referential_integrity, validity, custom_sql) |
 | 14 | **Cost monitoring** | Track CU consumption per pipeline run | 1 day | Fabric capacity metrics API → log CU per run → alert if over budget |
 | 15 | **Performance baseline** | Detect degradation before users complain | 2 days | Track avg duration per SP in sp_run_history. Alert if > 2x baseline. Requires append-only history (Phase 1 item 2) |
 
