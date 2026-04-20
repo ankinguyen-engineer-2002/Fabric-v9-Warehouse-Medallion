@@ -69,7 +69,7 @@
 | Compute | PySpark Notebooks | T-SQL Stored Procedures |
 | ETL logic | Python variables (COLUMN_SQL, SQL_TRANSFORM) | CREATE VIEW statements |
 | Orchestration | Pipeline → ForEach → Notebook | Pipeline → ForEach → EXEC SP |
-| Metadata | utl_pipeline_metadata (1 table) | meta schema (7 tables + 9 SPs) |
+| Metadata | utl_pipeline_metadata (1 table) | meta schema (7 tables + 10 SPs) |
 | DAG | execution_order (static integer) | depends_on + auto wave computation |
 | DQ | Python nb_dq_engine (hardcoded) | Config-driven dq_rules table |
 | Cold start | 30-60s Spark init per notebook | 0s — warehouse always warm |
@@ -176,7 +176,7 @@ Source Systems (Enterprise_Lakehouse via 3-part naming)
     gld_fact_forecast_kpi (CTE chain, LEFT JOINs)
     |
     v
-[Meta Layer — 7 tables, 9 SPs, 3 functions, 2 views]
+[Meta Layer — 7 tables, 10 SPs, 3 functions, 3 views]
     Config (sp_registry) + Log (sp_run_history) + DQ + DAG + Lineage + Timezone
     |
     v
@@ -845,7 +845,7 @@ Maps Enterprise team's `fn_GetDate` function.
 
 ## 20. Enterprise Architecture — US Team
 
-Clone: `Enterprise_Architect/data-edw-fabric/` (2578 files, private repo `afi-migration-pilot`)
+Clone: `enterprise_reference/data-edw-fabric/` (2578 files, private repo `afi-migration-pilot`)
 
 ### Key Framework: ETL_Framework
 
@@ -1008,7 +1008,7 @@ gh repo clone afi-migration-pilot/data-edw-fabric  # Use gh CLI (not git clone)
 | Data | CSV exports from Warehouse (auto-refresh TTL=600s) |
 | Tabs | 3: Table Lineage DAG, ETL Flow by Table, View Definitions |
 | Silver waves | slv0 (light blue), slv1 (blue), slv2 (dark blue) |
-| Source | `Fabric_Architect/master_lineage/` folder |
+| Source | `lineage_explorer/` folder |
 | Files | app.py, templates/lineage.html, data/*.csv, requirements.txt |
 
 ### Deploy Issues Resolved
@@ -1042,37 +1042,40 @@ Fabric-v9-Warehouse-Medallion/
 ├── _private/
 │   └── portfolio_architecture_detail.md  (Portfolio version, gitignored)
 │
-├── Fabric_Architect/
-│   ├── Architecture_v9_EN.docx     (Original architecture doc)
-│   ├── v9_ClaudeCode_Setup_Guide.docx
-│   ├── all_10_notebooks_source.txt (v8 notebook source code)
-│   ├── files.zip / files/          (Supporting files)
-│   │
-│   ├── master_lineage/             (Streamlit lineage app)
-│   │   ├── app.py
-│   │   ├── requirements.txt
-│   │   ├── templates/lineage.html  (React SVG DAG renderer)
-│   │   └── data/
-│   │       ├── lineage.csv         (52 edges)
-│   │       ├── registry.csv        (28 tables config)
-│   │       ├── views.csv           (all view definitions)
-│   │       └── run_history.csv     (recent SP runs)
-│   │
-│   ├── template_architecture.md    (Generic template)
-│   ├── template_pipeline_guide.md  (Generic template)
-│   ├── template_setup_guide.md     (Generic template)
-│   ├── v9_architecture_supplychain.md  (Project-specific, all 77 objects, IDs)
-│   ├── v9_pipeline_supplychain.md  (Project-specific, execution trace)
-│   ├── v9_setup_supplychain.md     (Project-specific, implementation log)
-│   ├── new_table_onboarding_guide.md
-│   ├── scheduling_and_concurrency.md
-│   ├── sqlproj_validation_guide.md
-│   ├── timezone_sync_guide.md
-│   ├── generic_sp_migration_plan.md
-│   ├── multi_mart_scale_architecture.md
-│   └── Enterprise_vs_Fabric_comparison.md
+├── diagrams/
+│   ├── v9_presentation.mmd         (Stakeholder overview)
+│   ├── template_full_architecture.mmd  (DE/Architect detail)
+│   ├── v9_supplychain_full_architecture.mmd  (v9 actual)
+│   └── svg/                        (6 SVG architecture diagrams)
 │
-└── Enterprise_Architect/
+├── docs/
+│   ├── templates/                  (Generic, apply to any project)
+│   │   ├── architecture.md
+│   │   ├── pipeline_guide.md
+│   │   └── setup_guide.md
+│   ├── supplychain/                (Project-specific v9)
+│   │   ├── architecture.md         (All 85 objects, IDs)
+│   │   ├── pipeline.md             (Execution trace)
+│   │   └── setup.md                (Implementation log)
+│   ├── operations/                 (How-to guides)
+│   │   ├── onboarding.md, runbook.md, alerting.md
+│   │   ├── scheduling.md, timezone_sync.md
+│   │   ├── sqlproj_validation.md, generic_sp_migration.md
+│   ├── enterprise/                 (Scale + alignment)
+│   │   ├── multi_mart_scale.md, fabric_vs_enterprise.md, roadmap.md
+│   └── archive/                    (.docx, notebooks_source.txt)
+│
+├── lineage_explorer/               (Streamlit lineage app)
+│   ├── app.py
+│   ├── requirements.txt
+│   ├── templates/lineage.html      (React SVG DAG renderer)
+│   └── data/                       (Auto-refreshed every 10 min by GitHub Actions)
+│       ├── lineage.csv             (52 edges)
+│       ├── registry.csv            (28 tables config)
+│       ├── views.csv               (28 view SQL definitions)
+│       └── run_history.csv         (recent SP runs)
+│
+└── enterprise_reference/
     └── data-edw-fabric/            (2578 files, Enterprise .sqlproj clone)
 ```
 
@@ -1124,7 +1127,7 @@ File: `.github/workflows/refresh_lineage_data.yml`
 
 ### 2026-04-13 — Initial Build
 - Set up project repo, uploaded architecture docs (.docx)
-- Created all 4 schemas, 7 meta tables, 9 SPs
+- Created all 4 schemas, 7 meta tables, 10 SPs
 - Built 18 bronze views + tables, 8 silver views + tables, 2 gold tables
 - Migrated from 28 per-table SPs → 1 generic SP (meta.usp_generic_load)
 - Created 7 pipelines via Fabric REST API (5 original + pl_dq_check + pl_sc_mart)
@@ -1172,7 +1175,7 @@ File: `.github/workflows/refresh_lineage_data.yml`
 
 If need to rebuild from scratch:
 
-1. **Phase 0**: CREATE SCHEMA meta → 7 tables → 9 SPs + 3 functions
+1. **Phase 0**: CREATE SCHEMA meta → 7 tables → 10 SPs + 3 functions
 2. **Phase 1**: 18 bronze views → EXEC meta.usp_generic_load for each table
 3. **Phase 1.5**: Seed sp_registry (18 rows) + dq_rules + run DQ
 4. **Phase 2**: 8 silver views → EXEC meta.usp_generic_load (DAG order)
@@ -1216,35 +1219,35 @@ If need to rebuild from scratch:
 | runtime.txt | python-3.11 (for Streamlit Cloud) |
 | .gitignore | Large files, .claude/, _private/, .DS_Store |
 
-### Fabric_Architect/ — Docs
+### docs/ — Documentation
 
-| File | Type | Purpose |
+| Path | Type | Purpose |
 |------|------|---------|
-| template_architecture.md | Template | Generic architecture reference |
-| template_pipeline_guide.md | Template | Generic pipeline execution trace |
-| template_setup_guide.md | Template | Phase-by-phase setup DDL/SP templates |
-| v9_architecture_supplychain.md | Project | All 77 objects: names, rows, IDs, sources |
-| v9_pipeline_supplychain.md | Project | Execution trace: actual SP names, durations |
-| v9_setup_supplychain.md | Project | Implementation log: Spark→T-SQL conversions |
-| new_table_onboarding_guide.md | Guide | How DA/DE adds new ETL table (7 steps) |
-| scheduling_and_concurrency.md | Guide | Cron, smart skip, concurrency, snapshot fix |
-| sqlproj_validation_guide.md | Guide | 3 SQL validation approaches |
-| timezone_sync_guide.md | Guide | UTC+CST+VN, fn_GetDate mapping |
-| generic_sp_migration_plan.md | Guide | Migration: 28 SPs → 1 generic SP |
-| multi_mart_scale_architecture.md | Guide | N marts parallel, cross-mart deps |
-| Enterprise_vs_Fabric_comparison.md | Guide | Enterprise ETL framework vs v9 |
+| docs/templates/architecture.md | Template | Generic architecture reference |
+| docs/templates/pipeline_guide.md | Template | Generic pipeline execution trace |
+| docs/templates/setup_guide.md | Template | Phase-by-phase setup DDL/SP templates |
+| docs/supplychain/architecture.md | Project | All ~85 objects: names, rows, IDs, sources |
+| docs/supplychain/pipeline.md | Project | Execution trace: actual SP names, durations |
+| docs/supplychain/setup.md | Project | Implementation log: Spark→T-SQL conversions |
+| docs/operations/onboarding.md | Guide | How DA/DE adds new ETL table (2 steps) |
+| docs/operations/scheduling.md | Guide | Cron, smart skip, concurrency, snapshot fix |
+| docs/operations/sqlproj_validation.md | Guide | 3 SQL validation approaches |
+| docs/operations/timezone_sync.md | Guide | UTC+CST+VN, fn_GetDate mapping |
+| docs/operations/generic_sp_migration.md | Guide | Migration: 28 SPs → 1 generic SP |
+| docs/enterprise/multi_mart_scale.md | Guide | N marts parallel, cross-mart deps |
+| docs/enterprise/fabric_vs_enterprise.md | Guide | Enterprise ETL framework vs v9 |
 
-### Fabric_Architect/master_lineage/ — Streamlit App
+### lineage_explorer/ — Streamlit App
 
 | File | Purpose |
 |------|---------|
 | app.py | Main Streamlit app (3 tabs) |
 | requirements.txt | Python dependencies |
 | templates/lineage.html | React SVG DAG renderer |
-| data/lineage.csv | 52 lineage edges |
-| data/registry.csv | 28 tables config |
-| data/views.csv | All view SQL definitions |
-| data/run_history.csv | Recent SP execution history |
+| data/lineage.csv | 52 lineage edges (auto-refresh 10min) |
+| data/registry.csv | 28 tables config (auto-refresh 10min) |
+| data/views.csv | 28 view SQL definitions (auto-refresh 10min) |
+| data/run_history.csv | Recent SP execution history (auto-refresh 10min) |
 
 ---
 

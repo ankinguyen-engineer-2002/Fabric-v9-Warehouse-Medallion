@@ -18,7 +18,7 @@ flowchart LR
         B["bronze\n18 tables\nraw mirror from source"]
         S["silver\n8 tables\nclean + join + business rules"]
         G["gold\n2 tables\nBI-ready facts"]
-        M["meta\n7 tables + 10 SPs + 2 fn + 2 views\nconfig / log / DQ / DAG / generic load"]
+        M["meta\n7 tables + 10 SPs + 3 fn + 3 views\nconfig / log / DQ / DAG / generic load"]
         B --> S --> G
     end
 
@@ -34,7 +34,7 @@ flowchart LR
 | `bronze` | Raw mirror from Enterprise_Lakehouse | 18 Tables + 17 Views (ETL logic) |
 | `silver` | Clean, conform, join, apply business rules | 8 Tables + 8 Views |
 | `gold` | Business-ready facts/dimensions for Power BI | 2 Tables + 2 Views |
-| `meta` | System control plane | 7 Tables + 10 SPs (incl. usp_generic_load, usp_check_dq_single) + 2 Functions + 2 Views |
+| `meta` | System control plane | 7 Tables + 10 SPs (incl. usp_generic_load, usp_check_dq_single) + 3 Functions + 3 Views |
 
 ### 1.3 Design Principles
 

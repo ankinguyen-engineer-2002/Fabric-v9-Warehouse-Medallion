@@ -117,7 +117,7 @@ jobs:
       - name: Install sqlfluff
         run: pip install sqlfluff
       - name: Lint SQL files
-        run: sqlfluff lint Fabric_Architect/**/*.sql --dialect tsql
+        run: sqlfluff lint docs/**/*.sql --dialect tsql
 ```
 
 **Pros**: Quick setup, runs on every PR

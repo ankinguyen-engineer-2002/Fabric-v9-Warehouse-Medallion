@@ -215,7 +215,7 @@ Click vao trigger **When an HTTP request is received**, dan JSON Schema vao:
     {
       "type": "Action.OpenUrl",
       "title": "📖 Open Runbook",
-      "url": "https://github.com/AricNguyen/20260413_Fabric_Refactor_Architect/blob/main/Fabric_Architect/runbook_operations.md"
+      "url": "https://github.com/AricNguyen/20260413_Fabric_Refactor_Architect/blob/main/docs/operations/runbook.md"
     }
   ]
 }
@@ -264,7 +264,7 @@ Click vao trigger **When an HTTP request is received**, dan JSON Schema vao:
   <li>Check <code>meta.sp_run_history</code> for failed tables</li>
   <li>Check <code>meta.dq_results</code> for DQ failures</li>
   <li>Re-run pipeline if transient error</li>
-  <li>See <a href="https://github.com/AricNguyen/20260413_Fabric_Refactor_Architect/blob/main/Fabric_Architect/runbook_operations.md">Runbook</a> for troubleshooting</li>
+  <li>See <a href="https://github.com/AricNguyen/20260413_Fabric_Refactor_Architect/blob/main/docs/operations/runbook.md">Runbook</a> for troubleshooting</li>
 </ol>
 ```
 
