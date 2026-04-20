@@ -1,0 +1,2230 @@
+
+================================================================================
+NOTEBOOK: brz_engine
+================================================================================
+# Fabric notebook source
+
+# METADATA ********************
+
+# META {
+# META   "kernel_info": {
+# META     "name": "synapse_pyspark"
+# META   },
+# META   "dependencies": {}
+# META }
+
+# CELL ********************
+
+# ==============================================================================
+# [ENGINE] brz_engine — KHÔNG CHỈNH
+# Nhận từ nb_etl: TARGET_TABLE, SOURCE_TABLE, COLUMN_SQL
+# ==============================================================================
+import time, calendar, random as _random
+from datetime import datetime, timedelta
+from pyspark.sql import functions as F
+from delta.tables import DeltaTable
+
+start_time   = time.time()
+METADATA_TBL = "SupplyChain_Lakehouse.dbo.utl_pipeline_metadata"
+LAKEHOUSE    = "SupplyChain_Lakehouse"
+ROW_LIMIT    = None
+SOURCE_BASE  = (
+    "abfss://c8d9fc83-18b6-4e1d-8264-0b49eed36fe0"
+    "@onelake.dfs.fabric.microsoft.com"
+    "/584e7d2c-46ca-49dc-bb6c-68df6ef4f424/Tables"
+)
+
+SOURCE_PATH = f"{SOURCE_BASE}/{SOURCE_TABLE}"
+
+# ── 1. FETCH CONFIG ────────────────────────────────────────────────────────────
+print(f"🔍 Fetching config for: {TARGET_TABLE}")
+config_df = spark.sql(f"SELECT * FROM {METADATA_TBL} WHERE table_name = '{TARGET_TABLE}'")
+if config_df.count() == 0:
+    raise Exception(f"❌ '{TARGET_TABLE}' chưa được đăng ký trong utl_pipeline_metadata!")
+
+config         = config_df.collect()[0]
+LOAD_TYPE      = config['load_type']
+WATERMARK_COL  = config['watermark_column']
+PRIMARY_KEY    = config['primary_key']
+FREQ           = config['frequency']
+LAST_WM        = config['last_watermark_value']
+NEXT_RUN       = config['next_run_time']
+IS_ACTIVE      = config['is_active']
+SCHEDULED_HOUR = config['scheduled_hour']
+print(f"📋 Config | load_type={LOAD_TYPE} | watermark_col={WATERMARK_COL} | last_wm={LAST_WM} | freq={FREQ}")
+
+# ── 2. SCHEDULING GATE ─────────────────────────────────────────────────────────
+if IS_ACTIVE == 0:
+    print("⏸️  Skipped: is_active = 0")
+    notebookutils.notebook.exit("skipped:inactive")
+
+now = datetime.utcnow()
+if NEXT_RUN and now < NEXT_RUN.replace(tzinfo=None):
+    remaining = round((NEXT_RUN.replace(tzinfo=None) - now).total_seconds() / 60, 1)
+    print(f"⏳ Skipped: next run at {NEXT_RUN} UTC ({remaining} min remaining)")
+    notebookutils.notebook.exit("skipped:not_due")
+
+# ── 3. SPARK CONFIG ────────────────────────────────────────────────────────────
+spark.conf.set("spark.sql.adaptive.enabled", "true")
+spark.conf.set("spark.microsoft.delta.optimizeWrite.enabled", "true")
+spark.conf.set("spark.microsoft.delta.vorder.enabled", "true")
+spark.conf.set("spark.sql.parquet.datetimeRebaseModeInRead", "LEGACY")
+spark.conf.set("spark.sql.parquet.int96RebaseModeInRead", "LEGACY")
+
+# ── 4. INGEST SOURCE ───────────────────────────────────────────────────────────
+print(f"📥 Reading: {SOURCE_PATH}")
+try:
+    df_raw = spark.read.format("delta") \
+        .option("mergeSchema", "true") \
+        .load(SOURCE_PATH)
+except Exception as e:
+    raise Exception(f"❌ Không đọc được source: {SOURCE_PATH}\n{str(e)}")
+
+if ROW_LIMIT:
+    df_raw = df_raw.limit(ROW_LIMIT)
+    print(f"⚠️  Dev mode: limited to {ROW_LIMIT:,} rows")
+
+if LOAD_TYPE in ('incremental', 'upsert') and WATERMARK_COL and LAST_WM:
+    df_raw = df_raw.filter(F.col(WATERMARK_COL) > F.lit(LAST_WM))
+    print(f"🔄 Incremental filter: {WATERMARK_COL} > {LAST_WM}")
+elif LOAD_TYPE == 'incremental' and WATERMARK_COL and not LAST_WM:
+    print(f"🔄 Incremental first run: loading all data")
+
+df_raw.createOrReplaceTempView("raw_source")
+
+# ── 5. TRANSFORM ───────────────────────────────────────────────────────────────
+df_final     = spark.sql(COLUMN_SQL)
+record_count = df_final.count()
+print(f"📋 Records to process: {record_count:,}")
+
+# ── 6. WRITE ───────────────────────────────────────────────────────────────────
+FULL_TARGET = f"{LAKEHOUSE}.dbo.{TARGET_TABLE}"
+
+if record_count == 0:
+    print("☕ No new records. Skipping write.")
+else:
+    if LOAD_TYPE == 'overwrite':
+        print(f"🔄 OVERWRITE → {FULL_TARGET}")
+        df_final.write.format("delta") \
+            .mode("overwrite") \
+            .option("overwriteSchema", "true") \
+            .saveAsTable(FULL_TARGET)
+
+    elif LOAD_TYPE == 'incremental':
+        print(f"➕ INCREMENTAL APPEND → {FULL_TARGET}")
+        df_final.write.format("delta") \
+            .mode("append") \
+            .saveAsTable(FULL_TARGET)
+
+    elif LOAD_TYPE == 'upsert':
+        pk_list   = [k.strip() for k in PRIMARY_KEY.split(",")]
+        join_cond = " AND ".join([f"t.{k} = s.{k}" for k in pk_list])
+        print(f"🔀 UPSERT → {FULL_TARGET} ON ({', '.join(pk_list)})")
+        if DeltaTable.isDeltaTable(spark, f"Tables/{TARGET_TABLE}"):
+            DeltaTable.forName(spark, FULL_TARGET).alias("t") \
+                .merge(df_final.alias("s"), join_cond) \
+                .whenMatchedUpdateAll() \
+                .whenNotMatchedInsertAll() \
+                .execute()
+        else:
+            print(f"⚠️  Target chua ton tai, tao moi bang overwrite")
+            df_final.write.format("delta").mode("overwrite").saveAsTable(FULL_TARGET)
+
+    else:
+        raise Exception(f"❌ load_type khong hop le: '{LOAD_TYPE}'")
+
+    spark.sql(f"OPTIMIZE {FULL_TARGET}")
+
+# ── 7. CALC NEXT RUN ───────────────────────────────────────────────────────────
+def calc_next_run(freq, scheduled_hour):
+    freq = (freq or '').lower()
+    now  = datetime.utcnow()
+    h    = scheduled_hour if scheduled_hour is not None else 2
+
+    if freq == 'daily':
+        next_day = now.date() + timedelta(days=1)
+        return datetime(next_day.year, next_day.month, next_day.day, h, 0, 0)
+    if freq == 'hourly':
+        return now + timedelta(hours=1)
+    if freq == 'weekly':
+        next_week = now.date() + timedelta(weeks=1)
+        return datetime(next_week.year, next_week.month, next_week.day, h, 0, 0)
+    if freq == 'monthly':
+        y = now.year + (now.month // 12)
+        m = (now.month % 12) + 1
+        d = min(now.day, calendar.monthrange(y, m)[1])
+        return datetime(y, m, d, h, 0, 0)
+    return now + timedelta(days=1)
+
+new_wm = LAST_WM
+if WATERMARK_COL and WATERMARK_COL in df_raw.columns and record_count > 0:
+    new_wm = spark.read.format("delta") \
+        .option("mergeSchema", "true") \
+        .load(SOURCE_PATH) \
+        .agg(F.max(WATERMARK_COL)) \
+        .collect()[0][0]
+
+new_next_run  = calc_next_run(FREQ, SCHEDULED_HOUR)
+duration_secs = round(time.time() - start_time)
+
+# ── 8. UPDATE METADATA — Exponential Backoff + Full Jitter ────────────────────
+def update_metadata_with_retry(spark, metadata_tbl, target_table,
+                                new_wm, record_count, new_next_run, duration_secs,
+                                source_tables_str="",
+                                max_retries=15, base=2.0, cap=60.0):
+    for attempt in range(max_retries):
+        try:
+            # ✅ Format pipeline_notes dựa trên record_count
+            if record_count == 0:
+                pipeline_notes = 'No new records to process'
+            else:
+                pipeline_notes = f'Processed {record_count:,} rows in {duration_secs}s'
+            
+            safe_notes = pipeline_notes.replace("'", "''")
+            
+            spark.sql(f"""
+                UPDATE {metadata_tbl} SET
+                    last_watermark_value = '{new_wm}',
+                    last_load_date       = current_timestamp(),
+                    rows_loaded          = {record_count},
+                    status               = 'success',
+                    next_run_time        = '{new_next_run}',
+                    error_message        = NULL,
+                    pipeline_notes       = '{safe_notes}',
+                    source_tables        = '{source_tables_str}'
+                WHERE table_name = '{target_table}'
+            """)
+            if attempt > 0:
+                print(f"✅ Metadata updated after {attempt} retries")
+            return
+
+        except Exception as e:
+            is_conflict = any(x in str(e) for x in [
+                'ConcurrentAppendException',
+                'ConcurrentDeleteReadException',
+                'ConcurrentTransactionException'
+            ])
+            if is_conflict and attempt < max_retries - 1:
+                ceiling = min(cap, base * (2 ** attempt))
+                wait    = _random.uniform(0, ceiling)
+                print(f"⚠️ Conflict attempt {attempt+1}/{max_retries} → wait {wait:.1f}s")
+                time.sleep(wait)
+            else:
+                raise
+
+# ── Extract source tables for lineage ──
+source_tables_str = f"[external] {SOURCE_TABLE}"
+
+update_metadata_with_retry(
+    spark         = spark,
+    metadata_tbl  = METADATA_TBL,
+    target_table  = TARGET_TABLE,
+    new_wm        = new_wm,
+    record_count  = record_count,
+    new_next_run  = new_next_run,
+    duration_secs = duration_secs,
+    source_tables_str = source_tables_str
+)
+
+print(f"✅ Done | {record_count:,} rows | {duration_secs}s | Next: {new_next_run} UTC")
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+
+================================================================================
+NOTEBOOK: gld_engine
+================================================================================
+# Fabric notebook source
+
+# METADATA ********************
+
+# META {
+# META   "kernel_info": {
+# META     "name": "synapse_pyspark"
+# META   },
+# META   "dependencies": {}
+# META }
+
+# CELL ********************
+
+# ==============================================================================
+# [ENGINE] gld_engine — KHÔNG CHỈNH
+# 
+# Chức năng:
+# 1. Auto-detect first run (full load) vs subsequent (full reload)
+# 2. Scan SQL_AGGREGATE để detect:
+#    - JOIN types (LEFT, INNER, CROSS, FULL, RIGHT)
+#    - WHERE clauses (filters)
+#    - GROUP BY aggregation
+# 3. Log detailed transformation:
+#    - Source counts (before aggregation)
+#    - Final row counts
+#    - Aggregation ratio (input vs output)
+# 4. Handle LOAD_TYPE: overwrite (full reload every run)
+# ==============================================================================
+import time, calendar, random as _random
+from datetime import datetime, timedelta
+from pyspark.sql import functions as F
+from delta.tables import DeltaTable
+import re
+
+start_time   = time.time()
+METADATA_TBL = "SupplyChain_Lakehouse.dbo.utl_pipeline_metadata"
+LAKEHOUSE    = "SupplyChain_Lakehouse"
+ROW_LIMIT    = None
+
+# ── 1. FETCH CONFIG ────────────────────────────────────────────────────────────
+print(f"🔍 Fetching config for: {TARGET_TABLE}")
+config_df = spark.sql(f"SELECT * FROM {METADATA_TBL} WHERE table_name = '{TARGET_TABLE}'")
+if config_df.count() == 0:
+    raise Exception(f"❌ '{TARGET_TABLE}' chưa được đăng ký trong utl_pipeline_metadata!")
+
+config         = config_df.collect()[0]
+LOAD_TYPE      = config['load_type']
+FREQ           = config['frequency']
+NEXT_RUN       = config['next_run_time']
+IS_ACTIVE      = config['is_active']
+SCHEDULED_HOUR = config['scheduled_hour']
+print(f"📋 Config | load_type={LOAD_TYPE} | freq={FREQ}")
+
+# ── 2. SCHEDULING GATE ─────────────────────────────────────────────────────────
+if IS_ACTIVE == 0:
+    print("⏸️  Skipped: is_active = 0")
+    notebookutils.notebook.exit("skipped:inactive")
+
+now = datetime.utcnow()
+if NEXT_RUN and now < NEXT_RUN.replace(tzinfo=None):
+    remaining = round((NEXT_RUN.replace(tzinfo=None) - now).total_seconds() / 60, 1)
+    print(f"⏳ Skipped: next run at {NEXT_RUN} UTC ({remaining} min remaining)")
+    notebookutils.notebook.exit("skipped:not_due")
+
+# ── 3. SPARK CONFIG ────────────────────────────────────────────────────────────
+spark.conf.set("spark.sql.adaptive.enabled", "true")
+spark.conf.set("spark.microsoft.delta.optimizeWrite.enabled", "true")
+spark.conf.set("spark.microsoft.delta.vorder.enabled", "true")
+spark.conf.set("spark.sql.parquet.datetimeRebaseModeInRead", "LEGACY")
+spark.conf.set("spark.sql.parquet.int96RebaseModeInRead", "LEGACY")
+
+# ── 4. SCAN SQL FOR JOIN/WHERE/GROUP BY ────────────────────────────────────────
+print(f"📋 Scanning SQL_AGGREGATE for operations...")
+
+# Extract JOIN types (order matters)
+join_pattern = r'(?:INNER\s+|LEFT\s+|RIGHT\s+|FULL\s+|CROSS\s+)?JOIN\s+(?:[^\s\.]+\.)?([^\s]+)\s+([a-z])'
+joins = re.findall(join_pattern, SQL_AGGREGATE, re.IGNORECASE)
+
+# Extract table names (FROM + all JOINs in order)
+from_pattern = r'FROM\s+(?:[^\s\.]+\.)?([^\s]+)\s+([a-z])'
+from_match = re.search(from_pattern, SQL_AGGREGATE, re.IGNORECASE)
+
+# Check for WHERE clause
+has_where = bool(re.search(r'\bWHERE\b', SQL_AGGREGATE, re.IGNORECASE))
+
+# Check for GROUP BY
+has_group_by = bool(re.search(r'\bGROUP\s+BY\b', SQL_AGGREGATE, re.IGNORECASE))
+
+# Build operation chain
+operation_chain = []
+if from_match:
+    operation_chain.append(f"FROM_{from_match.group(1).upper()}")
+
+for join_type, join_table in joins:
+    if not join_type.strip():
+        join_type = "INNER"
+    else:
+        join_type = join_type.strip().upper()
+    operation_chain.append(f"{join_type}_JOIN_{join_table.upper()}")
+
+if has_where:
+    operation_chain.append("WHERE_FILTER")
+
+if has_group_by:
+    operation_chain.append("GROUP_BY")
+
+print(f"  📊 Operations: {' → '.join(operation_chain)}")
+print(f"  📊 JOINs found: {len(joins)} (types: {', '.join(set(j[0].strip().upper() or 'INNER' for j in joins))})")
+print(f"  📊 Has WHERE: {has_where}")
+print(f"  📊 Has GROUP BY: {has_group_by}")
+
+# ── 5. GET SOURCE ROW COUNTS (BEFORE aggregation) ───────────────────────────────
+print(f"📊 Counting source rows (before aggregation)...")
+
+source_counts = {}
+try:
+    # All tables in SQL (FROM + JOINs)
+    all_tables = []
+    if from_match:
+        all_tables.append(from_match.group(1))
+    all_tables.extend([j[1] for j in joins])
+    
+    for table_name in set(all_tables):
+        try:
+            source_count_sql = f"SELECT COUNT(*) as cnt FROM {LAKEHOUSE}.dbo.{table_name}"
+            source_count = spark.sql(source_count_sql).collect()[0]['cnt']
+            source_counts[table_name] = source_count
+            print(f"  📊 {table_name}: {source_count:,} rows")
+        except:
+            pass
+    
+except Exception as e:
+    print(f"  ⚠️  Could not extract source counts: {str(e)}")
+
+# ── 6. AGGREGATE (GLD: execute SQL_AGGREGATE) ──────────────────────────────────
+print(f"📋 Executing SQL_AGGREGATE (full reload)...")
+print(f"  Operations: {' → '.join(operation_chain)}")
+
+try:
+    df_final = spark.sql(SQL_AGGREGATE)
+except Exception as e:
+    raise Exception(f"❌ Không chạy được SQL_AGGREGATE:\n{str(e)}")
+
+if ROW_LIMIT:
+    df_final = df_final.limit(ROW_LIMIT)
+    print(f"⚠️  Dev mode: limited to {ROW_LIMIT:,} rows")
+
+record_count = df_final.count()
+print(f"📊 Final result (after aggregation): {record_count:,} rows")
+
+# ── 7. VALIDATION: Aggregation Ratio ───────────────────────────────────────────
+print(f"🔍 Validating aggregation...")
+
+warnings = []
+if record_count == 0:
+    warnings.append("NO_OUTPUT")
+
+# Calculate aggregation ratio (input vs output)
+primary_table = list(source_counts.keys())[0] if source_counts else None
+if primary_table and source_counts[primary_table] > 0:
+    input_count = source_counts[primary_table]
+    ratio = (record_count / input_count) * 100
+    
+    if has_group_by:
+        print(f"  ✓ GROUP BY: {input_count:,} → {record_count:,} rows (ratio: {ratio:.1f}%)")
+    else:
+        if ratio < 100:
+            print(f"  ℹ️ Aggregation reduced rows: {ratio:.1f}%")
+        else:
+            print(f"  ℹ️ No reduction: {ratio:.1f}%")
+
+# ── 8. WRITE ───────────────────────────────────────────────────────────────────
+FULL_TARGET = f"{LAKEHOUSE}.dbo.{TARGET_TABLE}"
+
+if record_count == 0:
+    print("☕ No records. Skipping write.")
+    pipeline_notes = "No records"
+else:
+    # GLD: Always OVERWRITE (full reload)
+    print(f"🔄 OVERWRITE → {FULL_TARGET} (full reload)")
+    df_final.write.format("delta") \
+        .mode("overwrite") \
+        .option("overwriteSchema", "true") \
+        .option("mergeSchema", "true") \
+        .saveAsTable(FULL_TARGET)
+
+    # OPTIMIZE always for aggregate tables
+    print(f"⚡ OPTIMIZE {FULL_TARGET}")
+    spark.sql(f"OPTIMIZE {FULL_TARGET}")
+    
+    # ── BUILD DETAILED PIPELINE NOTES ──────────────────────────────────────────
+    # Format: MODE | OPERATIONS | BEFORE_COUNTS → AFTER | RATIO | WARNINGS
+    source_counts_str = " | ".join([f"{t}={c:,}" for t, c in source_counts.items()])
+    ops_str = " → ".join(operation_chain) if operation_chain else "SIMPLE_SELECT"
+    warning_str = f" [⚠️  {','.join(warnings)}]" if warnings else " [✓]"
+    
+    if has_group_by and source_counts and primary_table:
+        primary_count = source_counts[primary_table]
+        ratio = (record_count / primary_count) * 100
+        pipeline_notes = f"FULL | {ops_str} | BEFORE:{source_counts_str} → AFTER:{record_count:,} (ratio {ratio:.1f}%){warning_str}"
+    else:
+        pipeline_notes = f"FULL | {ops_str} | BEFORE:{source_counts_str} → AFTER:{record_count:,}{warning_str}"
+    
+    print(f"📝 Pipeline notes: {pipeline_notes}")
+
+# ── 9. CALC NEXT RUN ───────────────────────────────────────────────────────────
+def calc_next_run(freq, scheduled_hour):
+    freq = (freq or '').lower()
+    now  = datetime.utcnow()
+    h    = scheduled_hour if scheduled_hour is not None else 2
+
+    if freq == 'daily':
+        next_day = now.date() + timedelta(days=1)
+        return datetime(next_day.year, next_day.month, next_day.day, h, 0, 0)
+    if freq == 'hourly':
+        return now + timedelta(hours=1)
+    if freq == 'weekly':
+        next_week = now.date() + timedelta(weeks=1)
+        return datetime(next_week.year, next_week.month, next_week.day, h, 0, 0)
+    if freq == 'monthly':
+        y = now.year + (now.month // 12)
+        m = (now.month % 12) + 1
+        d = min(now.day, calendar.monthrange(y, m)[1])
+        return datetime(y, m, d, h, 0, 0)
+    return now + timedelta(days=1)
+
+new_wm = datetime.utcnow().isoformat()
+new_next_run  = calc_next_run(FREQ, SCHEDULED_HOUR)
+duration_secs = round(time.time() - start_time)
+
+# ── 10. UPDATE METADATA — Exponential Backoff + Full Jitter ───────────────────
+def update_metadata_with_retry(spark, metadata_tbl, target_table,
+                                new_wm, record_count, new_next_run, duration_secs, pipeline_notes,
+                                source_tables_str="",
+                                max_retries=15, base=2.0, cap=60.0):
+    for attempt in range(max_retries):
+        try:
+            safe_notes = pipeline_notes.replace("'", "''")
+            
+            spark.sql(f"""
+                UPDATE {metadata_tbl} SET
+                    last_watermark_value = '{new_wm}',
+                    last_load_date       = current_timestamp(),
+                    rows_loaded          = {record_count},
+                    status               = 'success',
+                    next_run_time        = '{new_next_run}',
+                    error_message        = NULL,
+                    pipeline_notes       = '{safe_notes}',
+                    source_tables        = '{source_tables_str}'
+                WHERE table_name = '{target_table}'
+            """)
+            if attempt > 0:
+                print(f"✅ Metadata updated after {attempt} retries")
+            return
+
+        except Exception as e:
+            is_conflict = any(x in str(e) for x in [
+                'ConcurrentAppendException',
+                'ConcurrentDeleteReadException',
+                'ConcurrentTransactionException'
+            ])
+            if is_conflict and attempt < max_retries - 1:
+                ceiling = min(cap, base * (2 ** attempt))
+                wait    = _random.uniform(0, ceiling)
+                print(f"⚠️ Conflict attempt {attempt+1}/{max_retries} → wait {wait:.1f}s")
+                time.sleep(wait)
+            else:
+                raise
+
+# ── Extract source tables for lineage ──
+import re as _re
+_src_pattern = r'(?:FROM|JOIN)\s+(?:\S+\.)(\w+)'
+_src_tables = _re.findall(_src_pattern, SQL_AGGREGATE, _re.IGNORECASE)
+_skip = {'select','where','set','as','on','and','or','raw_source','table','view','null','true','false','case','when','then','else','end'}
+source_tables_str = ','.join(sorted(set(t for t in _src_tables if t.lower() not in _skip and len(t) > 2)))
+
+update_metadata_with_retry(
+    spark=spark,
+    metadata_tbl=METADATA_TBL,
+    target_table=TARGET_TABLE,
+    new_wm=new_wm,
+    record_count=record_count,
+    new_next_run=new_next_run,
+    duration_secs=duration_secs,
+    pipeline_notes=pipeline_notes,
+    source_tables_str=source_tables_str
+)
+
+print(f"✅ Done | {record_count:,} rows | {duration_secs}s | Next: {new_next_run} UTC")
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+
+================================================================================
+NOTEBOOK: nb_gld_flat_forecast_actual
+================================================================================
+# Fabric notebook source
+
+# METADATA ********************
+
+# META {
+# META   "kernel_info": {
+# META     "name": "synapse_pyspark"
+# META   },
+# META   "dependencies": {
+# META     "lakehouse": {
+# META       "default_lakehouse": "62a3081e-4093-4f46-856c-f50aa58732fa",
+# META       "default_lakehouse_name": "SupplyChain_Lakehouse",
+# META       "default_lakehouse_workspace_id": "c8d9fc83-18b6-4e1d-8264-0b49eed36fe0",
+# META       "known_lakehouses": [
+# META         {
+# META           "id": "62a3081e-4093-4f46-856c-f50aa58732fa"
+# META         }
+# META       ]
+# META     }
+# META   }
+# META }
+
+# CELL ********************
+
+# ============================================================================
+# [GLD] nb_etl_gld_flat_forecast_actual
+# Gold: Flat Forecast vs Actual (UNION ALL for accuracy reporting)
+#
+# Sources:
+#   - slv_actual_demand_monthly (invoiced + open orders)
+#   - slv_forecast_demand_monthly (snapshot-based forecast)
+#   - slv_naive_forecast_monthly (rolling naive benchmark)
+#
+# Transformations:
+#   - UNION ALL three SLV fact tables
+#   - Standardize columns across sources
+#   - Single grain: Item × Warehouse × CustomerGroup × FiscalMonth × Status × Version
+#
+# Load Type: overwrite (full reload every run)
+# ============================================================================
+
+TARGET_TABLE = 'gld_flat_forecast_actual'
+
+LAKEHOUSE = "SupplyChain_Lakehouse"
+SCHEMA    = "dbo"
+DB        = f'{LAKEHOUSE}.{SCHEMA}'
+
+SQL_AGGREGATE = f'''
+/* ── Actual Demand ── */
+SELECT
+    TRIM(id_item_sku) AS id_item_sku,
+    TRIM(code_warehouse) AS code_warehouse,
+    TRIM(code_customer_group) AS code_customer_group,
+    CAST(dt_fsc_month_first AS DATE) AS dt_fsc_month_first,
+    CAST(dt_fsc_month_last AS DATE) AS dt_fsc_month_last,
+    'Actual demand' AS code_horizon,
+    TRIM(code_status) AS code_status,
+    TRIM(name_version) AS name_version,
+    CAST(qty_demand AS DOUBLE) AS qty
+FROM {DB}.slv_actual_demand_monthly
+
+UNION ALL
+
+/* ── Forecast Demand ── */
+SELECT
+    TRIM(id_item_sku) AS id_item_sku,
+    TRIM(code_warehouse) AS code_warehouse,
+    TRIM(code_customer_group) AS code_customer_group,
+    CAST(dt_fsc_month_first AS DATE) AS dt_fsc_month_first,
+    CAST(dt_fsc_month_last AS DATE) AS dt_fsc_month_last,
+    TRIM(code_horizon) AS code_horizon,
+    TRIM(code_status) AS code_status,
+    TRIM(code_version) AS name_version,
+    CAST(qty_forecast AS DOUBLE) AS qty
+FROM {DB}.slv_forecast_demand_monthly
+
+UNION ALL
+
+/* ── Naive Forecast ── */
+SELECT
+    TRIM(id_item_sku) AS id_item_sku,
+    TRIM(code_warehouse) AS code_warehouse,
+    TRIM(code_customer_group) AS code_customer_group,
+    CAST(dt_fsc_month_first AS DATE) AS dt_fsc_month_first,
+    CAST(dt_fsc_month_last AS DATE) AS dt_fsc_month_last,
+    'Naive forecast' AS code_horizon,
+    TRIM(code_status) AS code_status,
+    TRIM(name_version) AS name_version,
+    CAST(qty_demand AS DOUBLE) AS qty
+FROM {DB}.slv_naive_forecast_monthly
+'''
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+notebookutils.notebook.run(
+    "gld_engine",
+    7200,
+    {
+        "TARGET_TABLE":   TARGET_TABLE,
+        "SQL_AGGREGATE":  SQL_AGGREGATE
+    }
+)
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+
+================================================================================
+NOTEBOOK: nb_gld_forecast_kpi_metric
+================================================================================
+# Fabric notebook source
+
+# METADATA ********************
+
+# META {
+# META   "kernel_info": {
+# META     "name": "synapse_pyspark"
+# META   },
+# META   "dependencies": {
+# META     "lakehouse": {
+# META       "default_lakehouse": "62a3081e-4093-4f46-856c-f50aa58732fa",
+# META       "default_lakehouse_name": "SupplyChain_Lakehouse",
+# META       "default_lakehouse_workspace_id": "c8d9fc83-18b6-4e1d-8264-0b49eed36fe0",
+# META       "known_lakehouses": [
+# META         {
+# META           "id": "62a3081e-4093-4f46-856c-f50aa58732fa"
+# META         }
+# META       ]
+# META     }
+# META   }
+# META }
+
+# CELL ********************
+
+# ============================================================================
+# [GLD] nb_gld_forecast_kpi_metric
+# Gold: Forecast Accuracy KPI (error metrics + horizon analysis)
+#
+# Sources:
+#   - slv_forecast_demand_monthly (forecast at snapshots)
+#   - slv_actual_demand_monthly (actual demand)
+#   - slv_naive_forecast_monthly (naive forecast baseline)
+#
+# Transformations:
+#   - 4 CTEs: forecast, actuals, naive, spine (UNION of all dimension keys)
+#   - Spine LEFT JOINs to forecast, actuals, naive
+#   - Full coverage of all item × warehouse × customer × month combinations
+#
+# FIXES:
+#   1. UPPER() on id_item_sku, code_warehouse, code_customer_group
+#      to prevent case-sensitive splits (e.g. AFICONS vs AFICONs).
+#   2. Null-safe equality (=) on all JOIN conditions
+#      to handle NULL in code_customer_group.
+#
+# Load Type: overwrite (full reload every run)
+# ============================================================================
+
+TARGET_TABLE = 'gld_forecast_kpi_metric'
+
+LAKEHOUSE = "SupplyChain_Lakehouse"
+SCHEMA    = "dbo"
+DB        = f'{LAKEHOUSE}.{SCHEMA}'
+
+SQL_AGGREGATE = f'''
+WITH
+/* ── Forecast: aggregate by snapshot × SKU × WH × CustGroup × FiscalMonth ── */
+forecast AS (
+    SELECT
+        UPPER(TRIM(DFC.id_item_sku))          AS id_item_sku,
+        UPPER(TRIM(DFC.code_warehouse))       AS code_warehouse,
+        --UPPER(TRIM(DFC.code_customer_group))  AS code_customer_group,
+        CAST(DFC.dt_fsc_month_first AS DATE)  AS dt_fsc_month_first,
+        CAST(DFC.dt_fsc_month_last AS DATE)   AS dt_fsc_month_last,
+        TRIM(DFC.code_horizon)                AS code_horizon,
+        CAST(DFC.dt_snapshot AS DATE)         AS dt_snapshot,
+        CAST(SUM(DFC.qty_forecast) AS DOUBLE) AS qty_forecast
+    FROM {DB}.slv_forecast_demand_monthly AS DFC
+    WHERE DFC.code_horizon IN ('Lag-0', 'Lag-1', 'Lag-2', 'Lag-3', 'Lag-4' , '>Lag-4')
+    GROUP BY
+        UPPER(TRIM(DFC.id_item_sku)),
+        UPPER(TRIM(DFC.code_warehouse)),
+        --UPPER(TRIM(DFC.code_customer_group)),
+        CAST(DFC.dt_fsc_month_first AS DATE),
+        CAST(DFC.dt_fsc_month_last AS DATE),
+        TRIM(DFC.code_horizon),
+        CAST(DFC.dt_snapshot AS DATE)
+),
+
+/* ── Actual demand: monthly by SKU × WH × CustGroup ── */
+actuals AS (
+    SELECT
+        UPPER(TRIM(id_item_sku))              AS id_item_sku,
+        UPPER(TRIM(code_warehouse))           AS code_warehouse,
+        --UPPER(TRIM(code_customer_group))      AS code_customer_group,
+        CAST(dt_fsc_month_first AS DATE)      AS dt_fsc_month_first,
+        CAST(dt_fsc_month_last AS DATE)       AS dt_fsc_month_last,
+        CAST(SUM(qty_demand) AS DOUBLE)       AS qty_actual
+    FROM {DB}.slv_actual_demand_monthly
+    GROUP BY
+        UPPER(TRIM(id_item_sku)),
+        UPPER(TRIM(code_warehouse)),
+        --UPPER(TRIM(code_customer_group)),
+        CAST(dt_fsc_month_first AS DATE),
+        CAST(dt_fsc_month_last AS DATE)
+),
+
+/* ── Naive forecast: rolling from slv_naive_forecast_monthly ── */
+naive AS (
+    SELECT
+        UPPER(TRIM(id_item_sku))              AS id_item_sku,
+        UPPER(TRIM(code_warehouse))           AS code_warehouse,
+        --UPPER(TRIM(code_customer_group))      AS code_customer_group,
+        CAST(dt_fsc_month_first AS DATE)      AS dt_fsc_month_first,
+        CAST(dt_fsc_month_last AS DATE)       AS dt_fsc_month_last,
+        CAST(SUM(qty_demand) AS DOUBLE)       AS qty_naive_forecast
+    FROM {DB}.slv_naive_forecast_monthly
+    GROUP BY
+        UPPER(TRIM(id_item_sku)),
+        UPPER(TRIM(code_warehouse)),
+        --UPPER(TRIM(code_customer_group)),
+        CAST(dt_fsc_month_first AS DATE),
+        CAST(dt_fsc_month_last AS DATE)
+),
+
+/* ── Spine: UNION all dimension keys from 3 sources ── */
+dimkeys AS (
+    SELECT id_item_sku, code_warehouse, --code_customer_group,
+           dt_fsc_month_first, dt_fsc_month_last
+    FROM forecast
+
+    UNION
+
+    SELECT id_item_sku, code_warehouse, --code_customer_group,
+           dt_fsc_month_first, dt_fsc_month_last
+    FROM actuals
+
+    UNION
+
+    SELECT id_item_sku, code_warehouse, --code_customer_group,
+           dt_fsc_month_first, dt_fsc_month_last
+    FROM naive
+),
+spine AS (
+    SELECT 
+        K.id_item_sku, K.code_warehouse, --K.code_customer_group,
+        K.dt_fsc_month_first, K.dt_fsc_month_last, H.code_horizon
+    FROM dimkeys K
+    CROSS JOIN {DB}.ref_forecast_horizon H
+)
+
+/* ── Final: spine LEFT JOIN all three + compute error metrics ── */
+SELECT
+    SP.id_item_sku,
+    SP.code_warehouse,
+    --SP.code_customer_group,
+    SP.dt_fsc_month_first,
+    SP.dt_fsc_month_last,
+    SP.code_horizon,
+    FC.dt_snapshot,
+
+    /* ── Quantities ── */
+    CAST(FC.qty_forecast AS DOUBLE)        AS qty_forecast,
+    CAST(ACT.qty_actual AS DOUBLE)         AS qty_actual,
+    CAST(NF.qty_naive_forecast AS DOUBLE)  AS qty_naive_forecast,
+
+    /* ── Forecast Error ── */
+    CAST(COALESCE(ACT.qty_actual, 0) - COALESCE(FC.qty_forecast, 0) AS DOUBLE)
+        AS qty_fcst_error,
+    CAST(ABS(COALESCE(FC.qty_forecast, 0) - COALESCE(ACT.qty_actual, 0)) AS DOUBLE)
+        AS qty_abs_fcst_error,
+
+    /* ── Naive Forecast Error ── */
+    CAST(COALESCE(ACT.qty_actual, 0) - COALESCE(NF.qty_naive_forecast, 0) AS DOUBLE)
+        AS qty_naive_fcst_error,
+    CAST(ABS(COALESCE(NF.qty_naive_forecast, 0) - COALESCE(ACT.qty_actual, 0)) AS DOUBLE)
+        AS qty_abs_naive_fcst_error
+
+FROM spine AS SP
+
+LEFT JOIN forecast AS FC
+    ON  SP.id_item_sku         <=> FC.id_item_sku
+    AND SP.code_warehouse      <=> FC.code_warehouse
+    --AND SP.code_customer_group <=> FC.code_customer_group
+    AND SP.dt_fsc_month_first  <=> FC.dt_fsc_month_first
+    AND SP.dt_fsc_month_last   <=> FC.dt_fsc_month_last
+    AND SP.code_horizon        <=> FC.code_horizon
+
+LEFT JOIN actuals AS ACT
+    ON  SP.id_item_sku         <=> ACT.id_item_sku
+    AND SP.code_warehouse      <=> ACT.code_warehouse
+    --AND SP.code_customer_group <=> ACT.code_customer_group
+    AND SP.dt_fsc_month_first  <=> ACT.dt_fsc_month_first
+    AND SP.dt_fsc_month_last   <=> ACT.dt_fsc_month_last
+
+LEFT JOIN naive AS NF
+    ON  SP.id_item_sku         <=> NF.id_item_sku
+    AND SP.code_warehouse      <=> NF.code_warehouse
+    --AND SP.code_customer_group <=> NF.code_customer_group
+    AND SP.dt_fsc_month_first  <=> NF.dt_fsc_month_first
+    AND SP.dt_fsc_month_last   <=> NF.dt_fsc_month_last
+'''
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+notebookutils.notebook.run(
+    "gld_engine",
+    7200,
+    {
+        "TARGET_TABLE":   TARGET_TABLE,
+        "SQL_AGGREGATE":  SQL_AGGREGATE
+    }
+)
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+
+================================================================================
+NOTEBOOK: env_config
+================================================================================
+# Fabric notebook source
+
+# METADATA ********************
+
+# META {
+# META   "kernel_info": {
+# META     "name": "synapse_pyspark"
+# META   },
+# META   "dependencies": {}
+# META }
+
+# CELL ********************
+
+workspace_name = notebookutils.runtime.context.get('currentWorkspaceName', '')
+
+if workspace_name == 'Enterprise SupplyChain-Dev':
+    ENV          = 'dev'
+    LAKEHOUSE    = 'SupplyChain_Lakehouse'
+    WAREHOUSE    = 'SupplyChain_Warehouse'
+    ROW_LIMIT    = None
+    LOOKBACK_YRS = 1
+elif workspace_name == 'Enterprise SupplyChain':
+    ENV          = 'prod'
+    LAKEHOUSE    = 'SupplyChain_Lakehouse'
+    WAREHOUSE    = 'SupplyChain_Warehouse'
+    ROW_LIMIT    = None
+    LOOKBACK_YRS = 3
+else:
+    raise Exception(f"Unknown workspace: '{workspace_name}'")
+
+SCHEMA       = 'dbo'
+METADATA_TBL = f'{LAKEHOUSE}.{SCHEMA}.utl_pipeline_metadata'
+
+# Enterprise Lakehouse - fixed, does not change per env
+SOURCE_BASE = (
+    'abfss://c8d9fc83-18b6-4e1d-8264-0b49eed36fe0'
+    '@onelake.dfs.fabric.microsoft.com'
+    '/584e7d2c-46ca-49dc-bb6c-68df6ef4f424'
+    '/Tables'
+)
+
+print(f'ENV={ENV} | Lakehouse={LAKEHOUSE} | Warehouse={WAREHOUSE} | Lookback={LOOKBACK_YRS}yr | Limit={ROW_LIMIT}')
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+
+================================================================================
+NOTEBOOK: nb_dq_engine
+================================================================================
+# Fabric notebook source
+
+# METADATA ********************
+
+# META {
+# META   "kernel_info": {
+# META     "name": "synapse_pyspark"
+# META   },
+# META   "dependencies": {}
+# META }
+
+# CELL ********************
+
+# Fabric notebook source
+# Notebook: nb_dq_engine
+# Purpose: DQ Engine — 4 check functions + main orchestration loop
+# Used by: nb_dq_after_brz, nb_dq_after_ref, nb_dq_after_slv, nb_dq_after_gld
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+# Cell 1 — Parameters (tag as parameter cell in Fabric)
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+DQ_LAYER = "BRZ"
+TEAMS_WEBHOOK_URL = ""
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+# Cell 2 — Environment (from notebookutils.runtime.context)
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+context = notebookutils.runtime.context
+workspace_name = context.get("currentWorkspaceName", "")
+
+if workspace_name == "Enterprise SupplyChain-Dev":
+    ENV = "dev"
+elif workspace_name == "Enterprise SupplyChain":
+    ENV = "prod"
+else:
+    ENV = "dev"  # fallback
+
+LAKEHOUSE = "SupplyChain_Lakehouse"
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+# Cell 3 — Imports + Config
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+import json
+import uuid
+import time
+from datetime import datetime, timezone, date
+
+from pyspark.sql import functions as F
+from pyspark.sql.types import (
+    StructType, StructField, StringType, BooleanType,
+    LongType, TimestampType, IntegerType,
+)
+
+RUN_ID = str(uuid.uuid4())
+RUN_TIMESTAMP = datetime.now(timezone.utc)
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+# Cell 4 — Check Functions (all PySpark, never pandas)
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+def check_uniqueness(table_name, column_name, params):
+    """Check PK uniqueness. Supports single column or composite key.
+
+    column_name: single col (e.g. "id_order") or "*" for composite
+    params: None → use column_name
+            {"columns": ["col_a", "col_b"]} → composite key
+    """
+    df = spark.table(table_name)
+
+    if params and "columns" in params:
+        cols = params["columns"]
+    else:
+        cols = [column_name]
+
+    total = df.count()
+    distinct = df.select(*cols).distinct().count()
+    dup_count = total - distinct
+
+    return {
+        "passed": dup_count == 0,
+        "actual_value": f"{dup_count:,} duplicates / {total:,} rows",
+        "expected_value": "0 duplicates",
+    }
+
+
+def check_row_count(table_name, column_name, params):
+    """Check table has minimum row count.
+
+    params: {"min": 1}
+    """
+    df = spark.table(table_name)
+    actual = df.count()
+    min_rows = int(params.get("min", 1)) if params else 1
+
+    return {
+        "passed": actual >= min_rows,
+        "actual_value": f"{actual:,} rows",
+        "expected_value": f">= {min_rows:,}",
+    }
+
+
+def check_freshness(table_name, column_name, params):
+    """Check data freshness by finding the most recent timestamp/date column.
+
+    params: {"max_age_hours": 48, "ts_column": "dt_invoice"}
+    If ts_column not specified, auto-detect columns with dt_ or ts_ prefix.
+    """
+    max_age = int(params.get("max_age_hours", 48)) if params else 48
+    ts_col = params.get("ts_column") if params else None
+
+    df = spark.table(table_name)
+
+    # Auto-detect timestamp/date column if not specified
+    if not ts_col:
+        candidates = [
+            c.name for c in df.schema.fields
+            if c.name.startswith("dt_") or c.name.startswith("ts_")
+        ]
+        if not candidates:
+            return {
+                "passed": False,
+                "actual_value": "no dt_/ts_ column found",
+                "expected_value": f"< {max_age}h",
+                "error_message": "Cannot auto-detect timestamp column. "
+                                 "Specify ts_column in check_params.",
+            }
+        # Pick the first candidate
+        ts_col = candidates[0]
+
+    if ts_col not in df.columns:
+        return {
+            "passed": False,
+            "actual_value": f"column '{ts_col}' not found",
+            "expected_value": f"< {max_age}h",
+            "error_message": f"Column '{ts_col}' does not exist in {table_name}",
+        }
+
+    latest_val = df.agg(F.max(F.col(ts_col))).collect()[0][0]
+
+    if latest_val is None:
+        return {
+            "passed": False,
+            "actual_value": "NULL (no data)",
+            "expected_value": f"< {max_age}h",
+        }
+
+    # Handle date vs timestamp
+    if isinstance(latest_val, date) and not isinstance(latest_val, datetime):
+        latest_dt = datetime.combine(latest_val, datetime.min.time(),
+                                     tzinfo=timezone.utc)
+    elif isinstance(latest_val, datetime):
+        latest_dt = (latest_val.replace(tzinfo=timezone.utc)
+                     if latest_val.tzinfo is None else latest_val)
+    else:
+        return {
+            "passed": False,
+            "actual_value": str(latest_val),
+            "expected_value": f"< {max_age}h",
+            "error_message": f"Cannot parse '{ts_col}' as date/timestamp",
+        }
+
+    now = datetime.now(timezone.utc)
+    age_hours = (now - latest_dt).total_seconds() / 3600
+
+    return {
+        "passed": age_hours <= max_age,
+        "actual_value": f"{age_hours:.1f}h (latest: {latest_dt.strftime('%Y-%m-%d %H:%M')})",
+        "expected_value": f"< {max_age}h",
+    }
+
+
+def check_null_percent(table_name, column_name, params):
+    """Check % null does not exceed threshold. Supports multi-column.
+
+    column_name: single col or "*" for multi
+    params: {"max_null_pct": 0}
+            {"columns": ["col_a", "col_b"], "max_null_pct": 0}
+    """
+    max_pct = float(params.get("max_null_pct", 0)) if params else 0
+
+    if params and "columns" in params:
+        cols = params["columns"]
+    else:
+        cols = [column_name]
+
+    df = spark.table(table_name)
+    total = df.count()
+
+    if total == 0:
+        return {
+            "passed": False,
+            "actual_value": "0 rows",
+            "expected_value": f"<= {max_pct}%",
+        }
+
+    # Check each column, report worst
+    worst_pct = 0.0
+    worst_col = ""
+    details = []
+
+    for col in cols:
+        if col not in df.columns:
+            details.append(f"{col}: NOT FOUND")
+            continue
+        null_count = df.filter(F.col(col).isNull()).count()
+        null_pct = null_count / total * 100
+        details.append(f"{col}: {null_pct:.2f}% ({null_count:,}/{total:,})")
+        if null_pct > worst_pct:
+            worst_pct = null_pct
+            worst_col = col
+
+    passed = worst_pct <= max_pct
+
+    return {
+        "passed": passed,
+        "actual_value": " | ".join(details),
+        "expected_value": f"<= {max_pct}% null",
+    }
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+# Cell 5 — Teams Alert
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+def send_teams_alert(webhook_url, layer, run_id, failures):
+    """Send failure summary to Microsoft Teams via webhook."""
+    if not webhook_url:
+        return
+
+    import requests
+
+    facts = []
+    for f in failures[:10]:
+        facts.append({
+            "name": f.get("table_name", ""),
+            "value": (f"{f.get('check_type')}: "
+                      f"{f.get('error_message', 'FAILED')} "
+                      f"(Severity: {f.get('severity')})"),
+        })
+
+    card = {
+        "@type": "MessageCard",
+        "themeColor": "FF0000",
+        "summary": f"DQ Failures - {layer} layer",
+        "sections": [{
+            "activityTitle": f"Data Quality Alert - {layer} Layer",
+            "activitySubtitle": f"Run: {run_id} | {RUN_TIMESTAMP.isoformat()}",
+            "facts": facts,
+            "markdown": True,
+        }],
+    }
+
+    try:
+        requests.post(webhook_url, json=card, timeout=10)
+    except Exception as e:
+        print(f"WARNING: Failed to send Teams alert: {e}")
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+# Cell 6 — Main Orchestration Loop
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+def run_dq_checks(dq_layer, env):
+    """Fetch rules, execute checks, persist results, alert on failures."""
+
+    CHECK_DISPATCH = {
+        "uniqueness": check_uniqueness,
+        "row_count": check_row_count,
+        "freshness": check_freshness,
+        "null_percent": check_null_percent,
+    }
+
+    # 1. Fetch active rules for this layer
+    rules_df = spark.table(f"{LAKEHOUSE}.dbo.utl_dq_rules").filter(
+        (F.col("layer") == dq_layer) & (F.col("is_active") == 1)
+    )
+    rules = rules_df.collect()
+
+    print(f"{'=' * 60}")
+    print(f"DQ Engine: {len(rules)} rules for layer {dq_layer}")
+    print(f"Run ID: {RUN_ID}")
+    print(f"{'=' * 60}")
+
+    if len(rules) == 0:
+        print(f"No active DQ rules found for layer {dq_layer}. Skipping.")
+        notebookutils.notebook.exit(f"skipped:no_rules_for_{dq_layer}")
+        return
+
+    # 2. Execute each rule
+    results = []
+    critical_failures = []
+
+    for rule in rules:
+        check_type = rule["check_type"]
+        check_fn = CHECK_DISPATCH.get(check_type)
+
+        if check_fn is None:
+            print(f"  WARNING: Unknown check_type '{check_type}' "
+                  f"for rule {rule['rule_id']}")
+            continue
+
+        start_ms = time.time() * 1000
+
+        try:
+            params = (json.loads(rule["check_params"])
+                      if rule["check_params"] else {})
+            outcome = check_fn(
+                rule["table_name"], rule["column_name"], params
+            )
+            error_msg = outcome.get(
+                "error_message",
+                None if outcome["passed"]
+                else f"{check_type} failed: actual={outcome['actual_value']}",
+            )
+        except Exception as e:
+            outcome = {
+                "passed": False,
+                "actual_value": "ERROR",
+                "expected_value": "N/A",
+            }
+            error_msg = str(e)
+
+        elapsed_ms = int(time.time() * 1000 - start_ms)
+
+        result = {
+            "result_id": str(uuid.uuid4()),
+            "run_id": RUN_ID,
+            "run_timestamp": RUN_TIMESTAMP,
+            "layer": dq_layer,
+            "table_name": rule["table_name"],
+            "rule_id": rule["rule_id"],
+            "check_type": check_type,
+            "column_name": rule["column_name"] or "*",
+            "severity": rule["severity"],
+            "passed": outcome["passed"],
+            "actual_value": str(outcome.get("actual_value", "")),
+            "expected_value": str(outcome.get("expected_value", "")),
+            "error_message": error_msg,
+            "execution_time_ms": elapsed_ms,
+            "environment": env,
+        }
+        results.append(result)
+
+        status = "PASS" if outcome["passed"] else "FAIL"
+        print(f"  [{status}] {rule['table_name']}.{rule['column_name'] or '*'} "
+              f"({check_type}, {rule['severity']}) "
+              f"- {outcome.get('actual_value', '')} [{elapsed_ms}ms]")
+
+        if not outcome["passed"] and rule["severity"] == "CRITICAL":
+            critical_failures.append(result)
+
+    # 3. Persist results to Delta table
+    results_schema = StructType([
+        StructField("result_id", StringType()),
+        StructField("run_id", StringType()),
+        StructField("run_timestamp", TimestampType()),
+        StructField("layer", StringType()),
+        StructField("table_name", StringType()),
+        StructField("rule_id", StringType()),
+        StructField("check_type", StringType()),
+        StructField("column_name", StringType()),
+        StructField("severity", StringType()),
+        StructField("passed", BooleanType()),
+        StructField("actual_value", StringType()),
+        StructField("expected_value", StringType()),
+        StructField("error_message", StringType()),
+        StructField("execution_time_ms", LongType()),
+        StructField("environment", StringType()),
+    ])
+
+    results_df = spark.createDataFrame(results, schema=results_schema)
+    results_df.write.mode("append").format("delta").saveAsTable(
+        f"{LAKEHOUSE}.dbo.utl_dq_results"
+    )
+
+    # 4. Summary
+    total = len(results)
+    passed = sum(1 for r in results if r["passed"])
+    failed = total - passed
+    critical_count = len(critical_failures)
+
+    print(f"\n{'=' * 60}")
+    print(f"DQ Summary: {passed}/{total} passed, {failed} failed "
+          f"({critical_count} CRITICAL)")
+    print(f"{'=' * 60}")
+
+    # 5. Send Teams alert if any failures
+    all_failures = [r for r in results if not r["passed"]]
+    if all_failures and TEAMS_WEBHOOK_URL:
+        send_teams_alert(TEAMS_WEBHOOK_URL, dq_layer, RUN_ID, all_failures)
+
+    # 6. Raise exception on CRITICAL failures (stops pipeline)
+    if critical_failures:
+        failure_tables = ", ".join(
+            sorted(set(f["table_name"] for f in critical_failures))
+        )
+        raise Exception(
+            f"DQ CRITICAL FAILURE in {dq_layer} layer: "
+            f"{critical_count} critical checks failed on tables: "
+            f"{failure_tables}. Run ID: {RUN_ID}"
+        )
+
+    print(f"DQ checks completed for {dq_layer}. No critical failures.")
+    notebookutils.notebook.exit(f"success:{passed}/{total}")
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+# Cell 7 — Execute
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+run_dq_checks(DQ_LAYER, ENV)
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+
+================================================================================
+NOTEBOOK: nb_ref_forecast_horizon
+================================================================================
+# Fabric notebook source
+
+# METADATA ********************
+
+# META {
+# META   "kernel_info": {
+# META     "name": "synapse_pyspark"
+# META   },
+# META   "dependencies": {
+# META     "lakehouse": {
+# META       "default_lakehouse": "62a3081e-4093-4f46-856c-f50aa58732fa",
+# META       "default_lakehouse_name": "SupplyChain_Lakehouse",
+# META       "default_lakehouse_workspace_id": "c8d9fc83-18b6-4e1d-8264-0b49eed36fe0",
+# META       "known_lakehouses": [
+# META         {
+# META           "id": "62a3081e-4093-4f46-856c-f50aa58732fa"
+# META         },
+# META         {
+# META           "id": "584e7d2c-46ca-49dc-bb6c-68df6ef4f424"
+# META         }
+# META       ]
+# META     }
+# META   }
+# META }
+
+# CELL ********************
+
+TARGET_TABLE = "ref_forecast_horizon"
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+import time
+from datetime import datetime, timedelta
+
+start_time = time.time()
+
+# Write hardcode data
+spark.sql("""
+    CREATE OR REPLACE TABLE SupplyChain_Lakehouse.dbo.ref_forecast_horizon
+    USING DELTA AS
+    SELECT 'Lag-0'      AS code_horizon, 1 AS num_rank UNION ALL
+    SELECT 'Lag-1',  2 UNION ALL
+    SELECT 'Lag-2',  3 UNION ALL
+    SELECT 'Lag-3',  4 UNION ALL
+    SELECT 'Lag-4', 5 UNION ALL
+    SELECT '>Lag-4',  6 UNION ALL
+    SELECT 'Actual demand',  7 UNION ALL
+    SELECT 'Naive forecast',  8
+""")
+
+duration_secs = round(time.time() - start_time)
+record_count  = 8
+
+# Update metadata
+next_run = datetime.utcnow().date() + timedelta(days=1)
+new_next_run = datetime(next_run.year, next_run.month, next_run.day, 2, 0, 0)
+
+spark.sql(f"""
+    UPDATE SupplyChain_Lakehouse.dbo.utl_pipeline_metadata SET
+        last_load_date  = current_timestamp(),
+        rows_loaded     = {record_count},
+        status          = 'success',
+        next_run_time   = '{new_next_run}',
+        error_message   = NULL,
+        pipeline_notes  = 'Hardcode load {record_count} rows in {duration_secs}s'
+    WHERE table_name = '{TARGET_TABLE}'
+""")
+
+print(f"Done | {record_count} rows | {duration_secs}s | Next: {new_next_run} UTC")
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+
+================================================================================
+NOTEBOOK: nb_sc_ref_customer_shipping_location
+================================================================================
+# Fabric notebook source
+
+# METADATA ********************
+
+# META {
+# META   "kernel_info": {
+# META     "name": "jupyter",
+# META     "jupyter_kernel_name": "python3.12"
+# META   }
+# META }
+
+# CELL ********************
+
+# @notebook_type: ref
+# @target: SupplyChain_DW.ref_customer_shipping_location
+# @source: Wholesale_Customers.ShippingLocations
+OBJECT_NAME  = "ref_customer_shipping_location"
+SCHEMA_WRK   = "SupplyChain_DW_Wrk"
+SCHEMA_DW    = "SupplyChain_DW"
+SOURCE_DATA  = "$(Source_Data)"
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "jupyter_python"
+# META }
+
+# CELL ********************
+
+# MAGIC %%sql
+# MAGIC -- @type: view
+# MAGIC -- @schema: SupplyChain_DW_Wrk
+# MAGIC -- @name: v_ref_customer_shipping_location
+# MAGIC CREATE OR ALTER VIEW [SupplyChain_DW_Wrk].[v_ref_customer_shipping_location]
+# MAGIC AS
+# MAGIC SELECT
+# MAGIC     -- Keys & Identifiers
+# MAGIC     TRIM(cslCustomerNumber)                                          AS id_customer,
+# MAGIC     TRIM(cslShiptoNumber)                                            AS code_ship_to,
+# MAGIC     CAST(cslMapicsSequenceNumberTieuGia AS INT)                      AS num_mapics_sequence,
+# MAGIC     TRIM(cslName)                                                    AS name_ship_to,
+# MAGIC 
+# MAGIC     -- Address
+# MAGIC     TRIM(csmShpa1)                                                   AS name_address_1,
+# MAGIC     TRIM(csmShpa2)                                                   AS name_address_2,
+# MAGIC     TRIM(csmShpa3)                                                   AS name_address_3,
+# MAGIC     TRIM(csmShpzp)                                                   AS code_zip,
+# MAGIC     TRIM(csmShpst)                                                   AS code_state,
+# MAGIC     TRIM(csmShpco)                                                   AS code_country,
+# MAGIC     TRIM(csmCounty)                                                  AS code_county,
+# MAGIC 
+# MAGIC     -- Contact
+# MAGIC     TRIM(csmPhone)                                                   AS code_phone,
+# MAGIC     TRIM(csmFaxTn)                                                   AS code_fax,
+# MAGIC     TRIM(csmContact)                                                 AS name_contact,
+# MAGIC     TRIM(csmWebsite)                                                 AS code_website,
+# MAGIC     TRIM(csmEmail)                                                   AS code_email,
+# MAGIC     TRIM(csmCsPhone)                                                 AS code_cs_phone,
+# MAGIC     TRIM(csmcsFax)                                                   AS code_cs_fax,
+# MAGIC     TRIM(csmcsContact)                                               AS name_cs_contact,
+# MAGIC     TRIM(csmcsEmail)                                                 AS code_cs_email,
+# MAGIC 
+# MAGIC     -- Sales & Pricing Codes
+# MAGIC     TRIM(cslCommissionCode)                                          AS code_commission,
+# MAGIC     TRIM(cslFreightCode)                                             AS code_freight,
+# MAGIC     TRIM(cslPriceCode)                                               AS code_price,
+# MAGIC     TRIM(cslDiscountCode)                                            AS code_discount,
+# MAGIC     CAST(cslCommissionSplit AS DECIMAL(10,4))                        AS pct_commission_split,
+# MAGIC 
+# MAGIC     -- Warehouse & Territory
+# MAGIC     TRIM(cslDefaultWarehouse)                                        AS code_default_warehouse,
+# MAGIC     TRIM(cslShippingTerritory)                                       AS code_shipping_territory,
+# MAGIC 
+# MAGIC     -- Business & Ship Type
+# MAGIC     TRIM(cslBusinessType)                                            AS code_business_type,
+# MAGIC     TRIM(cslShipType)                                                AS code_ship_type,
+# MAGIC 
+# MAGIC     -- Transcom
+# MAGIC     TRIM(cslTranscomPrimaryID)                                       AS id_transcom_primary,
+# MAGIC     TRIM(cslTranscomAlternateID)                                     AS id_transcom_alternate,
+# MAGIC 
+# MAGIC     -- Comments & Memo
+# MAGIC     TRIM(cslComment1)                                                AS name_comment_1,
+# MAGIC     TRIM(cslComment2)                                                AS name_comment_2,
+# MAGIC     TRIM(cslMemo)                                                    AS name_memo,
+# MAGIC     TRIM(csmDirections)                                              AS name_directions,
+# MAGIC     TRIM(csmCrossStreet)                                             AS name_cross_street,
+# MAGIC 
+# MAGIC     -- CRM & IDs
+# MAGIC     TRIM(cslCrmID)                                                   AS id_crm,
+# MAGIC     cslBuyerAddressID                                                AS id_buyer_address,
+# MAGIC     cslPartyLocationID                                               AS id_party_location,
+# MAGIC     cslRouteAddressID                                                AS id_route_address,
+# MAGIC     cslReturnAddressID                                               AS id_return_address,
+# MAGIC     TRIM(cslReturnAddressName)                                       AS name_return_address,
+# MAGIC 
+# MAGIC     -- MSA & Region
+# MAGIC     TRIM(csmMsa_Fips)                                                AS code_msa_fips,
+# MAGIC     csmRMCityNumber                                                  AS code_rm_city,
+# MAGIC 
+# MAGIC     -- Tax
+# MAGIC     TRIM(cslTaxExempt)                                               AS code_tax_exempt,
+# MAGIC 
+# MAGIC     -- Customer Segment
+# MAGIC     CAST(cslCustomerSegment AS INT)                                  AS num_customer_segment,
+# MAGIC 
+# MAGIC     -- Default Order Types
+# MAGIC     TRIM(cslDefaultOrderType1)                                       AS code_default_order_type_1,
+# MAGIC     TRIM(cslDefaultOrderType2)                                       AS code_default_order_type_2,
+# MAGIC     TRIM(cslDefaultOrderType3)                                       AS code_default_order_type_3,
+# MAGIC     TRIM(cslDefaultOrderType4)                                       AS code_default_order_type_4,
+# MAGIC 
+# MAGIC     -- Shipping & Delivery
+# MAGIC     CAST(csmShled AS INT)                                            AS num_ship_lead_days,
+# MAGIC     TRIM(cslDeliveryUnitOfMeasure)                                   AS code_delivery_uom,
+# MAGIC     CAST(cslDeliveryUnitOfMeasureFence AS DECIMAL(10,2))             AS val_delivery_uom_fence,
+# MAGIC     TRIM(cslExpressShippingMethod)                                   AS code_express_shipping_method,
+# MAGIC     CAST(cslExpressHandlingCharge AS DECIMAL(10,3))                  AS pct_express_handling_charge,
+# MAGIC     CAST(cslExpressMinimum AS DECIMAL(10,2))                         AS amt_express_minimum,
+# MAGIC     CAST(cslExpressMaximum AS DECIMAL(10,2))                         AS amt_express_maximum,
+# MAGIC     TRIM(cslExpressServiceContractNumber)                            AS code_express_service_contract,
+# MAGIC 
+# MAGIC     -- Flags
+# MAGIC     CASE WHEN cslBlockRepOrderEntry = 1 THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS is_block_rep_order_entry,
+# MAGIC     TRIM(cslAllowFax)                                                AS code_allow_fax,
+# MAGIC     TRIM(cslDirectConsumer)                                          AS code_direct_consumer,
+# MAGIC     TRIM(cslDirectIncludeShipto)                                     AS code_direct_include_shipto,
+# MAGIC     TRIM(cslExportsLCLConsolidationFlag)                             AS code_exports_lcl_consolidation,
+# MAGIC     TRIM(cslExportsDocumentCountry)                                  AS code_exports_document_country,
+# MAGIC     TRIM(cslExportsProductOnPallets)                                 AS code_exports_product_on_pallets,
+# MAGIC     TRIM(cslExportsAppointmentsRequired)                             AS code_exports_appointments_required,
+# MAGIC     cslHasDock                                                       AS code_has_dock,
+# MAGIC     TRIM(cslUseNegotiatedFreightRate)                                AS code_use_negotiated_freight_rate,
+# MAGIC     TRIM(cslUseStandardFreightRate)                                  AS code_use_standard_freight_rate,
+# MAGIC     TRIM(cslDoNotRepriceOrders)                                      AS code_do_not_reprice_orders,
+# MAGIC     TRIM(cslPricingUseOfflineFiles)                                  AS code_pricing_use_offline_files,
+# MAGIC 
+# MAGIC     -- Language
+# MAGIC     TRIM(cslDefaultLanguage)                                         AS code_default_language,
+# MAGIC 
+# MAGIC     -- Dates
+# MAGIC     CAST(cslTerritoryEffectivityDate AS DATETIME2)                   AS dt_territory_effectivity,
+# MAGIC     TRIM(cslHasDockUserDate)                                         AS name_has_dock_user_date,
+# MAGIC     CAST(cslLastStatusChangeDate AS DATETIME2)                       AS dt_last_status_change,
+# MAGIC 
+# MAGIC     -- Status & Record
+# MAGIC     TRIM(acrec)                                                      AS code_record_status,
+# MAGIC     csmAppcd                                                         AS code_app,
+# MAGIC 
+# MAGIC     -- Audit flags
+# MAGIC     CAST(csmChgAddr AS INT)                                          AS num_change_address,
+# MAGIC     CAST(csmChgShip AS INT)                                          AS num_change_ship,
+# MAGIC     CAST(csmChgShipExt AS INT)                                       AS num_change_ship_ext,
+# MAGIC     CAST(csmChgCust AS INT)                                          AS num_change_customer,
+# MAGIC     CAST(commAudit AS INT)                                           AS num_commission_audit,
+# MAGIC     CAST(commAudit2 AS INT)                                          AS num_commission_audit_2,
+# MAGIC 
+# MAGIC     -- Source audit
+# MAGIC     TRIM(usra)                                                       AS name_created_by,
+# MAGIC     CAST(dtea AS DATETIME2)                                          AS ts_created,
+# MAGIC     TRIM(usrc)                                                       AS name_modified_by,
+# MAGIC     CAST(dtec AS DATETIME2)                                          AS ts_modified
+# MAGIC 
+# MAGIC FROM [$(Source_Data)].[Wholesale_Customers].[ShippingLocations]
+# MAGIC WHERE cslCustomerNumber IS NOT NULL;
+
+# METADATA ********************
+
+# META {
+# META   "language": "sparksql",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+# MAGIC %%sql
+# MAGIC -- @type: table
+# MAGIC -- @schema: SupplyChain_DW
+# MAGIC -- @name: ref_customer_shipping_location
+# MAGIC IF OBJECT_ID('[SupplyChain_DW].[ref_customer_shipping_location]') IS NULL
+# MAGIC CREATE TABLE [SupplyChain_DW].[ref_customer_shipping_location]
+# MAGIC (
+# MAGIC     [id_customer]                       CHAR(8)          NULL,
+# MAGIC     [code_ship_to]                      CHAR(4)          NULL,
+# MAGIC     [num_mapics_sequence]               INT              NULL,
+# MAGIC     [name_ship_to]                      VARCHAR(35)      NULL,
+# MAGIC     [name_address_1]                    VARCHAR(25)      NULL,
+# MAGIC     [name_address_2]                    VARCHAR(50)      NULL,
+# MAGIC     [name_address_3]                    VARCHAR(25)      NULL,
+# MAGIC     [code_zip]                          VARCHAR(10)      NULL,
+# MAGIC     [code_state]                        CHAR(2)          NULL,
+# MAGIC     [code_country]                      CHAR(3)          NULL,
+# MAGIC     [code_county]                       CHAR(3)          NULL,
+# MAGIC     [code_phone]                        VARCHAR(15)      NULL,
+# MAGIC     [code_fax]                          VARCHAR(15)      NULL,
+# MAGIC     [name_contact]                      CHAR(25)         NULL,
+# MAGIC     [code_website]                      VARCHAR(40)      NULL,
+# MAGIC     [code_email]                        VARCHAR(50)      NULL,
+# MAGIC     [code_cs_phone]                     VARCHAR(15)      NULL,
+# MAGIC     [code_cs_fax]                       VARCHAR(15)      NULL,
+# MAGIC     [name_cs_contact]                   VARCHAR(25)      NULL,
+# MAGIC     [code_cs_email]                     VARCHAR(50)      NULL,
+# MAGIC     [code_commission]                   CHAR(3)          NULL,
+# MAGIC     [code_freight]                      CHAR(3)          NULL,
+# MAGIC     [code_price]                        CHAR(6)          NULL,
+# MAGIC     [code_discount]                     CHAR(3)          NULL,
+# MAGIC     [pct_commission_split]              DECIMAL(10,4)    NULL,
+# MAGIC     [code_default_warehouse]            CHAR(3)          NULL,
+# MAGIC     [code_shipping_territory]           CHAR(5)          NULL,
+# MAGIC     [code_business_type]                CHAR(2)          NULL,
+# MAGIC     [code_ship_type]                    CHAR(2)          NULL,
+# MAGIC     [id_transcom_primary]               VARCHAR(13)      NULL,
+# MAGIC     [id_transcom_alternate]             CHAR(8)          NULL,
+# MAGIC     [name_comment_1]                    VARCHAR(25)      NULL,
+# MAGIC     [name_comment_2]                    VARCHAR(25)      NULL,
+# MAGIC     [name_memo]                         VARCHAR(500)     NULL,
+# MAGIC     [name_directions]                   VARCHAR(150)     NULL,
+# MAGIC     [name_cross_street]                 VARCHAR(35)      NULL,
+# MAGIC     [id_crm]                            CHAR(5)          NULL,
+# MAGIC     [id_buyer_address]                  INT              NULL,
+# MAGIC     [id_party_location]                 INT              NULL,
+# MAGIC     [id_route_address]                  INT              NULL,
+# MAGIC     [id_return_address]                 INT              NULL,
+# MAGIC     [name_return_address]               VARCHAR(35)      NULL,
+# MAGIC     [code_msa_fips]                     CHAR(4)          NULL,
+# MAGIC     [code_rm_city]                      INT              NULL,
+# MAGIC     [code_tax_exempt]                   CHAR(5)          NULL,
+# MAGIC     [num_customer_segment]              INT              NULL,
+# MAGIC     [code_default_order_type_1]         CHAR(1)          NULL,
+# MAGIC     [code_default_order_type_2]         CHAR(1)          NULL,
+# MAGIC     [code_default_order_type_3]         CHAR(1)          NULL,
+# MAGIC     [code_default_order_type_4]         CHAR(1)          NULL,
+# MAGIC     [num_ship_lead_days]                INT              NULL,
+# MAGIC     [code_delivery_uom]                 CHAR(1)          NULL,
+# MAGIC     [val_delivery_uom_fence]            DECIMAL(10,2)    NULL,
+# MAGIC     [code_express_shipping_method]      CHAR(3)          NULL,
+# MAGIC     [pct_express_handling_charge]       DECIMAL(10,3)    NULL,
+# MAGIC     [amt_express_minimum]               DECIMAL(10,2)    NULL,
+# MAGIC     [amt_express_maximum]               DECIMAL(10,2)    NULL,
+# MAGIC     [code_express_service_contract]     VARCHAR(50)      NULL,
+# MAGIC     [is_block_rep_order_entry]          BIT              NULL,
+# MAGIC     [code_allow_fax]                    CHAR(1)          NULL,
+# MAGIC     [code_direct_consumer]              CHAR(1)          NULL,
+# MAGIC     [code_direct_include_shipto]        CHAR(1)          NULL,
+# MAGIC     [code_exports_lcl_consolidation]    CHAR(1)          NULL,
+# MAGIC     [code_exports_document_country]     CHAR(3)          NULL,
+# MAGIC     [code_exports_product_on_pallets]   CHAR(1)          NULL,
+# MAGIC     [code_exports_appointments_required] CHAR(1)         NULL,
+# MAGIC     [code_has_dock]                     BIT              NULL,
+# MAGIC     [code_use_negotiated_freight_rate]  CHAR(1)          NULL,
+# MAGIC     [code_use_standard_freight_rate]    CHAR(1)          NULL,
+# MAGIC     [code_do_not_reprice_orders]        CHAR(1)          NULL,
+# MAGIC     [code_pricing_use_offline_files]    CHAR(1)          NULL,
+# MAGIC     [code_default_language]             CHAR(8)          NULL,
+# MAGIC     [dt_territory_effectivity]          DATETIME2(6)     NULL,
+# MAGIC     [name_has_dock_user_date]           VARCHAR(50)      NULL,
+# MAGIC     [dt_last_status_change]             DATETIME2(6)     NULL,
+# MAGIC     [code_record_status]                CHAR(1)          NULL,
+# MAGIC     [code_app]                          INT              NULL,
+# MAGIC     [num_change_address]                INT              NULL,
+# MAGIC     [num_change_ship]                   INT              NULL,
+# MAGIC     [num_change_ship_ext]               INT              NULL,
+# MAGIC     [num_change_customer]               INT              NULL,
+# MAGIC     [num_commission_audit]              INT              NULL,
+# MAGIC     [num_commission_audit_2]            INT              NULL,
+# MAGIC     [name_created_by]                   VARCHAR(30)      NULL,
+# MAGIC     [ts_created]                        DATETIME2(6)     NULL,
+# MAGIC     [name_modified_by]                  VARCHAR(30)      NULL,
+# MAGIC     [ts_modified]                       DATETIME2(6)     NULL
+# MAGIC );
+
+# METADATA ********************
+
+# META {
+# META   "language": "sparksql",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+# MAGIC %%sql
+# MAGIC -- @type: procedure
+# MAGIC -- @schema: dbo
+# MAGIC -- @name: usp_Load_ref_customer_shipping_location
+# MAGIC CREATE OR ALTER PROCEDURE [dbo].[usp_Load_ref_customer_shipping_location]
+# MAGIC AS
+# MAGIC BEGIN
+# MAGIC     EXEC [ETL_Framework].[DW_Developer].[usp_DropConstraints] 'SupplyChain_Warehouse'
+# MAGIC     EXEC [ETL_Framework].[DW_Developer].[usp_RefreshCuratedTableFromView]
+# MAGIC          'SupplyChain_Warehouse', 'SupplyChain_DW', 'ref_customer_shipping_location'
+# MAGIC END;
+
+# METADATA ********************
+
+# META {
+# META   "language": "sparksql",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+import sempy.fabric as fabric
+result = fabric.run_query("SupplyChain_Warehouse", "EXEC [dbo].[usp_Load_ref_customer_shipping_location]")
+print(result)
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "jupyter_python"
+# META }
+
+
+================================================================================
+NOTEBOOK: nb_ref_calendar
+================================================================================
+# Fabric notebook source
+
+# METADATA ********************
+
+# META {
+# META   "kernel_info": {
+# META     "name": "synapse_pyspark"
+# META   },
+# META   "dependencies": {
+# META     "lakehouse": {
+# META       "default_lakehouse": "584e7d2c-46ca-49dc-bb6c-68df6ef4f424",
+# META       "default_lakehouse_name": "Enterprise_Lakehouse",
+# META       "default_lakehouse_workspace_id": "c8d9fc83-18b6-4e1d-8264-0b49eed36fe0",
+# META       "known_lakehouses": [
+# META         {
+# META           "id": "584e7d2c-46ca-49dc-bb6c-68df6ef4f424"
+# META         },
+# META         {
+# META           "id": "62a3081e-4093-4f46-856c-f50aa58732fa"
+# META         }
+# META       ]
+# META     }
+# META   }
+# META }
+
+# CELL ********************
+
+TARGET_TABLE = "ref_calendar"
+SOURCE_TABLE = "MasterData_DW/DimDate"
+
+COLUMN_SQL = """
+    SELECT
+        -- Keys
+        CAST(DateKey AS INT)                                 AS sk_date,
+        CAST(MapicsDate AS INT)                              AS id_mapics_date,
+        CAST(DateID AS DATE)                                 AS dt_date,
+        CAST(DateTimeID AS DATE)                             AS dt_datetime,
+        CAST(CalendarDate AS DATE)                           AS dt_calendar,
+
+        -- Calendar - Day
+        TRIM(CalendarDateName)                               AS name_calendar_date,
+        CAST(CalendarDateIndicator AS INT)                   AS num_cal_date_indicator,
+        CAST(CalendarDayOfWeek AS INT)                       AS num_cal_day_of_week,
+        TRIM(CalendarDayOfWeekName)                          AS name_cal_day_of_week,
+        CAST(CalendarDayOfMonth AS INT)                      AS num_cal_day_of_month,
+        CAST(CalendarDayOfYear AS INT)                       AS num_cal_day_of_year,
+
+        -- Calendar - Week
+        CAST(CalendarWeek AS INT)                            AS num_cal_week,
+        CAST(CalendarWeekIndicator AS INT)                   AS num_cal_week_indicator,
+        CAST(CalendarWeekYear AS INT)                        AS num_cal_week_year,
+        TRIM(CalendarWeekYearName)                           AS name_cal_week_year,
+        CAST(CalendarWeekFirstDate AS DATE)                  AS dt_cal_week_first,
+        CAST(CalendarWeekLastDate AS DATE)                   AS dt_cal_week_last,
+        CAST(CalendarWeekOfMonth AS INT)                     AS num_cal_week_of_month,
+
+        -- Calendar - Month
+        CAST(CalendarMonth AS INT)                           AS num_cal_month,
+        CAST(CalendarMonthIndicator AS INT)                  AS num_cal_month_indicator,
+        CAST(CalendarMonthYear AS INT)                       AS num_cal_month_year,
+        TRIM(CalendarMonthName)                              AS name_cal_month,
+        TRIM(CalendarMonthYearName)                          AS name_cal_month_year,
+        CAST(CalendarMonthFirstDate AS DATE)                 AS dt_cal_month_first,
+        CAST(CalendarMonthLastDate AS DATE)                  AS dt_cal_month_last,
+
+        -- Calendar - Quarter
+        CAST(CalendarQuarter AS INT)                         AS num_cal_quarter,
+        TRIM(CalendarQuarterName)                            AS name_cal_quarter,
+        CAST(CalendarQuarterIndicator AS INT)                AS num_cal_quarter_indicator,
+        CAST(CalendarQuarterYear AS INT)                     AS num_cal_quarter_year,
+        TRIM(CalendarQuarterYearName)                        AS name_cal_quarter_year,
+
+        -- Calendar - Semester & Year
+        CAST(CalendarSemester AS INT)                        AS num_cal_semester,
+        CAST(CalendarSemesterYear AS INT)                    AS num_cal_semester_year,
+        CAST(CalendarYear AS INT)                            AS num_cal_year,
+        TRIM(CalendarYearName)                               AS name_cal_year,
+        CAST(CalendarYearIndicator AS INT)                   AS num_cal_year_indicator,
+
+        -- Fiscal - Day
+        CAST(FiscalDate AS DATE)                             AS dt_fiscal,
+        TRIM(FiscalDateName)                                 AS name_fiscal_date,
+        CAST(FiscalDateIndicator AS INT)                     AS num_fsc_date_indicator,
+        CAST(FiscalDayOfWeek AS INT)                         AS num_fsc_day_of_week,
+        TRIM(FiscalDayOfWeekName)                            AS name_fsc_day_of_week,
+        CAST(FiscalDayOfMonth AS INT)                        AS num_fsc_day_of_month,
+        CAST(FiscalDayOfYear AS INT)                         AS num_fsc_day_of_year,
+
+        -- Fiscal - Week
+        CAST(FiscalWeek AS INT)                              AS num_fsc_week,
+        CAST(FiscalWeekIndicator AS INT)                     AS num_fsc_week_indicator,
+        CAST(FiscalWeekYear AS INT)                          AS num_fsc_week_year,
+        TRIM(FiscalWeekYearName)                             AS name_fsc_week_year,
+        CAST(FiscalWeekFirstDate AS DATE)                    AS dt_fsc_week_first,
+        CAST(FiscalWeekLastDate AS DATE)                     AS dt_fsc_week_last,
+        CAST(FiscalWeekOfMonth AS INT)                       AS num_fsc_week_of_month,
+
+        -- Fiscal - Month
+        CAST(FiscalMonth AS INT)                             AS num_fsc_month,
+        CAST(FiscalMonthIndicator AS INT)                    AS num_fsc_month_indicator,
+        CAST(FiscalMonthYear AS INT)                         AS num_fsc_month_year,
+        TRIM(FiscalMonthName)                                AS name_fsc_month,
+        TRIM(FiscalMonthYearName)                            AS name_fsc_month_year,
+        CAST(FiscalMonthFirstDate AS DATE)                   AS dt_fsc_month_first,
+        CAST(FiscalMonthLastDate AS DATE)                    AS dt_fsc_month_last,
+
+        -- Fiscal - Quarter
+        CAST(FiscalQuarter AS INT)                           AS num_fsc_quarter,
+        TRIM(FiscalQuarterName)                              AS name_fsc_quarter,
+        CAST(FiscalQuarterIndicator AS INT)                  AS num_fsc_quarter_indicator,
+        CAST(FiscalQuarterYear AS INT)                       AS num_fsc_quarter_year,
+        TRIM(FiscalQuarterYearName)                          AS name_fsc_quarter_year,
+
+        -- Fiscal - Semester & Year
+        CAST(FiscalSemester AS INT)                          AS num_fsc_semester,
+        CAST(FiscalSemesterYear AS INT)                      AS num_fsc_semester_year,
+        CAST(FiscalYear AS INT)                              AS num_fsc_year,
+        TRIM(FiscalYearName)                                 AS name_fsc_year,
+        CAST(FiscalYearIndicator AS INT)                     AS num_fsc_year_indicator,
+        CAST(FiscalYearFirstDate AS DATE)                    AS dt_fsc_year_first,
+        CAST(FiscalYearLastDate AS DATE)                     AS dt_fsc_year_last,
+
+        -- Holiday & Working Day
+        TRIM(HolidayIndicator)                               AS code_holiday_indicator,
+        TRIM(HolidayName)                                    AS name_holiday,
+        TRIM(WorkingDayIndicator)                            AS code_working_day,
+        TRIM(WeekdayWeekend)                                 AS code_weekday_weekend
+
+    FROM raw_source
+    WHERE DateKey IS NOT NULL
+"""
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+notebookutils.notebook.run(
+    "brz_engine",
+    7200,
+    {
+        "TARGET_TABLE": TARGET_TABLE,
+        "SOURCE_TABLE": SOURCE_TABLE,
+        "COLUMN_SQL":   COLUMN_SQL
+    }
+)
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+
+================================================================================
+NOTEBOOK: nb_ref_product
+================================================================================
+# Fabric notebook source
+
+# METADATA ********************
+
+# META {
+# META   "kernel_info": {
+# META     "name": "synapse_pyspark"
+# META   },
+# META   "dependencies": {
+# META     "lakehouse": {
+# META       "default_lakehouse": "584e7d2c-46ca-49dc-bb6c-68df6ef4f424",
+# META       "default_lakehouse_name": "Enterprise_Lakehouse",
+# META       "default_lakehouse_workspace_id": "c8d9fc83-18b6-4e1d-8264-0b49eed36fe0",
+# META       "known_lakehouses": [
+# META         {
+# META           "id": "584e7d2c-46ca-49dc-bb6c-68df6ef4f424"
+# META         },
+# META         {
+# META           "id": "62a3081e-4093-4f46-856c-f50aa58732fa"
+# META         }
+# META       ]
+# META     }
+# META   }
+# META }
+
+# CELL ********************
+
+TARGET_TABLE = "ref_product"
+SOURCE_TABLE = "SupplyChain_DW/DimCurrentProductDetails"
+
+COLUMN_SQL = """
+SELECT
+    -- Keys & Identifiers
+    CAST(CurrentProductDetailsKey AS INT)                 AS sk_product,
+    TRIM(ItemSKU)                                        AS id_item_sku,
+    TRIM(Item)                                           AS id_item,
+    TRIM(SCPItem)                                        AS id_scp_item,
+
+    -- Item Descriptions
+    TRIM(ItemDescription)                                AS name_item_description,
+    TRIM(Colors)                                         AS name_color,
+    CAST(QtyInBox AS INT)                                AS num_qty_in_box,
+    TRIM(UOM)                                            AS code_uom,
+
+    -- Series
+    TRIM(SeriesNumber)                                   AS code_series,
+    TRIM(ExtSeriesNumber)                                AS code_ext_series,
+    TRIM(ItemExtSeriesNumber)                             AS code_item_ext_series,
+    TRIM(SeriesName)                                     AS name_series,
+    TRIM(SeriesColor)                                    AS name_series_color,
+    TRIM(SeriesDescription)                              AS name_series_description,
+
+    -- Concatenated Descriptions
+    TRIM(`Item-Description-Series`)                      AS name_item_desc_series,
+    TRIM(`SH-Item-Description-Series`)                   AS name_sh_item_desc_series,
+    TRIM(`SH-Series-Description`)                        AS name_sh_series_description,
+    TRIM(`Item-Description-Series-ItemColor`)            AS name_item_desc_series_color,
+
+    -- Classification - Item
+    TRIM(ItemClassCode)                                  AS code_item_class,
+    TRIM(ItemClassName)                                  AS name_item_class,
+    TRIM(ItemClass)                                      AS name_item_class_full,
+    TRIM(ItemCode)                                       AS code_item,
+    TRIM(ItemGrouping)                                   AS name_item_grouping,
+    TRIM(ItemStyleCode)                                  AS code_item_style,
+    TRIM(ItemStyleGroup)                                 AS name_item_style_group,
+    TRIM(ItemStyle)                                      AS name_item_style,
+
+    -- Classification - Product Line & Category
+    TRIM(ProductLine)                                    AS name_product_line,
+    TRIM(RetailCategoryCode)                             AS code_retail_category,
+    TRIM(RetailCategoryDescription)                      AS name_retail_category,
+    TRIM(MerchandisingCategory)                          AS name_merchandising_category,
+    TRIM(ChildStyleDescription)                          AS name_child_style,
+    TRIM(ParentStyleDescription)                         AS name_parent_style,
+    TRIM(PricePoint)                                     AS name_price_point,
+    TRIM(AssociationCode)                                AS code_association,
+
+    -- Classification - Sales
+    TRIM(SalesClassCode)                                 AS code_sales_class,
+    TRIM(SalesClassDescription)                          AS name_sales_class_description,
+    TRIM(SalesClass)                                     AS name_sales_class,
+    TRIM(AFISalesCategoryCode)                           AS code_afi_sales_category,
+    TRIM(AFISalesCategory)                               AS name_afi_sales_category,
+    TRIM(AFISalesDivisionCode)                           AS code_afi_sales_division,
+    TRIM(AFISalesDivision)                               AS name_afi_sales_division,
+    TRIM(AFIFinanceDivision)                             AS name_afi_finance_division,
+
+    -- Classification - Discount
+    TRIM(DiscountClassCode)                              AS code_discount_class,
+    TRIM(DiscountClassDescription)                       AS name_discount_class_description,
+    TRIM(DiscountClass)                                  AS name_discount_class,
+
+    -- Classification - Commission
+    TRIM(CommissionClassCode)                            AS code_commission_class,
+    TRIM(CommissionClassDescription)                     AS name_commission_class_description,
+    TRIM(CommissionClass)                                AS name_commission_class,
+
+    -- Classification - Freight
+    TRIM(FreightClassCode)                               AS code_freight_class,
+    TRIM(FreightClassDescription)                        AS name_freight_class_description,
+    TRIM(FreightClass)                                   AS name_freight_class,
+
+    -- Classification - Collective
+    TRIM(CollectiveClassCode)                            AS code_collective_class,
+    TRIM(CollectiveClass)                                AS name_collective_class,
+
+    -- Office & Origin
+    TRIM(ResponsibleOffice)                              AS code_responsible_office,
+    TRIM(`Import/DomesticCode`)                          AS code_import_domestic,
+    TRIM(CountryofOrigin)                                AS name_country_of_origin,
+    TRIM(CEXCode)                                        AS code_cex,
+
+    -- Status
+    TRIM(AFIItemStatus)                                  AS code_afi_item_status,
+    TRIM(ManufacturingStatus)                            AS code_manufacturing_status,
+    TRIM(CurrentSCPManufacturingStatus)                  AS code_current_scp_manufacturing_status,
+    TRIM(MarketingItemStatus)                            AS code_marketing_item_status,
+    TRIM(MarketingStatusDescription)                     AS name_marketing_status,
+    TRIM(CurrentStatus)                                  AS code_current_status,
+    CAST(ManufacturingStatusChangeDate AS DATE)          AS dt_manufacturing_status_change,
+
+    -- Flags
+    CASE WHEN LOWER(TRIM(MainPieceItem)) = 'true' THEN true ELSE false END   AS is_main_piece,
+    CAST(CommodityItem AS INT)                           AS num_commodity_item,
+    TRIM(SellableItemFlag)                               AS code_sellable_item,
+    CAST(F123ProductFlag AS INT)                         AS is_f123_product,
+    CAST(HSCoreProductFlag AS INT)                       AS is_hs_core_product,
+    CAST(HSProprietaryProductFlag AS INT)                AS is_hs_proprietary_product,
+    CAST(HSExclusiveFlag AS INT)                         AS is_hs_exclusive,
+    CAST(BerklineProductFlag AS INT)                     AS is_berkline_product,
+    CAST(BenchcraftProductFlag AS INT)                   AS is_benchcraft_product,
+    CAST(NewMillenniumProductFlag AS INT)                AS is_new_millennium_product,
+    CAST(BardiniProductFlag AS INT)                      AS is_bardini_product,
+    CAST(ShanghaiStore AS INT)                           AS is_shanghai_store,
+    CAST(DefaultGroup AS INT)                            AS num_default_group,
+
+    -- Market
+    TRIM(MarketIntroducedAt)                             AS name_market_introduced_at,
+    CAST(MarketBeginDate AS DATE)                        AS dt_market_begin,
+    CAST(MarketEndDate AS DATE)                          AS dt_market_end,
+
+    -- Pricing
+    CAST(FOBPrice AS DECIMAL(14,3))                      AS amt_fob_price,
+    TRIM(GoodBetterBestForPricePoint)                    AS code_good_better_best,
+    CAST(GBBSortId AS INT)                               AS num_gbb_sort,
+
+    -- Vendor
+    TRIM(PrimaryVendor)                                  AS code_primary_vendor,
+    TRIM(PrimaryVendorName)                              AS name_primary_vendor,
+
+    -- Invoice & Forecast
+    TRIM(InitialInvoicePeriod)                           AS code_initial_invoice_period,
+    CAST(InitialInvoiceQty AS INT)                       AS qty_initial_invoice,
+    TRIM(ItemForecastPlannerID)                          AS id_item_forecast_planner,
+
+    -- Package / Main Piece
+    TRIM(MainPiece)                                      AS code_main_piece
+
+FROM raw_source
+WHERE ItemSKU IS NOT NULL
+    AND ItemSKU <> "N/A"
+"""
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+
+# CELL ********************
+
+notebookutils.notebook.run(
+    "brz_engine",
+    7200,
+    {
+        "TARGET_TABLE": TARGET_TABLE,
+        "SOURCE_TABLE": SOURCE_TABLE,
+        "COLUMN_SQL":   COLUMN_SQL
+    }
+)
+
+# METADATA ********************
+
+# META {
+# META   "language": "python",
+# META   "language_group": "synapse_pyspark"
+# META }
+

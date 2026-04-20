@@ -372,7 +372,7 @@ VALUES (..., '["silver.slv_upstream_table"]');
 -- Pipeline auto picks up → wave auto-computed → parallel execution
 ```
 
-> **Full step-by-step guide**: See [new_table_onboarding_guide.md](Fabric_Architect/new_table_onboarding_guide.md) — covers all layers, load types, DQ rules, testing, FAQ.
+> **Full step-by-step guide**: See [onboarding.md](docs/operations/onboarding.md) — covers all layers, load types, DQ rules, testing, FAQ.
 
 ---
 
@@ -510,7 +510,7 @@ No pipeline changes needed — `pl_dq_check` Lookup dynamically reads `dq_rules`
 | **Concurrency** | Master: concurrency=1, Bronze: batch=6, Silver wave: batch=8, Gold: batch=2 |
 | **Snapshot conflict** | Mitigated: usp_log_run retry 3x + reduced batch + pipeline retry 3x60s |
 
-> **Full details**: See [scheduling_and_concurrency.md](Fabric_Architect/scheduling_and_concurrency.md) — trigger scenarios, CU estimates, cron setup.
+> **Full details**: See [scheduling.md](docs/operations/scheduling.md) — trigger scenarios, CU estimates, cron setup.
 
 ---
 
@@ -560,7 +560,7 @@ flowchart TD
 | **Cross-mart deps** | Silver in mart B can depend on bronze from mart A via `depends_on` |
 | **Cost optimization** | Total time = max(mart), not sum(marts) |
 
-> **Full design**: See [multi_mart_scale_architecture.md](Fabric_Architect/multi_mart_scale_architecture.md)
+> **Full design**: See [multi_mart_scale.md](docs/enterprise/multi_mart_scale.md)
 
 ---
 
@@ -595,7 +595,7 @@ flowchart TD
 | `cdc` | CDC | usp_IncrementalTableLoad |
 | `scd2` | SCD2 | usp_SCD2_TableLoad |
 
-> **Full comparison**: See [Enterprise_vs_Fabric_comparison.md](Fabric_Architect/Enterprise_vs_Fabric_comparison.md)
+> **Full comparison**: See [fabric_vs_enterprise.md](docs/enterprise/fabric_vs_enterprise.md)
 
 ---
 
@@ -616,7 +616,7 @@ flowchart TD
 
 > **⚠ BLOCKED**: Requires Azure DevOps access (not yet granted as of 2026-04-18).
 > CI/CD setup (.sqlproj, SqlCmdVariable, PR gates, build validation) cannot proceed until access is provided.
-> See [future_roadmap.md](Fabric_Architect/future_roadmap.md) Phase 2 for full details.
+> See [roadmap.md](docs/enterprise/roadmap.md) Phase 2 for full details.
 
 ```mermaid
 flowchart LR
@@ -668,56 +668,57 @@ flowchart LR
 
 ## Documentation Index
 
-### Onboarding & Operations
-
-| File | Description |
-|------|-------------|
-| [new_table_onboarding_guide.md](Fabric_Architect/new_table_onboarding_guide.md) | **Start here** — Step-by-step: add new ETL table (for DA/DE) |
-| [runbook_operations.md](Fabric_Architect/runbook_operations.md) | **Operations** — Pipeline troubleshooting, common errors, re-run guide, health checks, escalation |
-| [alerting_setup_guide.md](Fabric_Architect/alerting_setup_guide.md) | **Alerting** — Power Automate + Teams: setup guide, Adaptive Card design, test commands |
-| [health_check.py](scripts/health_check.py) | **Health Check** — 49 automated checks: `python3 scripts/health_check.py` |
-| [scheduling_and_concurrency.md](Fabric_Architect/scheduling_and_concurrency.md) | Scheduling: cron, smart skip, concurrency, snapshot conflict mitigation |
-| [sqlproj_validation_guide.md](Fabric_Architect/sqlproj_validation_guide.md) | .sqlproj validation: 3 approaches (lint / sqlproj / full ProjectRef) |
-| [timezone_sync_guide.md](Fabric_Architect/timezone_sync_guide.md) | Timezone sync: UTC + CST + VN, map Enterprise fn_GetDate |
-| [generic_sp_migration_plan.md](Fabric_Architect/generic_sp_migration_plan.md) | Migration history: 28 per-table SPs → 1 generic SP |
-
-### Architecture Diagrams (Mermaid `.mmd`)
+### Architecture Diagrams (`diagrams/`)
 
 | File | Audience | Description |
 |------|----------|-------------|
-| [v9_presentation.mmd](v9_presentation.mmd) | DA / BU / Leadership | **Presentation** — Overview: data flow, pipeline, DQ gates, scorecard, performance metrics |
-| [template_full_architecture.mmd](template_full_architecture.mmd) | DE / Architect | **System Design** — Full detail: all objects, SPs, functions, connections, meta layer, lineage |
-| [v9_supplychain_full_architecture.mmd](v9_supplychain_full_architecture.mmd) | DE (v9 project) | **v9 Actual** — Real data: 85 objects, 7 pipelines, 1.47B rows, all IDs |
+| [v9_presentation.mmd](diagrams/v9_presentation.mmd) | DA / BU / Leadership | **Presentation** — Overview: data flow, pipeline with DQ gates, scorecard, metrics |
+| [template_full_architecture.mmd](diagrams/template_full_architecture.mmd) | DE / Architect | **System Design** — Full detail: all objects, SPs, functions, connections, lineage |
+| [v9_supplychain_full_architecture.mmd](diagrams/v9_supplychain_full_architecture.mmd) | DE (v9 project) | **v9 Actual** — 85 objects, 7 pipelines, 1.47B rows, all IDs |
 
-### Templates (generic, apply to any project)
-
-| File | Description |
-|------|-------------|
-| [template_architecture.md](Fabric_Architect/template_architecture.md) | Architecture reference: schemas, pipelines, DAG, meta, DQ, naming |
-| [template_pipeline_guide.md](Fabric_Architect/template_pipeline_guide.md) | Pipeline execution trace: what happens when master triggers |
-| [template_setup_guide.md](Fabric_Architect/template_setup_guide.md) | Phase-by-phase setup: DDL, SP templates, pipeline JSON, REST API |
-
-### Project-specific (SupplyChain / Forecast)
+### Onboarding & Operations (`docs/operations/`)
 
 | File | Description |
 |------|-------------|
-| [v9_architecture_supplychain.md](Fabric_Architect/v9_architecture_supplychain.md) | All 76 objects: names, row counts, pipeline IDs, source mappings, SM |
-| [v9_pipeline_supplychain.md](Fabric_Architect/v9_pipeline_supplychain.md) | Execution trace: actual SP names, durations, wave assignments |
-| [v9_setup_supplychain.md](Fabric_Architect/v9_setup_supplychain.md) | Implementation log: Spark→T-SQL conversions, bugs, fixes |
+| [onboarding.md](docs/operations/onboarding.md) | **Start here** — Step-by-step: add new ETL table (for DA/DE) |
+| [runbook.md](docs/operations/runbook.md) | **Operations** — Pipeline troubleshooting, common errors, re-run guide, escalation |
+| [alerting.md](docs/operations/alerting.md) | **Alerting** — Power Automate + Teams: setup guide, Adaptive Card design |
+| [health_check.py](scripts/health_check.py) | **Health Check** — 49 automated checks: `python3 scripts/health_check.py` |
+| [scheduling.md](docs/operations/scheduling.md) | Scheduling: cron, smart skip, concurrency, snapshot conflict mitigation |
+| [sqlproj_validation.md](docs/operations/sqlproj_validation.md) | .sqlproj validation: 3 approaches (lint / sqlproj / full ProjectRef) |
+| [timezone_sync.md](docs/operations/timezone_sync.md) | Timezone sync: UTC + CST + VN, map Enterprise fn_GetDate |
+| [generic_sp_migration.md](docs/operations/generic_sp_migration.md) | Migration history: 28 per-table SPs → 1 generic SP |
 
-### Scale & Enterprise
-
-| File | Description |
-|------|-------------|
-| [multi_mart_scale_architecture.md](Fabric_Architect/multi_mart_scale_architecture.md) | Multi Data Mart: N marts parallel, cross-mart deps, cost optimization |
-| [Enterprise_vs_Fabric_comparison.md](Fabric_Architect/Enterprise_vs_Fabric_comparison.md) | Enterprise vs v9: ETL framework, load patterns, CI/CD, naming |
-| [future_roadmap.md](Fabric_Architect/future_roadmap.md) | Future roadmap: production hardening, CI/CD, scale, enterprise integration |
-
-### Context
+### Templates (`docs/templates/`)
 
 | File | Description |
 |------|-------------|
-| [SESSION_CONTEXT.md](SESSION_CONTEXT.md) | Session context: connections, decisions, bugs, skills (for AI continuity) |
+| [architecture.md](docs/templates/architecture.md) | Architecture reference: schemas, pipelines, DAG, meta, DQ, naming |
+| [pipeline_guide.md](docs/templates/pipeline_guide.md) | Pipeline execution trace: what happens when master triggers |
+| [setup_guide.md](docs/templates/setup_guide.md) | Phase-by-phase setup: DDL, SP templates, pipeline JSON, REST API |
+
+### Project-specific (`docs/supplychain/`)
+
+| File | Description |
+|------|-------------|
+| [architecture.md](docs/supplychain/architecture.md) | All 76 objects: names, row counts, pipeline IDs, source mappings, SM |
+| [pipeline.md](docs/supplychain/pipeline.md) | Execution trace: actual SP names, durations, wave assignments |
+| [setup.md](docs/supplychain/setup.md) | Implementation log: Spark→T-SQL conversions, bugs, fixes |
+
+### Scale & Enterprise (`docs/enterprise/`)
+
+| File | Description |
+|------|-------------|
+| [multi_mart_scale.md](docs/enterprise/multi_mart_scale.md) | Multi Data Mart: N marts parallel, cross-mart deps, cost optimization |
+| [fabric_vs_enterprise.md](docs/enterprise/fabric_vs_enterprise.md) | Enterprise vs v9: ETL framework, load patterns, CI/CD, naming |
+| [roadmap.md](docs/enterprise/roadmap.md) | Future roadmap: production hardening, CI/CD, scale, enterprise integration |
+
+### Apps & Scripts
+
+| File | Description |
+|------|-------------|
+| [lineage_explorer/](lineage_explorer/) | **Lineage Explorer** — Streamlit app: interactive DAG visualization |
+| [scripts/health_check.py](scripts/health_check.py) | **Health Check** — 49 automated checks |
 
 ---
 

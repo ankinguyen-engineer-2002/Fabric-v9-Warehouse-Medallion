@@ -187,11 +187,13 @@ curl -X POST "https://api.fabric.microsoft.com/v1/workspaces/$WS_ID/items" \
 | `FULL_CONTEXT.md` | Master context: all IDs, schemas, code, history |
 | `README.md` | Public documentation (13 sections) |
 | `task.md` | Roadmap progress tracker |
-| `Fabric_Architect/future_roadmap.md` | Score, strengths, weaknesses, 4-phase roadmap |
-| `Fabric_Architect/runbook_operations.md` | Operations: errors, re-run, escalation |
-| `Fabric_Architect/alerting_setup_guide.md` | Alerting design (blocked by IT) |
-| `Fabric_Architect/new_table_onboarding_guide.md` | Add new table (2 SQL statements) |
-| `Fabric_Architect/v9_setup_supplychain.md` | Implementation log with all DDL |
-| `Fabric_Architect/multi_mart_scale_architecture.md` | Multi-mart parallel design |
-| `Fabric_Architect/scheduling_and_concurrency.md` | Scheduling, cron, concurrency |
-| `Fabric_Architect/template_architecture.md` | Generic architecture reference |
+| `docs/enterprise/roadmap.md` | Score, strengths, weaknesses, 4-phase roadmap |
+| `docs/operations/runbook.md` | Operations: errors, re-run, escalation |
+| `docs/operations/alerting.md` | Alerting design (blocked by IT) |
+| `docs/operations/onboarding.md` | Add new table (2 SQL statements) |
+| `docs/supplychain/setup.md` | Implementation log with all DDL |
+| `docs/enterprise/multi_mart_scale.md` | Multi-mart parallel design |
+| `docs/operations/scheduling.md` | Scheduling, cron, concurrency |
+| `docs/templates/architecture.md` | Generic architecture reference |
+| `diagrams/` | Mermaid `.mmd` architecture diagrams (3 files) |
+| `lineage_explorer/` | Streamlit lineage app (live) |
