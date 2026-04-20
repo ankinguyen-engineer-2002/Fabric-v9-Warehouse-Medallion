@@ -83,8 +83,14 @@ jobs:
               w.writerow(cols)
               w.writerows(rows)
 
-          # Note: views.csv exported manually (Service Principal lacks sys.sql_modules permission)
-          # Use local `az login` to refresh: python3 -c "..." > lineage_explorer/data/views.csv
+          # Export views (via meta.vw_view_definitions wrapper — avoids sys.sql_modules permission issue)
+          cursor.execute("SELECT [schema], view_name, definition FROM meta.vw_view_definitions ORDER BY [schema], view_name")
+          cols = [d[0] for d in cursor.description]
+          rows = cursor.fetchall()
+          with open(f"{data_dir}/views.csv", "w", newline="") as f:
+              w = csv.writer(f)
+              w.writerow(cols)
+              w.writerows(rows)
 
           # Export run history
           cursor.execute("""
