@@ -3,7 +3,7 @@
 
 A complete architecture template for building **enterprise data warehouses** on Microsoft Fabric using **pure T-SQL stored procedures** — no Notebooks, no PySpark, no Lakehouse ETL.
 
-**[Live Lineage Explorer](https://vn-engineer-lineage.streamlit.app)** — Interactive data lineage visualization (login: admin123 / admin123)
+**[Live Lineage Explorer](https://vn-fabric-lineage.streamlit.app)** — Interactive data lineage visualization (login: admin123 / admin123)
 
 ---
 
@@ -659,7 +659,7 @@ flowchart LR
 - **Scheduling**: Cron-based (sp_registry) + smart skip filter
 - **Semantic Model**: Direct Lake (TMDL via Fabric REST API)
 - **BI**: Power BI Direct Lake
-- **Lineage**: Interactive Streamlit app ([live](https://vn-engineer-lineage.streamlit.app))
+- **Lineage**: Interactive Streamlit app ([live](https://vn-fabric-lineage.streamlit.app))
 - **Version Control**: GitHub
 - **Deployment**: Fabric REST API + Claude Code
 - **Environments**: DEV (operational) → TEST → PROD (roadmap)

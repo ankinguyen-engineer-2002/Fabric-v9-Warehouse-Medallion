@@ -1002,7 +1002,7 @@ gh repo clone afi-migration-pilot/data-edw-fabric  # Use gh CLI (not git clone)
 
 | Aspect | Value |
 |--------|-------|
-| URL | https://vn-engineer-lineage.streamlit.app |
+| URL | https://vn-fabric-lineage.streamlit.app |
 | Login | admin123 / admin123 (override via Streamlit secrets) |
 | Tech | Streamlit + React SVG DAG |
 | Data | CSV exports from Warehouse (auto-refresh TTL=600s) |
