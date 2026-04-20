@@ -681,6 +681,14 @@ flowchart LR
 | [timezone_sync_guide.md](Fabric_Architect/timezone_sync_guide.md) | Timezone sync: UTC + CST + VN, map Enterprise fn_GetDate |
 | [generic_sp_migration_plan.md](Fabric_Architect/generic_sp_migration_plan.md) | Migration history: 28 per-table SPs → 1 generic SP |
 
+### Architecture Diagrams (Mermaid `.mmd`)
+
+| File | Audience | Description |
+|------|----------|-------------|
+| [v9_presentation.mmd](v9_presentation.mmd) | DA / BU / Leadership | **Presentation** — Overview: data flow, pipeline, DQ gates, scorecard, performance metrics |
+| [template_full_architecture.mmd](template_full_architecture.mmd) | DE / Architect | **System Design** — Full detail: all objects, SPs, functions, connections, meta layer, lineage |
+| [v9_supplychain_full_architecture.mmd](v9_supplychain_full_architecture.mmd) | DE (v9 project) | **v9 Actual** — Real data: 85 objects, 7 pipelines, 1.47B rows, all IDs |
+
 ### Templates (generic, apply to any project)
 
 | File | Description |

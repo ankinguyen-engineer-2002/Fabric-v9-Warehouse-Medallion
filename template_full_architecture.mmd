@@ -1,0 +1,513 @@
+flowchart LR
+
+    %% ══════════════════════════════════════════════════════════════════════
+    %% TEMPLATE — Warehouse-Native Medallion Architecture
+    %% Microsoft Fabric · Pure T-SQL · Metadata-Driven · DAG Orchestration
+    %%
+    %% HOW TO READ THIS DIAGRAM:
+    %%   1. Follow the MAIN FLOW (thick arrows ═══>) left → right: ① → ⑥
+    %%   2. Each numbered stage = 1 pipeline phase
+    %%   3. Dotted arrows (-.->)  = supporting/config interactions
+    %%   4. Thick double arrows (==>) = DAG wave dependencies
+    %%   5. Bottom panels = infrastructure that powers everything above
+    %%
+    %% Customize: replace {placeholders} with your project values
+    %% ══════════════════════════════════════════════════════════════════════
+
+    %% ============ LEGEND ============
+    subgraph LEGEND["📖 How to Read — Follow ① → ⑥ left to right"]
+      direction LR
+      LEG_1["══▶ Main data flow<br/>(follow this first)"]
+      LEG_2["──▶ Data lineage<br/>(table dependencies)"]
+      LEG_3["- - ▶ Config / control<br/>(supporting systems)"]
+      LEG_4["══▶ DAG wave dep<br/>(silver execution order)"]
+      LEG_1 ~~~ LEG_2 ~~~ LEG_3 ~~~ LEG_4
+    end
+
+    %% ══════════════════════════════════════════════════════════════
+    %% ① SOURCE SYSTEMS — START HERE
+    %% ══════════════════════════════════════════════════════════════
+    subgraph SRC["① SOURCE — Where data comes from"]
+      direction TB
+
+      subgraph SRC_ERP["ERP / Transactional"]
+        SRC_TXN1["📋 {SourceTable_1}<br/>{N}M rows"]
+        SRC_TXN2["📋 {SourceTable_2}<br/>{N}M rows"]
+        SRC_TXN3["📋 {SourceTable_N}<br/>{N}M rows"]
+      end
+
+      subgraph SRC_DIM["Master Data / Dimensions"]
+        SRC_DIM1["📅 {DimTable_1} · {N}K"]
+        SRC_DIM2["🏷️ {DimTable_2} · {N}K"]
+        SRC_DIM3["🏭 {DimTable_N} · {N}"]
+      end
+
+      subgraph SRC_EXT["External / API / Files"]
+        SRC_EXT1["☁️ {ExternalSource_1}"]
+        SRC_EXT2["📁 {FileSource_1}"]
+      end
+
+      subgraph SRC_LEG["Legacy Systems"]
+        SRC_LEG1["🔄 {LegacyTable_1}"]
+      end
+
+      SRC_HARD["✏️ Hardcoded INSERT<br/>{ref_static_table} · {N} rows"]
+    end
+
+    %% ══════════════════════════════════════════════════════════════
+    %% ② BRONZE — Raw mirror, no transforms
+    %% ══════════════════════════════════════════════════════════════
+    subgraph BRZ["② BRONZE — Raw mirror from source · {N} Tables + {N} Views"]
+      direction TB
+
+      subgraph BRZ_TXN["Transactional ({N})"]
+        direction TB
+        BRZ_T1["brz_{source}__{entity_1}<br/>{N}M · {load_type}"]
+        BRZ_T2["brz_{source}__{entity_2}<br/>{N}M · {load_type}"]
+        BRZ_TN["brz_{source}__{entity_N}<br/>{N}M · {load_type}"]
+      end
+
+      subgraph BRZ_REF["Reference / Dimension ({N})"]
+        direction TB
+        REF_1["ref_{entity_1} · {N}K"]
+        REF_2["ref_{entity_2} · {N}K"]
+        REF_3["ref_{entity_3} · {N}"]
+        REF_N["ref_{entity_N} · {N}"]
+      end
+
+      subgraph BRZ_HOW["How it works"]
+        BRZ_VW["VIEW = ETL formula<br/>SELECT * FROM<br/>Enterprise_Lakehouse.{schema}.{table}"]
+        BRZ_SP["usp_generic_load<br/>reads VIEW → DROP + CTAS → TABLE"]
+        BRZ_VW --> BRZ_SP
+      end
+    end
+
+    %% ══════════════════════════════════════════════════════════════
+    %% ③ SILVER — Clean, join, business rules (DAG waves)
+    %% ══════════════════════════════════════════════════════════════
+    subgraph SLV["③ SILVER — Clean + Join + Business Rules · {N} Tables · DAG Waves"]
+      direction TB
+
+      subgraph SLV_W0["Wave 0 — No silver deps · run PARALLEL first"]
+        direction TB
+        SLV_A["slv_{concept_A}<br/>{N}M rows<br/>deps: brz + ref only"]
+        SLV_B["slv_{concept_B}<br/>{N}M rows<br/>deps: brz + ref only"]
+        SLV_C["slv_{concept_C}<br/>{N}K rows<br/>deps: brz + ref only"]
+      end
+
+      subgraph SLV_W1["Wave 1 — Depends on Wave 0 · PARALLEL within wave"]
+        direction TB
+        SLV_D["slv_{concept_D}<br/>{N}K rows<br/>deps: slv_A + slv_C"]
+        SLV_E["slv_{concept_E}<br/>{N}M rows<br/>deps: slv_A"]
+        SLV_F["slv_{concept_F}<br/>{N}K rows<br/>deps: slv_C"]
+      end
+
+      subgraph SLV_W2["Wave 2 — Depends on Wave 1 · deepest chain"]
+        SLV_G["slv_{concept_G}<br/>{N}K rows<br/>deps: slv_D"]
+      end
+
+      SLV_NOTE["Execution order:<br/>Wave 0 all finish → Wave 1 all finish → Wave 2<br/>Parallel WITHIN each wave · Sequential BETWEEN waves"]
+    end
+
+    %% ══════════════════════════════════════════════════════════════
+    %% ④ GOLD — BI-ready aggregated facts
+    %% ══════════════════════════════════════════════════════════════
+    subgraph GLD["④ GOLD — BI-Ready Facts & Dims · {N} Tables"]
+      direction TB
+      GLD_FACT1["gld_fact_{subject_1}<br/>{N}M rows<br/>{UNION ALL / CTE chain}"]
+      GLD_FACT2["gld_fact_{subject_2}<br/>{N}M rows"]
+      GLD_DIM1["gld_dim_{subject}<br/>{N}K rows · optional"]
+
+      GLD_HOW["Same pattern:<br/>VIEW (logic) → usp_generic_load → TABLE"]
+    end
+
+    %% ══════════════════════════════════════════════════════════════
+    %% ⑤ SEMANTIC MODEL — Power BI reads from here
+    %% ══════════════════════════════════════════════════════════════
+    subgraph SM["⑤ SEMANTIC MODEL — {SM_Name} · Direct Lake"]
+      direction TB
+
+      subgraph SM_DIM["Dimensions ({N})"]
+        SM_DIM1["dim_{entity_1}<br/>← bronze.ref_*"]
+        SM_DIM2["dim_{entity_2}<br/>← bronze.ref_*"]
+        SM_DIMN["dim_{entity_N}<br/>← bronze.ref_*"]
+      end
+
+      subgraph SM_FACT["Facts ({N})"]
+        SM_FACT1["fact_{subject_1}<br/>← gold.gld_fact_*"]
+        SM_FACT2["fact_{subject_2}<br/>← gold.gld_fact_*"]
+      end
+
+      SM_DAX["_Measure · ~{N} DAX measures<br/>{N} Relationships<br/>Auto-refresh at end of pipeline"]
+    end
+
+    %% ══════════════════════════════════════════════════════════════
+    %% ⑥ CONSUMERS — End users see this
+    %% ══════════════════════════════════════════════════════════════
+    subgraph CON["⑥ CONSUMERS — What end users see"]
+      direction TB
+      CON_PBI["📊 Power BI<br/>Reports + Dashboards<br/>Direct Lake query"]
+      CON_APP["🖥️ Data Apps<br/>{Streamlit / etc.}"]
+      CON_HC["🔍 Health Check<br/>Automated verification"]
+    end
+
+    %% ══════════════════════════════════════════════════════════════════
+    %%
+    %% ═══ MAIN DATA FLOW (follow this first) ═══════════════════════
+    %%
+    %% ══════════════════════════════════════════════════════════════════
+
+    %% ① → ② SOURCE → BRONZE
+    SRC_TXN1  ==>|"3-part naming"| BRZ_T1
+    SRC_TXN2  ==>|"3-part naming"| BRZ_T2
+    SRC_TXN3  ==>|"3-part naming"| BRZ_TN
+    SRC_DIM1  ==> REF_1
+    SRC_DIM2  ==> REF_2
+    SRC_DIM3  ==> REF_3
+    SRC_EXT1  ==> BRZ_T1
+    SRC_LEG1  ==> REF_N
+    SRC_HARD  ==> REF_N
+
+    %% ② → ③ BRONZE → SILVER (Wave 0 lineage)
+    BRZ_T1    -->|"join"| SLV_A
+    BRZ_T2    --> SLV_A
+    REF_1     --> SLV_A
+    BRZ_TN    --> SLV_B
+    REF_2     --> SLV_B
+    REF_1     --> SLV_B
+    BRZ_T1    --> SLV_C
+    BRZ_T2    --> SLV_C
+    REF_3     --> SLV_C
+
+    %% ③ SILVER DAG: Wave 0 → Wave 1
+    SLV_A     ==>|"wave dep"| SLV_D
+    SLV_C     ==>|"wave dep"| SLV_D
+    REF_1     --> SLV_D
+    SLV_A     ==>|"wave dep"| SLV_E
+    REF_1     --> SLV_E
+    SLV_C     ==>|"wave dep"| SLV_F
+    REF_1     --> SLV_F
+
+    %% ③ SILVER DAG: Wave 1 → Wave 2
+    SLV_D     ==>|"wave dep"| SLV_G
+    REF_1     --> SLV_G
+
+    %% ③ → ④ SILVER → GOLD
+    SLV_A     -->|"feeds"| GLD_FACT1
+    SLV_D     --> GLD_FACT1
+    SLV_B     --> GLD_FACT2
+    SLV_D     --> GLD_FACT2
+    SLV_G     --> GLD_FACT2
+
+    %% ④ → ⑤ SEMANTIC MODEL (Direct Lake reads from warehouse)
+    REF_1     -.->|"Direct Lake<br/>dims from bronze"| SM_DIM1
+    REF_2     -.-> SM_DIM2
+    REF_3     -.-> SM_DIMN
+
+    %% ⑤ → ⑥ SM → CONSUMERS
+    SM_FACT1  ==> CON_PBI
+    SM_FACT2  ==> CON_PBI
+
+    %% ══════════════════════════════════════════════════════════════════
+    %%
+    %% ═══ SUPPORTING SYSTEMS (read after main flow) ═════════════════
+    %%
+    %% ══════════════════════════════════════════════════════════════════
+
+    %% ============ META — The brain that controls everything ============
+    subgraph META["⚙️ META — Control Plane (powers all layers above)"]
+      direction TB
+
+      subgraph META_CFG["Configuration — what to run"]
+        direction TB
+        META_REG["📋 sp_registry<br/>{N} rows · 22+ cols<br/>Every table registered here:<br/>load_type · depends_on · source_objects<br/>watermark · primary_key · date_key<br/>frequency · cron · project"]
+        META_DQR["🛡️ dq_rules<br/>{N} rules · 7 check types<br/>completeness · uniqueness · row_count<br/>freshness · ref_integrity · validity · custom_sql"]
+        META_DAG["🔗 slv_dag_waves_runtime<br/>Auto-computed wave assignments"]
+      end
+
+      subgraph META_LOG["Logging — what happened"]
+        direction TB
+        META_RH["📊 sp_run_history<br/>Every SP execution logged<br/>run_id · status · duration · rows"]
+        META_DQX["✅ dq_results<br/>Every DQ check result<br/>PASS/FAIL · actual vs expected"]
+        META_LIN["🔀 sp_lineage<br/>{N} edges · auto-rebuilt<br/>Full source→target graph"]
+        META_PLR["📈 pipeline_run_log<br/>Pipeline-level tracking"]
+      end
+
+      subgraph META_SP["Stored Procedures — how it runs"]
+        direction TB
+        SP_GEN["⭐ usp_generic_load<br/>THE core engine · 1 SP for all tables<br/>8 patterns: overwrite · incremental<br/>upsert · datekey · daterange<br/>identity · cdc · scd2"]
+        SP_LOG["usp_log_run<br/>Log + retry 3x/2s<br/>Auto-update sp_registry"]
+        SP_DQS["usp_check_dq_single<br/>1 rule/call · CRITICAL→THROW"]
+        SP_WAV["usp_compute_slv_waves<br/>DAG solver · max 30 waves"]
+        SP_BLD["usp_build_lineage<br/>JSON→lineage graph"]
+        SP_FIN["usp_finalize_pipeline<br/>Lineage + log update"]
+        SP_PRL["usp_log_pipeline_run<br/>Pipeline start tracking"]
+      end
+
+      subgraph META_FN["Functions — scheduling gates"]
+        direction TB
+        FN_SR["ufn_should_run → 0/1<br/>is_active + next_run_time"]
+        FN_CR["ufn_cron_is_due<br/>5-field cron parser"]
+        FN_TZ["ufn_utc_to_{tz}<br/>DST-aware timezone"]
+      end
+
+      subgraph META_VW["Views — monitoring"]
+        direction TB
+        VW_TD["vw_table_dictionary<br/>Enterprise-format catalog"]
+        VW_RH["vw_run_history_tz<br/>Multi-timezone history"]
+      end
+    end
+
+    %% ============ PIPELINE — The engine that executes everything ============
+    subgraph PL["🔄 PIPELINE ENGINE — Executes ①→④ automatically"]
+      direction TB
+
+      subgraph PL_MASTER["pl_sc_master · Entry point · concurrency=1"]
+        direction LR
+        PL_LS["① log_start"]
+        PL_LK["② Lookup<br/>DISTINCT project"]
+        PL_FE["③ ForEach project<br/>PARALLEL"]
+        PL_MRT["④ Invoke<br/>pl_sc_mart"]
+        PL_FIN["⑤ finalize"]
+        PL_SM["⑥ refresh SM"]
+        PL_LS --> PL_LK --> PL_FE --> PL_MRT --> PL_FIN --> PL_SM
+      end
+
+      subgraph PL_MART["pl_sc_mart · Per-project chain: bronze → DQ → silver → DQ → gold → DQ"]
+        direction LR
+        PL_MB["bronze"]
+        PL_DQB["⏸ dq_brz"]
+        PL_MS["silver"]
+        PL_DQS["⏸ dq_slv"]
+        PL_MG["gold"]
+        PL_DQG["⏸ dq_gld"]
+        PL_MB --> PL_DQB --> PL_MS --> PL_DQS --> PL_MG --> PL_DQG
+      end
+
+      subgraph PL_BRZ["pl_sc_bronze · Parallel table load"]
+        direction LR
+        PL_BL["Lookup<br/>sp_registry<br/>+ smart skip"]
+        PL_BF["ForEach<br/>batch={N}<br/>PARALLEL"]
+        PL_BS["EXEC<br/>usp_generic_load"]
+        PL_BL --> PL_BF --> PL_BS
+      end
+
+      subgraph PL_SLV["pl_sc_silver · Parent-child DAG pattern"]
+        direction LR
+        PL_CW["compute<br/>waves"]
+        PL_SW["Lookup<br/>DISTINCT wave"]
+        PL_SF["ForEach wave<br/>SEQUENTIAL"]
+        PL_SI["Invoke<br/>child pipeline"]
+        PL_CW --> PL_SW --> PL_SF --> PL_SI
+      end
+
+      subgraph PL_SLV_W["pl_sc_silver_wave · Child: run 1 wave parallel"]
+        direction LR
+        PL_WL["Lookup<br/>SPs for<br/>wave N"]
+        PL_WF["ForEach<br/>batch={N}<br/>PARALLEL"]
+        PL_WS["EXEC<br/>usp_generic_load"]
+        PL_WL --> PL_WF --> PL_WS
+      end
+
+      subgraph PL_GLD["pl_sc_gold · Parallel table load"]
+        direction LR
+        PL_GL["Lookup"]
+        PL_GF["ForEach<br/>PARALLEL"]
+        PL_GS["EXEC<br/>usp_generic_load"]
+        PL_GL --> PL_GF --> PL_GS
+      end
+
+      subgraph PL_DQ["pl_dq_check · Quality gate between layers"]
+        direction LR
+        PL_DL["Lookup<br/>dq_rules"]
+        PL_DF["ForEach rule<br/>PARALLEL"]
+        PL_DS["EXEC<br/>usp_check_dq_single<br/>CRITICAL→STOP"]
+        PL_DL --> PL_DF --> PL_DS
+      end
+    end
+
+    %% ============ CONNECTIONS — How pipeline talks to data ============
+    subgraph CONN["🔌 CONNECTIONS — How pipeline reaches data"]
+      direction LR
+      CONN_LH["Lakehouse Conn<br/>For: Lookup activities<br/>Cross-DB 3-part naming<br/>ID: {lakehouse_conn_id}"]
+      CONN_WH["Warehouse Conn<br/>For: SP execution<br/>linkedService endpoint<br/>ID: {warehouse_id}"]
+      CONN_PL["Pipeline Conn<br/>For: InvokePipeline<br/>Parent→child calls<br/>ID: {pipeline_conn_id}"]
+      CONN_SM["SM Conn<br/>For: SM refresh<br/>Power BI API<br/>ID: {sm_conn_id}"]
+    end
+
+    %% ============ PLATFORM — Infrastructure foundation ============
+    subgraph PLT["🏗️ PLATFORM — Infrastructure foundation"]
+      direction LR
+      PLT_FAB["Microsoft Fabric {SKU}<br/>Synapse Data Warehouse"]
+      PLT_WS["{Workspace_Name}<br/>{workspace_id}"]
+      PLT_GIT["Version Control<br/>GitHub / Azure Repos<br/>.sql files"]
+      PLT_AZ["Azure CLI<br/>Token management"]
+      PLT_REST["Fabric REST API<br/>Deploy + manage"]
+      PLT_SCHED["Scheduling<br/>Daily {HH}:00 UTC+{N}<br/>Cron + Smart Skip"]
+    end
+
+    %% ============ ENTERPRISE & ENVIRONMENT ============
+    subgraph SCALE["🏛️ SCALE — Enterprise + Multi-Environment"]
+      direction LR
+
+      subgraph ENT["Enterprise Compatibility"]
+        direction TB
+        ENT_LP["Load Patterns 8/8<br/>Aligned ETL_Framework"]
+        ENT_TD["TableDictionary<br/>vw_table_dictionary"]
+        ENT_AL["Audit Log mapped"]
+        ENT_ADV["v9 ahead:<br/>DAG · Lineage · DQ"]
+        ENT_BLK["⚠ Blockers:<br/>{pending IT items}"]
+      end
+
+      subgraph ENV["Multi-Environment"]
+        direction TB
+        ENV_DEV["DEV<br/>Active"]
+        ENV_TEST["TEST<br/>Validation"]
+        ENV_PROD["PROD<br/>Production"]
+        ENV_DEV -->|"deploy"| ENV_TEST -->|"approve"| ENV_PROD
+      end
+    end
+
+    %% ══════════════════════════════════════════════════════════════════
+    %%
+    %% ═══ SUPPORTING LINKS (dotted = config/control) ═══════════════
+    %%
+    %% ══════════════════════════════════════════════════════════════════
+
+    %% Master → Mart → Sub-pipelines
+    PL_MRT    -.->|"invokes"| PL_MB
+    PL_MB     -.->|"runs"| PL_BL
+    PL_MS     -.->|"runs"| PL_CW
+    PL_MG     -.->|"runs"| PL_GL
+    PL_DQB    -.->|"runs"| PL_DL
+    PL_DQS    -.->|"runs"| PL_DL
+    PL_DQG    -.->|"runs"| PL_DL
+
+    %% Pipeline SM refresh → Semantic Model
+    PL_SM     -.->|"auto-refresh"| SM_DAX
+
+    %% Pipeline calls SPs
+    PL_BS     -.->|"calls"| SP_GEN
+    PL_WS     -.->|"calls"| SP_GEN
+    PL_GS     -.->|"calls"| SP_GEN
+    PL_DS     -.->|"calls"| SP_DQS
+
+    %% SP interactions with meta tables
+    SP_GEN    -.->|"reads config"| META_REG
+    SP_GEN    -.->|"logs via"| SP_LOG
+    SP_LOG    -.->|"writes"| META_RH
+    SP_LOG    -.->|"updates next_run"| META_REG
+    SP_DQS    -.->|"reads rules"| META_DQR
+    SP_DQS    -.->|"writes results"| META_DQX
+    PL_CW     -.->|"calls"| SP_WAV
+    SP_WAV    -.->|"computes"| META_DAG
+    SP_WAV    -.->|"reads deps"| META_REG
+
+    %% Finalize flow
+    PL_FIN    -.->|"calls"| SP_FIN
+    SP_FIN    -.->|"rebuilds"| SP_BLD
+    SP_BLD    -.->|"writes"| META_LIN
+    SP_FIN    -.->|"closes"| META_PLR
+    PL_LS     -.->|"calls"| SP_PRL
+    SP_PRL    -.->|"opens"| META_PLR
+
+    %% Scheduling gate
+    FN_SR     -.->|"gates Lookup"| PL_BL
+
+    %% Connection routing
+    CONN_LH   -.->|"Lookups"| PL_BL
+    CONN_LH   -.-> PL_WL
+    CONN_WH   -.->|"SP exec"| PL_BS
+    CONN_PL   -.->|"invoke"| PL_SI
+    CONN_SM   -.->|"refresh"| PL_SM
+
+    %% Platform foundations
+    PLT_FAB   -.-> PLT_WS
+    PLT_WS    -.-> CONN_WH
+    PLT_SCHED -.->|"triggers"| PL_LS
+    PLT_AZ    -.-> CONN_LH
+    PLT_REST  -.-> CONN_PL
+    PLT_GIT   -.-> PLT_REST
+
+    %% Enterprise links
+    ENT_LP    -.-> SP_GEN
+    ENT_TD    -.-> VW_TD
+    ENT_AL    -.-> META_RH
+
+    %% Lineage app
+    META_LIN  -.-> CON_APP
+
+    %% ════════════════════════════════════════════════
+    %% STYLES — Strong contrast between layers
+    %% ════════════════════════════════════════════════
+    classDef legend fill:#F8FAFC,stroke:#94A3B8,color:#334155,stroke-width:1px
+    classDef source fill:#DBEAFE,stroke:#2563EB,color:#1E3A5F,stroke-width:2px
+    classDef bronze fill:#FED7AA,stroke:#EA580C,color:#7C2D12,stroke-width:2px
+    classDef silver fill:#E9D5FF,stroke:#9333EA,color:#581C87,stroke-width:2px
+    classDef gold fill:#FDE68A,stroke:#D97706,color:#78350F,stroke-width:2px
+    classDef meta fill:#BBF7D0,stroke:#16A34A,color:#14532D,stroke-width:2px
+    classDef metaSP fill:#86EFAC,stroke:#22C55E,color:#166534,stroke-width:2px
+    classDef metaFn fill:#A7F3D0,stroke:#10B981,color:#065F46,stroke-width:1px
+    classDef pipeline fill:#FBCFE8,stroke:#DB2777,color:#831843,stroke-width:2px
+    classDef semantic fill:#C7D2FE,stroke:#6366F1,color:#312E81,stroke-width:2px
+    classDef consume fill:#99F6E4,stroke:#0D9488,color:#134E4A,stroke-width:2px
+    classDef conn fill:#FECACA,stroke:#EF4444,color:#7F1D1D,stroke-width:1px
+    classDef platform fill:#E2E8F0,stroke:#475569,color:#1E293B,stroke-width:1px
+    classDef enterprise fill:#FEF08A,stroke:#CA8A04,color:#713F12,stroke-width:1px
+    classDef env fill:#DDD6FE,stroke:#7C3AED,color:#4C1D95,stroke-width:1px
+    classDef dq fill:#FECDD3,stroke:#E11D48,color:#881337,stroke-width:2px
+    classDef note fill:#FEF9C3,stroke:#EAB308,color:#713F12,stroke-width:1px,stroke-dasharray:5 5
+
+    %% Legend
+    class LEG_1,LEG_2,LEG_3,LEG_4 legend
+
+    %% Source
+    class SRC_TXN1,SRC_TXN2,SRC_TXN3,SRC_DIM1,SRC_DIM2,SRC_DIM3 source
+    class SRC_EXT1,SRC_EXT2,SRC_LEG1,SRC_HARD source
+
+    %% Bronze
+    class BRZ_T1,BRZ_T2,BRZ_TN bronze
+    class REF_1,REF_2,REF_3,REF_N bronze
+    class BRZ_VW,BRZ_SP bronze
+
+    %% Silver
+    class SLV_A,SLV_B,SLV_C,SLV_D,SLV_E,SLV_F,SLV_G silver
+    class SLV_NOTE note
+
+    %% Gold
+    class GLD_FACT1,GLD_FACT2,GLD_DIM1 gold
+    class GLD_HOW note
+
+    %% Meta
+    class META_REG,META_DQR,META_DAG meta
+    class META_RH,META_DQX,META_LIN,META_PLR meta
+    class SP_GEN,SP_LOG,SP_DQS,SP_WAV,SP_BLD,SP_FIN,SP_PRL metaSP
+    class FN_SR,FN_CR,FN_TZ metaFn
+    class VW_TD,VW_RH meta
+
+    %% Pipeline
+    class PL_LS,PL_LK,PL_FE,PL_MRT,PL_FIN,PL_SM pipeline
+    class PL_MB,PL_MS,PL_MG pipeline
+    class PL_DQB,PL_DQS,PL_DQG dq
+    class PL_BL,PL_BF,PL_BS pipeline
+    class PL_CW,PL_SW,PL_SF,PL_SI pipeline
+    class PL_WL,PL_WF,PL_WS pipeline
+    class PL_GL,PL_GF,PL_GS pipeline
+    class PL_DL,PL_DF,PL_DS dq
+
+    %% Semantic Model
+    class SM_DIM1,SM_DIM2,SM_DIMN,SM_FACT1,SM_FACT2 semantic
+    class SM_DAX semantic
+
+    %% Consumers
+    class CON_PBI,CON_APP,CON_HC consume
+
+    %% Connections
+    class CONN_LH,CONN_WH,CONN_PL,CONN_SM conn
+
+    %% Platform
+    class PLT_FAB,PLT_WS,PLT_GIT,PLT_AZ,PLT_REST,PLT_SCHED platform
+
+    %% Enterprise & Environment
+    class ENT_LP,ENT_TD,ENT_AL,ENT_ADV,ENT_BLK enterprise
+    class ENV_DEV,ENV_TEST,ENV_PROD env
