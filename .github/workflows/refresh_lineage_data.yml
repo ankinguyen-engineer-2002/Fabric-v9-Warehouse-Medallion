@@ -59,7 +59,7 @@ jobs:
               attrs_before={1256: token_struct})
           cursor = conn.cursor()
 
-          data_dir = "Fabric_Architect/master_lineage/data"
+          data_dir = "lineage_explorer/data"
 
           # Export lineage
           cursor.execute("SELECT lineage_id, source_schema, source_table, target_schema, target_table, relationship_type, sp_name FROM meta.sp_lineage")
@@ -120,5 +120,5 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add Fabric_Architect/master_lineage/data/
+          git add lineage_explorer/data/
           git diff --cached --quiet || (git commit -m "Auto-refresh lineage data [skip ci]" && git push)
