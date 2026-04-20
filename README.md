@@ -45,7 +45,7 @@ flowchart LR
         B["bronze\n18 tables · 18 views\nraw mirror"]
         S["silver\n8 tables · 8 views\ntransform + join"]
         G["gold\n2 tables · 2 views\nBI-ready"]
-        M["meta\n10 tables · 10 SPs · 2 views · 3 functions\nconfig · log · DQ · DAG · contracts · cost"]
+        M["meta\n11 tables · 10 SPs · 2 views · 3 functions\nconfig · log · DQ · DAG · contracts · cost · view_defs"]
         B --> S --> G
     end
 
@@ -61,7 +61,7 @@ flowchart LR
 | **bronze** | Raw mirror from source systems | 18 tables + 18 views | `VIEW` reads source via 3-part naming → Generic SP does DROP + CTAS |
 | **silver** | Clean, conform, join, business rules | 8 tables + 8 views | `VIEW` reads bronze/silver → Generic SP does DROP + CTAS (DAG wave order) |
 | **gold** | Business-ready facts & dimensions | 2 tables + 2 views | `VIEW` reads silver → Generic SP does DROP + CTAS |
-| **meta** | System control plane | 10 tables + 10 SPs + 2 views + 3 fn | Config + log + DQ + DAG + lineage + timezone + contracts + cost + baseline |
+| **meta** | System control plane | 11 tables + 10 SPs + 2 views + 3 fn | Config + log + DQ + DAG + lineage + timezone + contracts + cost + baseline + view_definitions |
 
 ### Warehouse Structure
 
@@ -82,7 +82,7 @@ SupplyChain_Warehouse/
 └── meta/
     ├── Tables/    sp_registry, sp_run_history, dq_rules,
     │              dq_results, sp_lineage, pipeline_run_log,
-    │              slv_dag_waves_runtime                       (7)
+    │              slv_dag_waves_runtime, view_definitions      (8)
     ├── SPs/       usp_generic_load, usp_log_run (retry 3x),
     │              usp_check_dq, usp_check_dq_single,
     │              usp_build_lineage, usp_compute_slv_waves,
@@ -93,7 +93,7 @@ SupplyChain_Warehouse/
                    ufn_utc_to_cst                              (3)
 ```
 
-> **78 total objects** across 4 schemas. Per-table SPs have been deleted — all 28 tables loaded by 1 generic SP.
+> **~86 total objects** across 4 schemas. Per-table SPs have been deleted — all 28 tables loaded by 1 generic SP.
 
 ### Key Features
 

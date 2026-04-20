@@ -69,7 +69,7 @@
 | Compute | PySpark Notebooks | T-SQL Stored Procedures |
 | ETL logic | Python variables (COLUMN_SQL, SQL_TRANSFORM) | CREATE VIEW statements |
 | Orchestration | Pipeline → ForEach → Notebook | Pipeline → ForEach → EXEC SP |
-| Metadata | utl_pipeline_metadata (1 table) | meta schema (7 tables + 10 SPs) |
+| Metadata | utl_pipeline_metadata (1 table) | meta schema (8 tables + 10 SPs) |
 | DAG | execution_order (static integer) | depends_on + auto wave computation |
 | DQ | Python nb_dq_engine (hardcoded) | Config-driven dq_rules table |
 | Cold start | 30-60s Spark init per notebook | 0s — warehouse always warm |
@@ -176,7 +176,7 @@ Source Systems (Enterprise_Lakehouse via 3-part naming)
     gld_fact_forecast_kpi (CTE chain, LEFT JOINs)
     |
     v
-[Meta Layer — 7 tables, 10 SPs, 3 functions, 3 views]
+[Meta Layer — 8 tables, 10 SPs, 3 functions, 2 views]
     Config (sp_registry) + Log (sp_run_history) + DQ + DAG + Lineage + Timezone
     |
     v
@@ -275,17 +275,18 @@ SupplyChain_Warehouse/
 │       ├── vw_gld_fact_flat_forecast_actual
 │       └── vw_gld_fact_forecast_kpi
 │
-└── meta/ (21 objects)
-    ├── Tables/ (7)
+└── meta/ (23 objects)
+    ├── Tables/ (8)
     │   ├── sp_registry              28 rows   (config: SP definitions, 22 columns)
     │   ├── sp_run_history          330+ rows  (log: SP executions, with CST timestamps)
     │   ├── dq_rules                 30 rows   (config: DQ check definitions)
     │   ├── dq_results               30 rows   (log: DQ check outcomes)
     │   ├── sp_lineage               52 rows   (map: data flow edges)
     │   ├── pipeline_run_log                    (log: pipeline-level runs)
-    │   └── slv_dag_waves_runtime     8 rows   (runtime: wave computation)
+    │   ├── slv_dag_waves_runtime     8 rows   (runtime: wave computation)
+    │   └── view_definitions         28 rows   (snapshot: all VIEW SQL code for GitHub Actions)
     │
-    ├── Stored Procedures/ (9)
+    ├── Stored Procedures/ (10)
     │   ├── usp_generic_load         ★ CORE: replaces all 28 per-table SPs, 8 load patterns
     │   ├── usp_log_run              Log with retry 3x (snapshot conflict mitigation)
     │   ├── usp_log_pipeline_run     Pipeline start/end tracking with CST
@@ -349,9 +350,9 @@ CREATE TABLE meta.sp_registry (
 
 ---
 
-## 7. Meta Schema — 10 SPs + 3 Functions + 2 Views + 7 Tables
+## 7. Meta Schema — 10 SPs + 3 Functions + 2 Views + 8 Tables
 
-### 7 Tables
+### 8 Tables
 
 | Table | Rows | Auto/Manual | Role |
 |-------|------|-------------|------|
@@ -1127,7 +1128,7 @@ File: `.github/workflows/refresh_lineage_data.yml`
 
 ### 2026-04-13 — Initial Build
 - Set up project repo, uploaded architecture docs (.docx)
-- Created all 4 schemas, 7 meta tables, 10 SPs
+- Created all 4 schemas, 8 meta tables, 10 SPs
 - Built 18 bronze views + tables, 8 silver views + tables, 2 gold tables
 - Migrated from 28 per-table SPs → 1 generic SP (meta.usp_generic_load)
 - Created 7 pipelines via Fabric REST API (5 original + pl_dq_check + pl_sc_mart)
@@ -1175,7 +1176,7 @@ File: `.github/workflows/refresh_lineage_data.yml`
 
 If need to rebuild from scratch:
 
-1. **Phase 0**: CREATE SCHEMA meta → 7 tables → 10 SPs + 3 functions
+1. **Phase 0**: CREATE SCHEMA meta → 8 tables → 10 SPs + 3 functions
 2. **Phase 1**: 18 bronze views → EXEC meta.usp_generic_load for each table
 3. **Phase 1.5**: Seed sp_registry (18 rows) + dq_rules + run DQ
 4. **Phase 2**: 8 silver views → EXEC meta.usp_generic_load (DAG order)
