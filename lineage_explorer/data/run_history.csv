@@ -30,8 +30,8 @@ silver.slv_forecast_demand_monthly,success,13876949,59,2026-04-21 19:05:27.59000
 bronze.brz_wholesale_codis_afi__comast,success,226031,2,2026-04-21 19:02:41.296667,overwrite
 bronze.brz_wholesale_codis_afi__extorit,success,912132,15,2026-04-21 19:02:24.610000,overwrite
 bronze.ref_warehouse,success,55,3,2026-04-21 19:01:47.990000,overwrite
-bronze.brz_wholesale_codis_afi__codatan,success,918213,17,2026-04-21 19:01:46.566667,overwrite
 bronze.brz_wholesale_codis_afi__extord,success,225846,9,2026-04-21 19:01:46.566667,overwrite
+bronze.brz_wholesale_codis_afi__codatan,success,918213,17,2026-04-21 19:01:46.566667,overwrite
 bronze.brz_saleshistory_afi__invoicedetail,success,35437685,32,2026-04-21 19:01:46.140000,overwrite
 bronze.brz_supplychain_enh_1__demandforecastsnapshotdaily,success,1306460284,5,2026-04-21 19:01:45.096667,incremental
 bronze.brz_saleshistory_afi__invoiceheader,success,4082030,40,2026-04-21 19:01:45.090000,overwrite
