@@ -32,6 +32,16 @@
   - Auto-generate tu source_objects trong sp_registry
   - Hien tai: DQ chi check ben trong warehouse, source copy thieu → khong biet
 
+- [x] ~~**P1.6 — EDW Source Supplement**~~ **DONE 2026-04-23**
+  - ~~4 Group A tables chuyen sang doc tu _edw tables (CTAS tu SC_Lakehouse _ver2)~~
+  - ~~Ly do: Enterprise_Lakehouse thieu du lieu (invoicedetail 35M vs EDW 87.7M)~~
+  - ~~4 _edw tables created, 4 bronze views swapped, 2 gold views updated (code_horizon + 5 KPI cols)~~
+  - ~~1 SP created: bronze.usp_refresh_edw_tables~~
+  - ~~Pipeline: pl_sc_master them refresh_edw activity (first step)~~
+  - ~~vw_ref_calendar: them 2 cols (dt_fsc_quarter_first, dt_fsc_quarter_last)~~
+  - ~~Object count: 86 → 91. DAY LA TAM THOI — revert khi EL data day du~~
+  - ~~Rollback documented: docs/operations/edw_source_swap.md~~
+
 ---
 
 ## Phase 3: Scale (khi them mart thu 2 hoac > 50 tables)
@@ -85,4 +95,4 @@
 
 ---
 
-*Cap nhat lan cuoi: 2026-04-18*
+*Cap nhat lan cuoi: 2026-04-23*

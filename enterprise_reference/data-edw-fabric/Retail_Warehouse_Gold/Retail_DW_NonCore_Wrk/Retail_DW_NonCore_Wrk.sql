@@ -1,1 +1,0 @@
-CREATE SCHEMA Retail_DW_NonCore_Wrk;

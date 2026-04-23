@@ -1,1 +1,0 @@
-CREATE SCHEMA masterdata_itemmaster_afi;

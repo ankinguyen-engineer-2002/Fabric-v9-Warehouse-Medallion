@@ -1,7 +1,7 @@
 # FULL PROJECT CONTEXT — Read This File = Understand Everything
 > **Mục đích**: File duy nhất chứa TOÀN BỘ context, architecture, decisions, bugs, fixes, connections, pipeline details, SP logic, constraints, và session history.
 > **Cách dùng**: Bảo AI "đọc file FULL_CONTEXT.md" → AI hiểu mọi thứ, không cần hỏi thêm.
-> **Last updated**: 2026-04-17
+> **Last updated**: 2026-04-23
 > **Author**: Aric Nguyen + Claude Code
 
 ---
@@ -155,10 +155,10 @@ cursor = conn.cursor()
 ## 4. Kiến trúc tổng quan
 
 ```
-Source Systems (Enterprise_Lakehouse via 3-part naming)
+Source Systems (Enterprise_Lakehouse via 3-part naming + 4 _edw tables from SC_Lakehouse)
     |
     v
-[Bronze Layer — 18 tables, 18 views]
+[Bronze Layer — 22 tables (18 + 4 _edw), 18 views, 1 SP]
     Raw mirror from source
     7 transactional + 11 reference/dimension tables
     Load type: mostly overwrite, 1 incremental (demandforecast 1.3B rows)
@@ -199,16 +199,19 @@ Source Systems (Enterprise_Lakehouse via 3-part naming)
 
 ---
 
-## 5. Warehouse Structure — 78 Objects
+## 5. Warehouse Structure — 91 Objects
 
 ```
 SupplyChain_Warehouse/
 │
-├── bronze/ (36 objects)
-│   ├── Tables/ (18)
-│   │   ├── brz_saleshistory_afi__invoicedetail             35,798,317 rows
-│   │   ├── brz_saleshistory_afi__invoiceheader              4,044,847 rows
-│   │   ├── brz_supplychain_enh_1__demandforecastsnapshotdaily  1,306,460,284 rows ★ LARGEST
+├── bronze/ (41 objects)
+│   ├── Tables/ (22)
+│   │   ├── brz_saleshistory_afi__invoicedetail             87,700,000 rows (from _edw)
+│   │   ├── brz_saleshistory_afi__invoicedetail_edw         87,700,000 rows ★ EDW supplement
+│   │   ├── brz_saleshistory_afi__invoiceheader             24,700,000 rows (from _edw)
+│   │   ├── brz_saleshistory_afi__invoiceheader_edw         24,700,000 rows ★ EDW supplement
+│   │   ├── brz_supplychain_enh_1__demandforecastsnapshotdaily  42,400,000 rows (from _edw)
+│   │   ├── brz_supplychain_enh_1__demandforecastsnapshotdaily_edw  42,400,000 rows ★ EDW supplement
 │   │   ├── brz_wholesale_codis_afi__codatan                   918,213 rows
 │   │   ├── brz_wholesale_codis_afi__comast                    229,461 rows
 │   │   ├── brz_wholesale_codis_afi__extord                    229,736 rows
@@ -222,8 +225,12 @@ SupplyChain_Warehouse/
 │   │   ├── ref_forecast_horizon                                     8 rows  (hardcoded INSERT, no view)
 │   │   ├── ref_item_master                                    379,331 rows
 │   │   ├── ref_order_type                                          29 rows
-│   │   ├── ref_product                                        373,326 rows
+│   │   ├── ref_product                                        379,000 rows (from _edw)
+│   │   ├── ref_product_edw                                    379,000 rows ★ EDW supplement
 │   │   └── ref_warehouse                                           55 rows
+│   │
+│   ├── SPs/ (1)
+│   │   └── usp_refresh_edw_tables          Refresh 4 _edw tables from SC_Lakehouse _ver2
 │   │
 │   └── Views/ (18)
 │       ├── vw_brz_saleshistory_afi__invoicedetail
@@ -307,9 +314,10 @@ SupplyChain_Warehouse/
         ├── vw_table_dictionary      Maps sp_registry → Enterprise 63-col TableDictionary + 6 v9 extras
         └── vw_run_history_tz        Execution log in 3 timezones (UTC/CST/VN)
 
-TOTALS: ~38 tables + 30 views + 11 SPs + 3 functions = ~85 objects
-        + 7 pipelines = 84 managed artifacts
-        ~1.47 billion total rows
+TOTALS: ~42 tables + 30 views + 11 SPs + 3 functions = ~91 objects
+        + 7 pipelines = 98 managed artifacts
+        4 _edw tables are TEMPORARY supplement (revert when EL data is complete)
+        See docs/operations/edw_source_swap.md
 ```
 
 ---
@@ -504,7 +512,7 @@ END
 
 | Pipeline | ID | Role |
 |----------|------|------|
-| pl_sc_master | 319a8160-3f3a-4b87-8ad6-75ac4f3ec184 | Master: log → ForEach projects → finalize → SM |
+| pl_sc_master | 319a8160-3f3a-4b87-8ad6-75ac4f3ec184 | Master: refresh_edw → log → ForEach projects → finalize → SM |
 | pl_sc_mart | 9a1e7a12-30ab-465c-a45d-b051619193ac | Mart orchestrator: bronze → silver → gold per @project |
 | pl_sc_bronze | 1bdbaebb-7222-4e9c-a45d-3e632bba846d | Lookup+ForEach bronze/ref WHERE project=@project |
 | pl_sc_silver | 46437ae6-3a15-4697-957d-f1f44ba10633 | Parent: compute waves, invoke child per wave |
@@ -514,16 +522,17 @@ END
 
 ### pl_sc_master (319a8160) — Master Orchestrator
 
-Activities (9, sequential):
-1. **log_start** (SqlServerStoredProcedure) → EXEC meta.usp_log_pipeline_run
-2. **pl_sc_bronze** (InvokePipeline) → GUID 1bdbaebb
-3. **dq_bronze** (InvokePipeline) → pl_dq_check, layer='BRZ','REF'
-4. **pl_sc_silver** (InvokePipeline) → GUID 46437ae6
-5. **dq_silver** (InvokePipeline) → pl_dq_check, layer='SLV'
-6. **pl_sc_gold** (InvokePipeline) → GUID 94fc130e
-7. **dq_gold** (InvokePipeline) → pl_dq_check, layer='GLD'
-8. **finalize** (SqlServerStoredProcedure) → EXEC meta.usp_finalize_pipeline
-9. **refresh_sm** (PBISemanticModelRefresh) → SC_Control_Tower
+Activities (10, sequential):
+1. **refresh_edw** (SqlServerStoredProcedure) → EXEC bronze.usp_refresh_edw_tables (refreshes 4 _edw tables from SC_Lakehouse _ver2)
+2. **log_start** (SqlServerStoredProcedure) → EXEC meta.usp_log_pipeline_run
+3. **pl_sc_bronze** (InvokePipeline) → GUID 1bdbaebb
+4. **dq_bronze** (InvokePipeline) → pl_dq_check, layer='BRZ','REF'
+5. **pl_sc_silver** (InvokePipeline) → GUID 46437ae6
+6. **dq_silver** (InvokePipeline) → pl_dq_check, layer='SLV'
+7. **pl_sc_gold** (InvokePipeline) → GUID 94fc130e
+8. **dq_gold** (InvokePipeline) → pl_dq_check, layer='GLD'
+9. **finalize** (SqlServerStoredProcedure) → EXEC meta.usp_finalize_pipeline
+10. **refresh_sm** (PBISemanticModelRefresh) → SC_Control_Tower
 - Concurrency: 1 (prevents overlap)
 - DQ CRITICAL fail → pipeline stops, downstream layers do NOT run
 
@@ -620,8 +629,9 @@ SM refresh:
 
 ```
 T+00:00  pl_sc_master triggers
-T+00:00  → log_start: INSERT pipeline_run_log (status='running')
-T+00:00  → Invoke pl_sc_bronze
+T+00:00  → refresh_edw: EXEC bronze.usp_refresh_edw_tables (refresh 4 _edw tables)
+T+01:00  → log_start: INSERT pipeline_run_log (status='running')
+T+01:00  → Invoke pl_sc_bronze
 T+00:01    → Lookup: 18 tables from sp_registry
 T+00:02    → ForEach batch=6: first 6 SPs parallel
 T+03:00    → All 18 bronze complete (~1.35B rows, ~3 min)
@@ -1156,6 +1166,17 @@ File: `.github/workflows/refresh_lineage_data.yml`
 - **Deleted SESSION_CONTEXT.md**: replaced by FULL_CONTEXT.md
 - Object count: 77→78 (+1 SP: usp_check_dq_single), pipelines: 5→6 (+pl_dq_check)
 
+### 2026-04-23 — EDW Source Supplement
+- **Created 4 _edw tables**: CTAS from SupplyChain_Lakehouse _ver2 (invoicedetail 87.7M, invoiceheader 24.7M, demandforecast 42.4M, ref_product 379K)
+- **Swapped 4 bronze views**: from Enterprise_Lakehouse to _edw tables (EL has incomplete data for Group A)
+- **Updated 2 gold views**: vw_gld_fact_flat_forecast_actual (code_horizon fix), vw_gld_fact_forecast_kpi (5 KPI columns added)
+- **Fixed vw_ref_calendar**: added dt_fsc_quarter_first, dt_fsc_quarter_last
+- **Created bronze.usp_refresh_edw_tables**: refreshes 4 _edw tables from Lakehouse _ver2
+- **Updated pl_sc_master**: added refresh_edw as first activity (before log_start)
+- **Updated sp_registry**: source_objects changed to _edw references for 4 tables
+- **TEMPORARY** — revert when Enterprise_Lakehouse data is complete. Rollback documented in edw_source_swap.md
+- Object count: 86 → 91 (+4 _edw tables, +1 SP)
+
 ### 2026-04-16 — Polish & Robustness
 - **Renamed 4 child pipelines**: pl_sc_bronze → pl_sc_bronze, etc. (`pl_{layer}_{project}`)
 - **Bronze batch 8→6**: reduce snapshot conflict
@@ -1231,6 +1252,7 @@ If need to rebuild from scratch:
 | docs/supplychain/pipeline.md | Project | Execution trace: actual SP names, durations |
 | docs/supplychain/setup.md | Project | Implementation log: Spark→T-SQL conversions |
 | docs/operations/onboarding.md | Guide | How DA/DE adds new ETL table (2 steps) |
+| docs/operations/edw_source_swap.md | Guide | EDW source supplement: swap/rollback, verification, SM comparison |
 | docs/operations/scheduling.md | Guide | Cron, smart skip, concurrency, snapshot fix |
 | docs/operations/sqlproj_validation.md | Guide | 3 SQL validation approaches |
 | docs/operations/timezone_sync.md | Guide | UTC+CST+VN, fn_GetDate mapping |

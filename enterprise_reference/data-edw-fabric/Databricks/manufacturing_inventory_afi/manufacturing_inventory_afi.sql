@@ -1,1 +1,0 @@
-CREATE SCHEMA manufacturing_inventory_afi;

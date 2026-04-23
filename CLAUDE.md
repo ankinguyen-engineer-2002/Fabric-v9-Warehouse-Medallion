@@ -1,13 +1,13 @@
 # CLAUDE.md — Project Instructions for AI Assistants
 > SupplyChain Warehouse v9 — Microsoft Fabric, Pure T-SQL, Metadata-Driven
-> Last updated: 2026-04-18 | Score: 8.2/10 | Enterprise mapping: ~91%
+> Last updated: 2026-04-23 | Score: 8.2/10 | Enterprise mapping: ~91%
 
 ---
 
 ## Project Overview
 
 Warehouse-native medallion architecture on Microsoft Fabric. Pure T-SQL, no Notebooks/PySpark.
-- **~86 objects**: 4 schemas (bronze/silver/gold/meta), 28 data tables, 11 meta tables, 30 views, 10 SPs, 3 functions
+- **~91 objects**: 4 schemas (bronze/silver/gold/meta), 28 data tables + 4 _edw supplement tables, 11 meta tables, 30 views, 11 SPs, 3 functions
 - **7 pipelines**: multi-mart architecture (ForEach projects → pl_sc_mart → bronze→silver→gold). DQ gates deactivated
 - **1 generic SP** handles 8 load patterns for all 28 tables
 - **Auto-trigger**: daily 2AM UTC+7
@@ -188,13 +188,13 @@ curl -X POST "https://api.fabric.microsoft.com/v1/workspaces/$WS_ID/items" \
 | `FULL_CONTEXT.md` | Master context: all IDs, schemas, code, history |
 | `README.md` | Public documentation (13 sections) |
 | `task.md` | Roadmap progress tracker |
-| `docs/enterprise/roadmap.md` | Score, strengths, weaknesses, 4-phase roadmap |
-| `docs/operations/runbook.md` | Operations: errors, re-run, escalation |
-| `docs/operations/alerting.md` | Alerting design (blocked by IT) |
-| `docs/operations/onboarding.md` | Add new table (2 SQL statements) |
-| `docs/supplychain/setup.md` | Implementation log with all DDL |
-| `docs/enterprise/multi_mart_scale.md` | Multi-mart parallel design |
-| `docs/operations/scheduling.md` | Scheduling, cron, concurrency |
+| `sc_forecast/enterprise/roadmap.md` | Score, strengths, weaknesses, 4-phase roadmap |
+| `sc_forecast/docs/operations/runbook.md` | Operations: errors, re-run, escalation |
+| `sc_forecast/docs/operations/alerting.md` | Alerting design (blocked by IT) |
+| `sc_forecast/docs/operations/onboarding.md` | Add new table (2 SQL statements) |
+| `sc_forecast/docs/setup.md` | Implementation log with all DDL |
+| `sc_forecast/enterprise/multi_mart_scale.md` | Multi-mart parallel design |
+| `sc_forecast/docs/operations/scheduling.md` | Scheduling, cron, concurrency |
 | `docs/templates/architecture.md` | Generic architecture reference |
 | `diagrams/` | Mermaid `.mmd` architecture diagrams (3 files) |
 | `lineage_explorer/` | Streamlit lineage app (live) |

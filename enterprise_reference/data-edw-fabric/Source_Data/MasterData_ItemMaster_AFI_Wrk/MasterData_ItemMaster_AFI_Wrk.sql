@@ -1,1 +1,0 @@
-CREATE SCHEMA MasterData_ItemMaster_AFI_Wrk;

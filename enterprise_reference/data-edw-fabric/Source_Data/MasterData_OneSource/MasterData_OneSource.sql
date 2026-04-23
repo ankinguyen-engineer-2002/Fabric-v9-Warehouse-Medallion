@@ -1,1 +1,0 @@
-CREATE SCHEMA Masterdata_Onesource;

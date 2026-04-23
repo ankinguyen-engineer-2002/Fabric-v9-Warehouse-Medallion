@@ -1,1 +1,0 @@
-CREATE SCHEMA MasterData_HR_UKG_AGR_Wrk;

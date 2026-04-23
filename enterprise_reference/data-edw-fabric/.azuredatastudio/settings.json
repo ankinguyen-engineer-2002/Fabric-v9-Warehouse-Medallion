@@ -1,8 +1,0 @@
-{
-    "dataworkspace.excludedProjects": [
-        "Manufacturing_Lakehouse/Manufacturing_Lakehouse.sqlproj",
-        "Distribution_Lakehouse/Distribution_Lakehouse.sqlproj",
-        "MasterData_Lakehouse/MasterData_Lakehouse.sqlproj",
-        "Marketing_Lakehouse/Marketing_Lakehouse.sqlproj"
-    ]
-}

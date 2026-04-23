@@ -1,1 +1,0 @@
-CREATE SCHEMA wholesale_codis;

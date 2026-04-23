@@ -1,1 +1,0 @@
-CREATE SCHEMA Merch_ExternalFiles;

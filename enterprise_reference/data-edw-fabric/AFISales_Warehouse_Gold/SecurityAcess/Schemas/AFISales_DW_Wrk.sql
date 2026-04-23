@@ -1,5 +1,0 @@
-CREATE SCHEMA [AFISales_DW_Wrk]
-    AUTHORIZATION [dbo];
-
-
-

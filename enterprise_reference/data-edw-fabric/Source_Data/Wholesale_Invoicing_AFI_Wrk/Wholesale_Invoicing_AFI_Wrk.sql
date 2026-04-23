@@ -1,1 +1,0 @@
-CREATE SCHEMA Wholesale_Invoicing_AFI_wrk;

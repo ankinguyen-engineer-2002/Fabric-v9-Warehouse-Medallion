@@ -1,1 +1,0 @@
-CREATE SCHEMA MasterData_Product_Wrk;

@@ -1,1 +1,0 @@
-CREATE SCHEMA Wholesale_Quality_AFI_Wrk;

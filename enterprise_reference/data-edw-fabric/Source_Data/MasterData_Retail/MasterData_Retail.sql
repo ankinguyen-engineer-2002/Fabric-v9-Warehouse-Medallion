@@ -1,1 +1,0 @@
-CREATE SCHEMA MasterData_Retail;

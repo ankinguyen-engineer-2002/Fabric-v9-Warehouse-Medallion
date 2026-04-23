@@ -1,16 +1,40 @@
-# Large files
-Fabric_Architect/files.zip
-Fabric_Architect/all_10_notebooks_source.txt
-Fabric_Architect/files/
-
-# Enterprise repo .git (nested)
-Enterprise_Architect/data-edw-fabric/.git/
-
 # OS
 .DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
 
 # Claude cache
 .claude/
 
 # Private portfolio
 _private/
+
+# Claude extensions backup (not project code)
+_claude_extensions_backup/
+
+# Enterprise reference repo (cloned for reference, not project code)
+enterprise_reference/
+
+# Large development files
+Fabric_Architect/files.zip
+Fabric_Architect/all_10_notebooks_source.txt
+Fabric_Architect/files/
+
+# Enterprise repo nested .git
+Enterprise_Architect/data-edw-fabric/.git/
+
+# Development archive (docx exports, notebook dumps)
+docs/archive/
+
+# Editor
+*.swp
+*.swo
+*~
+.idea/
+.vscode/

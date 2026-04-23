@@ -1,1 +1,0 @@
-CREATE SCHEMA distribution_warehouse_wholesale;
