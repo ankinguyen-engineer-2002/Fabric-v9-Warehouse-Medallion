@@ -771,6 +771,10 @@ LEFT JOIN naive_agg N
     AND N.code_warehouse = F.code_warehouse
     AND N.dt_fsc_month_first = F.dt_fsc_month_first
 "
+meta,vw_run_history_tz,-- pending GitHub Actions refresh
+meta,vw_run_history_tz,-- pending refresh by GitHub Actions
+meta,vw_table_dictionary,-- pending refresh by GitHub Actions
+meta,vw_table_dictionary,-- pending GitHub Actions refresh
 silver,vw_slv_actual_demand_monthly,"
 CREATE   VIEW silver.vw_slv_actual_demand_monthly AS
 WITH current_fiscal AS (
