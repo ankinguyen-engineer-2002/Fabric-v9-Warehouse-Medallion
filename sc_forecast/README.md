@@ -32,17 +32,21 @@ Khi EL day du → rollback theo [edw_source_swap.md](docs/operations/edw_source_
 | [pipeline.md](docs/pipeline.md) | Execution trace: SP names, durations, wave assignments |
 | [v8_vs_v9_comparison.md](docs/v8_vs_v9_comparison.md) | So sanh v8 (notebook) vs v9 (warehouse), source mapping |
 
-### Operations
+### Operations (rieng cho forecast)
 | Doc | Mo ta |
 |-----|-------|
-| [runbook.md](docs/operations/runbook.md) | Pipeline errors, re-run, escalation |
-| [onboarding.md](docs/operations/onboarding.md) | Them bang moi (2 SQL statements) |
-| [scheduling.md](docs/operations/scheduling.md) | Cron, smart skip, concurrency |
-| [alerting.md](docs/operations/alerting.md) | Alerting design (blocked by IT) |
 | [edw_source_swap.md](docs/operations/edw_source_swap.md) | **Doi source EDW ↔ EL: swap + rollback** |
-| [generic_sp_migration.md](docs/operations/generic_sp_migration.md) | Migration 28 SPs → 1 generic SP |
-| [sqlproj_validation.md](docs/operations/sqlproj_validation.md) | .sqlproj build validation |
-| [timezone_sync.md](docs/operations/timezone_sync.md) | UTC + CST + VN timezone |
+
+### Operations (chung — ap dung moi project)
+| Doc | Mo ta |
+|-----|-------|
+| [runbook.md](../docs/operations/runbook.md) | Pipeline errors, re-run, escalation |
+| [onboarding.md](../docs/operations/onboarding.md) | Them bang moi (2 SQL statements) |
+| [scheduling.md](../docs/operations/scheduling.md) | Cron, smart skip, concurrency |
+| [alerting.md](../docs/operations/alerting.md) | Alerting design (blocked by IT) |
+| [generic_sp_migration.md](../docs/operations/generic_sp_migration.md) | Migration 28 SPs → 1 generic SP |
+| [sqlproj_validation.md](../docs/operations/sqlproj_validation.md) | .sqlproj build validation |
+| [timezone_sync.md](../docs/operations/timezone_sync.md) | UTC + CST + VN timezone |
 
 ### Enterprise & Scale
 | Doc | Mo ta |
@@ -73,7 +77,7 @@ VALUES ('meta.usp_generic_load', 'bronze.vw_brz_{name}',
 Trigger `pl_sc_master` tu Fabric Portal.
 
 ### Pipeline bi loi
-Xem [runbook.md](docs/operations/runbook.md).
+Xem [runbook.md](../docs/operations/runbook.md).
 
 ---
 
