@@ -20,6 +20,7 @@ venv/
 
 # === Claude Code ===
 .claude/
+.claude.md
 
 # === Private / Personal ===
 _private/
@@ -30,3 +31,4 @@ _claude_extensions_backup/
 
 # === Archive ===
 docs/archive/
+.claude.md
