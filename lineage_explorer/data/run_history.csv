@@ -1,4 +1,5 @@
 sp_name,status,rows_affected,duration_seconds,start_time,load_type
+bronze.ref_calendar,success,21551,5,2026-04-24 09:48:09.940000,overwrite
 gold.gld_fact_forecast_kpi,success,36357300,49,2026-04-23 16:41:52.396667,overwrite
 gold.gld_fact_flat_forecast_actual,success,48762164,23,2026-04-23 16:41:27.516667,overwrite
 silver.slv_forecast_demand_monthly,success,42405685,170,2026-04-23 16:38:35.426667,overwrite
@@ -48,4 +49,3 @@ silver.slv_invoice_weekly,success,15552154,157,2026-04-21 19:08:55.996667,overwr
 silver.slv_actual_demand_weekly,success,1091147,17,2026-04-21 19:08:55.993333,overwrite
 silver.slv_open_order_line_level,success,224621,14,2026-04-21 19:05:28.670000,overwrite
 silver.slv_invoice_detail_line_level,success,35437685,29,2026-04-21 19:05:27.740000,overwrite
-silver.slv_forecast_demand_monthly,success,13876949,59,2026-04-21 19:05:27.590000,overwrite
