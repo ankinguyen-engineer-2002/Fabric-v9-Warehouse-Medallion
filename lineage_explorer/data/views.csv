@@ -773,8 +773,8 @@ LEFT JOIN naive_agg N
 "
 meta,vw_run_history_tz,-- pending refresh by GitHub Actions
 meta,vw_run_history_tz,-- pending GitHub Actions refresh
-meta,vw_table_dictionary,-- pending refresh by GitHub Actions
 meta,vw_table_dictionary,-- pending GitHub Actions refresh
+meta,vw_table_dictionary,-- pending refresh by GitHub Actions
 silver,vw_slv_actual_demand_monthly,"
 CREATE   VIEW silver.vw_slv_actual_demand_monthly AS
 WITH current_fiscal AS (
