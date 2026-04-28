@@ -1,4 +1,12 @@
 sp_name,status,rows_affected,duration_seconds,start_time,load_type
+silver.slv_naive_forecast_monthly,success,2799569,32,2026-04-28 19:18:54.306667,overwrite
+silver.slv_invoice_weekly,success,37388968,192,2026-04-28 19:13:00.453333,overwrite
+silver.slv_actual_demand_monthly,success,3594098,67,2026-04-28 19:12:59.666667,overwrite
+silver.slv_actual_demand_weekly,success,9903189,97,2026-04-28 19:12:59.363333,overwrite
+silver.slv_open_order_monthly,success,96884,5,2026-04-28 19:12:59.350000,overwrite
+silver.slv_open_order_line_level,success,202184,11,2026-04-28 19:09:23.476667,overwrite
+silver.slv_forecast_demand_monthly,success,40423159,64,2026-04-28 19:09:23.123333,overwrite
+silver.slv_invoice_detail_line_level,success,88011466,76,2026-04-28 19:09:23.103333,overwrite
 gold.gld_fact_flat_forecast_actual,success,46816826,28,2026-04-28 18:42:48.890000,overwrite
 gold.gld_fact_forecast_kpi,success,35771196,51,2026-04-28 18:42:48.873333,overwrite
 silver.slv_naive_forecast_monthly,success,2799569,32,2026-04-28 18:39:52.216667,overwrite
@@ -41,11 +49,3 @@ bronze.brz_wholesale_codis_afi__comast,success,220144,7,2026-04-23 15:33:30.5700
 bronze.brz_supplychain_enh_1__demandforecastsnapshotdaily,success,1310461552,15,2026-04-23 15:33:30.453333,incremental
 bronze.brz_wholesale_codis_afi__extord,success,219991,7,2026-04-23 15:33:30.440000,overwrite
 gold.gld_fact_forecast_kpi,success,9113008,14,2026-04-22 19:16:46.713333,overwrite
-gold.gld_fact_flat_forecast_actual,success,14792687,23,2026-04-22 19:16:46.626667,overwrite
-silver.slv_naive_forecast_monthly,success,349899,7,2026-04-22 19:12:58.400000,overwrite
-silver.slv_actual_demand_monthly,success,565839,13,2026-04-22 19:08:57.043333,overwrite
-silver.slv_open_order_monthly,success,105266,7,2026-04-22 19:08:55.236667,overwrite
-silver.slv_invoice_weekly,success,15556101,154,2026-04-22 19:08:55.040000,overwrite
-silver.slv_actual_demand_weekly,success,1103540,19,2026-04-22 19:08:55.030000,overwrite
-silver.slv_open_order_line_level,success,220568,14,2026-04-22 19:05:33.333333,overwrite
-silver.slv_invoice_detail_line_level,success,35397456,34,2026-04-22 19:05:32.260000,overwrite
