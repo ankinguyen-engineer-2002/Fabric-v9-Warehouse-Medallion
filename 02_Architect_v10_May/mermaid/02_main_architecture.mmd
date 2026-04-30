@@ -1,0 +1,44 @@
+flowchart LR
+    subgraph ED["Enterprise_Data workspace"]
+        SRC["Upstream Source Products"]
+        ES["Enterprise Reusable Silver"]
+    end
+
+    subgraph SC["SupplyChain Dev workspace"]
+        LH["Enterprise_Access_Lakehouse<br/>Shortcut Access<br/>Logical Bronze"]
+        STG["Staging / BronzeMirror<br/>Exception Only"]
+        DW["Domain Processing Warehouse"]
+        SIL["Domain Silver Schemas<br/>PascalCase"]
+        GWH["SupplyChain Gold Warehouse<br/>Serving Boundary"]
+        SEM["Semantic Model / Reports"]
+        CTRL["v9 Control Plane<br/>Metadata / DQ / Lineage / Audit"]
+    end
+
+    SRC --> LH
+    SRC --> ES
+    LH -->|"Direct by default"| SIL
+    LH -->|"Stage only if required"| STG
+    STG --> SIL
+    ES -->|"Cross-domain input"| SIL
+    SIL --> GWH
+    GWH --> SEM
+
+    CTRL -.->|"registry"| LH
+    CTRL -.->|"load decision"| STG
+    CTRL -.->|"DAG + DQ"| SIL
+    CTRL -.->|"publish + reconcile"| GWH
+    CTRL -.->|"refresh + monitor"| SEM
+
+    class SRC,LH bronze
+    class STG staging
+    class ES,SIL silver
+    class GWH,SEM gold
+    class CTRL control
+    class DW neutral
+
+    classDef bronze fill:#B86B2B,stroke:#6B3A12,color:#FFFFFF
+    classDef staging fill:#D9822B,stroke:#8A4A0A,color:#FFFFFF
+    classDef silver fill:#C7CCD6,stroke:#687080,color:#111111
+    classDef gold fill:#F2C94C,stroke:#9A6B00,color:#111111
+    classDef control fill:#0B3D91,stroke:#06275F,color:#FFFFFF
+    classDef neutral fill:#E8EEF7,stroke:#6C7A89,color:#111111

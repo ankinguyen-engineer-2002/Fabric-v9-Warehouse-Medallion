@@ -1,0 +1,63 @@
+flowchart TD
+    TRG["Fabric Schedule / Manual Trigger"]
+    MASTER["pl_sc_master<br/>Master Orchestrator<br/>concurrency=1"]
+    START["log_start<br/>usp_log_pipeline_run"]
+    PROJECTS["Lookup DISTINCT project<br/>from meta.sp_registry"]
+    PROJECT_LOOP["ForEach project<br/>parallel batch=10"]
+    MART["pl_sc_mart<br/>@project_name"]
+
+    REG["meta.sp_registry<br/>project, layer, frequency,<br/>cron_expression, next_run_time,<br/>depends_on, access_mode"]
+    CRON["Schedule Gate<br/>ufn_cron_is_due"]
+    SKIP["Target Smart Skip Engine<br/>verify v9 Lookup<br/>next_run_time <= GETUTCDATE()"]
+    ACCESS["Access Decision<br/>DirectShortcut vs StageRequired"]
+
+    BRZ["Layer Loader<br/>Bronze or Staging<br/>ForEach batch=6"]
+    SILVER_DAG["Silver DAG Planner<br/>usp_compute_slv_waves"]
+    SILVER_WAVE["Silver Wave Runner<br/>pl_sc_silver_wave<br/>ForEach batch=8"]
+    GOLD["Gold Loader<br/>ForEach batch=2"]
+    DQ["DQ Gate<br/>pl_dq_check"]
+    FINAL["Finalize<br/>usp_finalize_pipeline<br/>lineage + run log"]
+    SEM["Semantic Refresh"]
+
+    TRG --> MASTER
+    MASTER --> START
+    START --> PROJECTS
+    REG --> PROJECTS
+    PROJECTS --> PROJECT_LOOP
+    PROJECT_LOOP --> MART
+
+    REG --> CRON
+    CRON --> SKIP
+    SKIP --> MART
+    REG --> ACCESS
+
+    MART --> ACCESS
+    ACCESS --> BRZ
+    BRZ --> DQ
+    DQ --> SILVER_DAG
+    REG --> SILVER_DAG
+    SILVER_DAG --> SILVER_WAVE
+    SILVER_WAVE --> DQ
+    DQ --> GOLD
+    GOLD --> FINAL
+    FINAL --> SEM
+
+    class TRG trigger
+    class MASTER,MART,PROJECTS,PROJECT_LOOP orchestrator
+    class REG metadata
+    class CRON,SKIP,ACCESS scheduler
+    class BRZ staging
+    class SILVER_DAG,SILVER_WAVE silver
+    class GOLD,SEM gold
+    class DQ quality
+    class FINAL monitor
+
+    classDef trigger fill:#E8EEF7,stroke:#6C7A89,color:#111111
+    classDef orchestrator fill:#0B3D91,stroke:#06275F,color:#FFFFFF
+    classDef metadata fill:#E8EEF7,stroke:#50627A,color:#111111
+    classDef scheduler fill:#2563EB,stroke:#1E3A8A,color:#FFFFFF
+    classDef staging fill:#D9822B,stroke:#8A4A0A,color:#FFFFFF
+    classDef silver fill:#C7CCD6,stroke:#687080,color:#111111
+    classDef gold fill:#F2C94C,stroke:#9A6B00,color:#111111
+    classDef quality fill:#0F766E,stroke:#064E3B,color:#FFFFFF
+    classDef monitor fill:#334155,stroke:#0F172A,color:#FFFFFF

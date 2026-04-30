@@ -1,0 +1,99 @@
+flowchart TD
+    subgraph META["Metadata And Contract Layer"]
+        REG["Asset Registry<br/>sp_registry"]
+        ACCESS["Access Mode Router<br/>DirectShortcut / StageRequired"]
+        CONTRACT["Source Contract Gate<br/>schema + SLA"]
+        DICT["Enterprise Dictionary Adapter<br/>vw_table_dictionary"]
+        TZ["Timezone Normalizer<br/>ufn_utc_to_cst"]
+    end
+
+    subgraph ORCH["Orchestration And Scheduling"]
+        MASTER["Master Orchestrator<br/>pl_sc_master"]
+        MART["Mart Routing Engine<br/>project + pl_sc_mart"]
+        SCHED["Schedule Gate<br/>cron_expression + frequency"]
+        SKIP["Smart Skip Engine<br/>next_run_time<br/>verify or activate"]
+        PLAN["Execution Planner<br/>batch + concurrency"]
+        DAG["DAG Wave Planner<br/>depends_on + slv waves"]
+        RETRY["Retry / Conflict Guard<br/>SP retry + pipeline retry"]
+    end
+
+    subgraph EXEC["Execution Layer"]
+        LOAD["Generic SQL Load Runner<br/>usp_generic_load"]
+        PATTERN["Load Pattern Router<br/>8 load patterns"]
+        STAGE["Optional Staging Runner<br/>BronzeMirror exceptions"]
+        SILVER["Domain Silver Runner"]
+        GOLD["Gold Publisher"]
+    end
+
+    subgraph QUALITY["Quality And Governance"]
+        DQ["DQ Gate Engine<br/>dq_rules + pl_dq_check"]
+        DQR["Quality Result Store<br/>dq_results"]
+        SCHEMA["Schema Contract Validator<br/>schema_contracts<br/>promote to gate"]
+        LINEAGE["Lineage Builder<br/>source_objects + sp_lineage"]
+    end
+
+    subgraph OBS["Observability And Serving"]
+        RUNLOG["Run Audit Logger<br/>sp_run_history"]
+        PIPELOG["Pipeline Audit Logger<br/>pipeline_run_log"]
+        FINAL["Finalizer<br/>usp_finalize_pipeline"]
+        PERF["Performance Baseline Monitor<br/>wire into flow"]
+        COST["Cost Monitor<br/>pipeline_cost_log<br/>wire into flow"]
+        SEM["Semantic Refresh Controller"]
+        DEBUG["Recovery / Debug Utility<br/>usp_run_silver_dag + usp_debug_loop"]
+    end
+
+    REG --> ACCESS
+    REG --> MART
+    REG --> SCHED
+    REG --> DAG
+    CONTRACT --> ACCESS
+    DICT --> REG
+    TZ --> RUNLOG
+
+    MASTER --> MART
+    SCHED --> SKIP
+    SKIP --> MART
+    MART --> PLAN
+    PLAN --> DAG
+    DAG --> LOAD
+    RETRY --> LOAD
+
+    ACCESS --> STAGE
+    ACCESS --> SILVER
+    LOAD --> PATTERN
+    PATTERN --> STAGE
+    PATTERN --> SILVER
+    SILVER --> GOLD
+
+    STAGE --> DQ
+    SILVER --> DQ
+    GOLD --> DQ
+    DQ --> DQR
+    SCHEMA --> DQ
+    DQ --> LINEAGE
+
+    LOAD --> RUNLOG
+    MASTER --> PIPELOG
+    LINEAGE --> FINAL
+    RUNLOG --> FINAL
+    FINAL --> PERF
+    FINAL --> COST
+    FINAL --> SEM
+    DEBUG -.-> DAG
+    DEBUG -.-> LOAD
+
+    class REG,ACCESS,CONTRACT,DICT,TZ metadata
+    class MASTER,MART,SCHED,SKIP,PLAN,DAG,RETRY orchestrator
+    class LOAD,PATTERN,STAGE,SILVER execution
+    class GOLD gold
+    class DQ,DQR,SCHEMA,LINEAGE quality
+    class RUNLOG,PIPELOG,FINAL,PERF,COST,DEBUG monitor
+    class SEM semantic
+
+    classDef metadata fill:#E8EEF7,stroke:#50627A,color:#111111
+    classDef orchestrator fill:#0B3D91,stroke:#06275F,color:#FFFFFF
+    classDef execution fill:#6B7280,stroke:#374151,color:#FFFFFF
+    classDef gold fill:#F2C94C,stroke:#9A6B00,color:#111111
+    classDef quality fill:#0F766E,stroke:#064E3B,color:#FFFFFF
+    classDef monitor fill:#334155,stroke:#0F172A,color:#FFFFFF
+    classDef semantic fill:#F2C94C,stroke:#9A6B00,color:#111111

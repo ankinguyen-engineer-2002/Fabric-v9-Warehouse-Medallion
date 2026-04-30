@@ -24,6 +24,12 @@ venv/
 
 # === Private / Personal ===
 _private/
+AGENTS.md
+
+# === Internal evidence / live Fabric exports ===
+02_Architect_v10_May/SQL Server Data Warehouse Standards.docx
+02_Architect_v10_May/readiness_exports/*
+!02_Architect_v10_May/readiness_exports/README.md
 
 # === Reference repos (cloned, not project code) ===
 enterprise_reference/

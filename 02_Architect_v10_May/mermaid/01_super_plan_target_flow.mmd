@@ -1,0 +1,13 @@
+flowchart LR
+    A["Enterprise_Data upstream data products"] --> B["Enterprise_Lakehouse shortcuts<br/>Logical Bronze"]
+    B --> C{"Direct source usable?"}
+    C -->|"Yes"| D["SupplyChain_Warehouse<br/>Domain Silver schemas"]
+    C -->|"No"| S["SupplyChain_Warehouse<br/>Staging / BronzeMirror exception layer"]
+    S --> D
+    D --> E["SupplyChain Gold Warehouse / Gold serving item"]
+    E --> F["Semantic Model / Reports"]
+
+    X["V9 meta control plane"] -.->|"orchestrates / DQ / lineage / audit"| B
+    X -.->|"orchestrates"| S
+    X -.->|"orchestrates"| D
+    X -.->|"orchestrates"| E
