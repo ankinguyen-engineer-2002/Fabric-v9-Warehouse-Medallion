@@ -489,7 +489,28 @@ Reason:
 
 v9 already built a TableDictionary adapter. v10 extends it rather than rebuilding it.
 
-Minimum v10 dictionary fields:
+Important design rule:
+
+```text
+Do not create one physical TableDictionary base table with 63 or 69 columns.
+Keep normalized control-plane tables small.
+Expose Bob/Enterprise-compatible columns through a view adapter.
+```
+
+Recommended shape:
+
+| Object | Purpose | Expected width |
+|---|---|---|
+| `Meta.AssetRegistryV10` | Core asset/control-plane metadata | Only operational fields needed by the framework |
+| `Meta.AssetGovernance` | Owner, approval, classification, security metadata | Small supplemental table |
+| `Meta.SourceContract*` | Source/schema/SLA checks | Contract-specific fields only |
+| `Meta.DQ*` / `Meta.Reconciliation*` | Quality and reconciliation results | Result-specific fields only |
+| `Meta.vw_TableDictionary` | Bob/Enterprise adapter view | 63 Enterprise-compatible columns + v9/v10 extension columns |
+| `Meta.TableDictionaryExport` | Optional physical export/sync if required | Same shape as the adapter view |
+
+[Verified] Current v9 `meta.vw_table_dictionary` exposes **69 columns**: 63 Enterprise-compatible columns plus 6 v9 extension columns. v10 should preserve that external compatibility unless Bob/Rakesh approve a new contract.
+
+The v10 control-plane base tables only need these core governance inputs; the adapter view derives/maps them into the 63/69-column output:
 
 ```text
 workspace_name

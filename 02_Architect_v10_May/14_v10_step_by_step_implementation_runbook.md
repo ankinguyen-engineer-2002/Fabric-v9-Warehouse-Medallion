@@ -715,12 +715,22 @@ KpiAggregateParity
 
 **Purpose:** meet Bob's TableDictionary expectation without rebuilding what v9 already solved.
 
+**Design rule:**
+
+Do not create a single physical TableDictionary base table with 63 or 69 columns. The v10 base metadata tables should stay normalized and small. `Meta.vw_TableDictionary` is the compatibility adapter that joins, derives, and null-fills fields into the Bob/Enterprise shape.
+
 **Create / extend:**
 
 - `Meta.vw_TableDictionary`
 - Optional physical export: `Meta.TableDictionaryExport` only if Bob/Rakesh require it.
 
-**Minimum fields:**
+**Adapter output target:**
+
+- Preserve the v9 external contract: 63 Enterprise-compatible columns plus v9/v10 extension columns.
+- Current v9 evidence shows `meta.vw_table_dictionary` has 69 columns: 63 Enterprise-compatible columns plus 6 v9 extension columns.
+- v10 can add extension columns only after confirming Bob/Rakesh do not require a strict 63-column physical export.
+
+**Core input fields required somewhere in v10 control-plane tables:**
 
 ```text
 workspace_name
@@ -751,17 +761,20 @@ security_classification
 
 **Steps:**
 
-- [ ] Step 1: Map v10 registry fields to Bob TableDictionary fields.
-- [ ] Step 2: Preserve CST output fields from v9.
-- [ ] Step 3: Add workspace/item/access mode fields missing from v9.
-- [ ] Step 4: Add approval status and owner fields.
-- [ ] Step 5: Add DQ and source contract status.
-- [ ] Step 6: Validate all managed v10 physical objects appear in the adapter.
-- [ ] Step 7: Ask Bob/Rakesh whether a physical export/sync is required.
+- [ ] Step 1: Keep core metadata in normalized tables such as `Meta.AssetRegistryV10`, `Meta.AssetGovernance`, source contracts, DQ, reconciliation, and run logs.
+- [ ] Step 2: Map v10 registry/governance fields to the 63 Enterprise-compatible TableDictionary columns.
+- [ ] Step 3: Preserve the 6 existing v9 extension columns or replace them with approved v10 extension columns only after sign-off.
+- [ ] Step 4: Preserve CST output fields from v9.
+- [ ] Step 5: Derive workspace/item/access mode fields in the view rather than duplicating them into every base table.
+- [ ] Step 6: Add approval status, owner, DQ status, and source contract status through joins.
+- [ ] Step 7: Validate all managed v10 physical objects appear in the adapter.
+- [ ] Step 8: Ask Bob/Rakesh whether a physical export/sync is required.
 
 **Exit gate:**
 
 - Every managed v10 object has dictionary metadata.
+- `Meta.vw_TableDictionary` exposes the Bob/Enterprise-compatible output contract.
+- No oversized 63/69-column physical base table is required.
 - Physical sync is not built unless required.
 
 ### Phase 15: Define Security Matrix Before Cutover

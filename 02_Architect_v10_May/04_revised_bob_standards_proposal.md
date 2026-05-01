@@ -203,6 +203,8 @@ New v10 rule:
 ```text
 TableDictionary compatibility is a required v10 control-plane output.
 Implementation starts from v9 vw_table_dictionary and sp_registry, not from a brand-new table.
+Do not create one oversized 63/69-column physical base table.
+Use normalized metadata tables plus a compatibility view adapter.
 ```
 
 Minimum required outputs:
