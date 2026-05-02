@@ -1,6 +1,6 @@
 # Architecture v9 — Complete Reference
 > SupplyChain_Warehouse | Microsoft Fabric F256 | Warehouse-Native Medallion Architecture
-> Build date: 2026-04-13 | Authors: Claude Code + Aric Nguyen
+> Build date: 2026-04-13 | Authors: AI assistant + Aric Nguyen
 > This document is the single source of truth for the entire v9 architecture.
 
 ---

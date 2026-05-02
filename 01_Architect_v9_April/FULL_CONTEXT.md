@@ -2,7 +2,7 @@
 > **Mục đích**: File duy nhất chứa TOÀN BỘ context, architecture, decisions, bugs, fixes, connections, pipeline details, SP logic, constraints, và session history.
 > **Cách dùng**: Bảo AI "đọc file FULL_CONTEXT.md" → AI hiểu mọi thứ, không cần hỏi thêm.
 > **Last updated**: 2026-04-23
-> **Author**: Aric Nguyen + Claude Code
+> **Author**: Aric Nguyen + AI assistant
 
 ---
 
@@ -55,7 +55,7 @@
 | **Division** | Global Supply Chain Analytics |
 | **Language** | Vietnamese (chính), English (docs/code) |
 | **Skills** | T-SQL, PySpark, Microsoft Fabric, Azure, Pipeline Orchestration, Data Warehouse Architecture |
-| **Working style** | Iterative build — deploy → hit constraints → fix → redeploy. Dùng Claude Code + Fabric MCP |
+| **Working style** | Iterative build — deploy → hit constraints → fix → redeploy. Dùng AI assistant + Fabric MCP |
 
 ---
 
@@ -1038,7 +1038,7 @@ gh repo clone afi-migration-pilot/data-edw-fabric  # Use gh CLI (not git clone)
 
 ```
 Fabric-v9-Warehouse-Medallion/
-├── .claude/                        (Claude Code cache — gitignored)
+├── .ai-cache/                        (AI assistant cache — gitignored)
 ├── .devcontainer/
 │   └── devcontainer.json           (Python 3.11, Streamlit auto-run)
 ├── .github/
@@ -1239,7 +1239,7 @@ If need to rebuild from scratch:
 | FULL_CONTEXT.md | ★ THIS FILE — everything in one place |
 | .python-version | 3.11 |
 | runtime.txt | python-3.11 (for Streamlit Cloud) |
-| .gitignore | Large files, .claude/, _private/, .DS_Store |
+| .gitignore | Large files, .ai-cache/, _private/, .DS_Store |
 
 ### docs/ — Documentation
 
@@ -1274,5 +1274,5 @@ If need to rebuild from scratch:
 
 ---
 
-*Built with Claude Code + Fabric MCP Server. ~4 days from zero to production-ready.*
+*Built with AI assistant + Fabric MCP Server. ~4 days from zero to production-ready.*
 *Tổng cộng ~1.47 tỷ rows, ~85 objects, 7 pipelines, 1 generic SP, 8 load patterns, 54 DQ rules (30 active). Multi-mart architecture. Health check: 49/49 PASS.*
