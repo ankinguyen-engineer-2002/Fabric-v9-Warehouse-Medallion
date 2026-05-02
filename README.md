@@ -77,25 +77,108 @@ Pure T-SQL stored procedures. No Notebooks. No PySpark. No Lakehouse ETL.<br/>
 
 ---
 
+## Workspace Inventory — Medallion Item Map
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                        BRONZE — Logical Access Layer                        │
+│                       (No dedicated Warehouse)                              │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Enterprise_Lakehouse                                                       │
+│  ├── OneLake shortcuts → Enterprise_Data workspace                          │
+│  ├── N schemas · N+ source-aligned tables                                   │
+│  ├── Source_Schema_1/    raw operational data                                │
+│  ├── Source_Schema_2/    master data / dimensions                            │
+│  ├── Source_Schema_N/    ...                                                 │
+│  └── Role: READ-ONLY access. Silver views read directly from here.          │
+│                                                                             │
+│  Supplement_Lakehouse                                                       │
+│  ├── N Dataflow feeds → _ver2 staging tables                                │
+│  ├── Reference tables (manual / dataflow seeded)                            │
+│  └── Role: EDW supplement source when Enterprise_Lakehouse is incomplete    │
+│                                                                             │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                    SILVER — Processing Warehouse                            │
+│                    Processing_Warehouse                                     │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Staging (N tables, N views, 1 SP)                                          │
+│  ├── {EdwTable_1}         ← CTAS from Supplement Lakehouse                  │
+│  ├── {EdwTable_N}         ← CTAS from Supplement Lakehouse                  │
+│  ├── vw_{Source_1} ... vw_{Source_N}  → column mapping from raw sources     │
+│  └── usp_RefreshEdwTables → CTAS all EDW supplement tables                  │
+│                                                                             │
+│  ReferenceMaster (N tables, N views)                                        │
+│  ├── {RefTable_1}         ← Enterprise_Lakehouse source                     │
+│  ├── {RefTable_N}         ← Enterprise_Lakehouse source                     │
+│  └── Role: Domain reference data, loaded via usp_GenericLoad                │
+│                                                                             │
+│  {DomainSchema_1} (N tables, N views)            ── DAG Wave 0,1 ──        │
+│  ├── {DomainTable_A}      ← Staging + ReferenceMaster                       │
+│  ├── {DomainTable_B}      ← DomainTable_A + ReferenceMaster                 │
+│  └── ...                                                                    │
+│                                                                             │
+│  {DomainSchema_2} (N tables, N views)            ── DAG Wave 0,2 ──        │
+│  ├── {DomainTable_C}      ← Staging + ReferenceMaster                       │
+│  └── ...                                                                    │
+│                                                                             │
+│  {DomainSchema_N} (N tables, N views)            ── DAG Wave 0,1 ──        │
+│  └── ...                                                                    │
+│                                                                             │
+│  Meta (20 tables, 5 views, 16 SPs, 3 functions)                             │
+│  ├── AssetRegistryV10         Registry: asset, layer, load type, schedule    │
+│  ├── DQRule                   DQ: 7 check types, severity-based gating      │
+│  ├── LineageEdge              Lineage: auto-built from source_objects        │
+│  ├── SilverDagWaveRuntime     DAG: computed wave assignments                 │
+│  ├── RunLog                   Logging: per-table UTC+CST, rows, status      │
+│  ├── usp_GenericLoad          8 load patterns (1 SP for all tables)          │
+│  ├── usp_ComputeSilverWaves   Iterative dependency graph → waves            │
+│  ├── usp_CheckDqSingle        Per-rule DQ engine with retry                 │
+│  ├── ufn_cron_is_due          5-field cron parser                            │
+│  └── ...                                                                    │
+│                                                                             │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                      GOLD — Dedicated Serving Warehouse                     │
+│                      Gold_Warehouse                                         │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  {ServingSchema} (N tables, N views)                                        │
+│  ├── Fact{Subject_1}      ← cross-DB CTAS from Silver                       │
+│  ├── Fact{Subject_2}      ← cross-DB CTAS from Silver                       │
+│  ├── vw_Fact{Subject_1}   → transform view reading Processing WH           │
+│  └── Role: Direct Lake semantic model reads physical tables from here       │
+│                                                                             │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                      CONSUMPTION                                            │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Semantic Model (Direct Lake) → reads Gold physical tables                  │
+│  Power BI Reports → reads Semantic Model                                    │
+│                                                                             │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
 ## Medallion Layer Detail
 
 ### Bronze — Logical Access (No Dedicated Warehouse)
 
 ```
 Enterprise_Lakehouse (OneLake shortcuts)
-  ├── Wholesale_Codis_AFI/     Order data (codatan, COMAST, EXTORD, EXTORIT)
-  ├── MasterData_DW/           DimDate, DimItemMaster
-  ├── Customers/               AccountMaster, ShippingLocations
-  └── SupplyChain_DW/          DimAFIWarehouses
+  ├── Source_Schema_1/     Raw operational data
+  ├── Source_Schema_2/     Master data / dimensions
+  └── Source_Schema_N/     ...
 
-SupplyChain_Lakehouse (EDW supplement dataflows)
-  └── dbo/                     _ver2 tables (InvoiceDetail, InvoiceHeader, etc.)
+Supplement_Lakehouse (EDW supplement dataflows)
+  └── dbo/                 _ver2 tables (exception sources)
 ```
 
 **Rules:**
 - Default: direct read via 3-part naming (no local copy)
 - Exception: CTAS into `Staging` schema only when EDW supplement, unstable source, snapshot consistency, or replay/debug needed
-- Source access views (`Staging.vw_Codatan`, etc.) handle column mapping from raw CODIS format
+- Source access views (`Staging.vw_{Source}`, etc.) handle column mapping from raw formats
 
 ### Silver — Domain Process Schemas
 
