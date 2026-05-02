@@ -581,6 +581,25 @@ SELECT * FROM Meta.vw_TableDictionary;
 
 ---
 
+## Enterprise Standards Compliance
+
+Architecture audited against enterprise DW standards (Bob/Rakesh). Full audit in [`docs/decisions/ADR-003-bob-standards-compliance-audit.md`](docs/decisions/ADR-003-bob-standards-compliance-audit.md).
+
+| Status | Count | Detail |
+|---|---|---|
+| PASS | 13 | Schema grouping, PascalCase tables, Fact/Dim prefix, dbo clean, TableDictionary, ETL docs |
+| Adapted for Fabric | 7 | Direct Lake replaces view rule, OneLake replaces PolyBase, Pipeline replaces SQL Agent |
+| Needs fix (easy) | 2 | SELECT * in 7 REF views, Primary Key metadata empty |
+| Pending Bob decision | 2 | Schema suffix convention (_DW/_ENH/_WRK vs PascalCase), Column naming (snake_case vs PascalCase) |
+| Not applicable | 7 | HASH/REPLICATE, CCIX/CIX, partitioning, statistics, SQL Agent, PolyBase, SSIS |
+
+### Pending Decisions (ask Bob)
+
+1. **Schema suffix**: DOCX says `ForecastHistory_ENH`, `ForecastAccuracy_DW`. Email says PascalCase only. Current v10 uses PascalCase without suffix. Rebuild ~1 session if suffix required.
+2. **Column naming**: DOCX says PascalCase. v10 + v9 + existing semantic models all use snake_case. Rebuild ~1 session if PascalCase required.
+
+---
+
 ## Branch Strategy
 
 | Branch | Purpose | Content |
@@ -629,10 +648,11 @@ SELECT * FROM Meta.vw_TableDictionary;
 
 ### Decision Records (`docs/decisions/`)
 
-| ADR | Decision |
-|---|---|
-| ADR-001 | Adopt Hybrid Medallion architecture |
-| ADR-002 | EDW Supplement Exit Strategy |
+| ADR | Decision | Status |
+|---|---|---|
+| ADR-001 | Adopt Hybrid Medallion architecture | Accepted |
+| ADR-002 | EDW Supplement Exit Strategy | Accepted |
+| ADR-003 | Bob Standards Compliance Audit | Open — pending Bob confirmation on 2 items |
 
 ---
 
