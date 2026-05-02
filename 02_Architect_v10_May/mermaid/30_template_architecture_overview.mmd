@@ -1,0 +1,58 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1a73e8', 'primaryTextColor': '#fff', 'primaryBorderColor': '#1557b0', 'lineColor': '#666', 'secondaryColor': '#e8f0fe', 'tertiaryColor': '#f1f3f4'}}}%%
+flowchart TB
+    subgraph EXT["Enterprise Data Workspace"]
+        SRC["Upstream Source Products"]
+    end
+
+    subgraph WS["Domain Workspace"]
+        subgraph BRONZE["BRONZE — Logical Access Layer"]
+            EL["Lakehouse<br/><i>OneLake Shortcuts</i><br/>Source-aligned data access"]
+            SL["Supplement Lakehouse<br/><i>Dataflow Feeds</i><br/>Exception-only sources"]
+        end
+
+        subgraph SILVER["SILVER — Processing Warehouse"]
+            direction TB
+            STG["Staging<br/>Exception-only persistence<br/>EDW supplement tables"]
+            REF["ReferenceMaster<br/>Domain reference data<br/>Calendar, Master tables"]
+            DOM1["DomainSchema_1<br/>Business transformations<br/>N tables | N views"]
+            DOM2["DomainSchema_2<br/>Business transformations<br/>N tables | N views"]
+            DOMN["DomainSchema_N<br/>...repeat per domain..."]
+            META["Meta Control Plane<br/>Registry | DQ | Lineage<br/>DAG | Scheduling | Logging"]
+        end
+
+        subgraph GOLD["GOLD — Dedicated Serving Warehouse"]
+            FA["ServingSchema<br/>Physical tables<br/>Direct Lake ready"]
+        end
+
+        subgraph PIPE["Pipeline Orchestration"]
+            PM["pl_master<br/>Multi-mart ForEach"]
+            PMT["pl_mart<br/>staging→silver→gold"]
+            PS["pl_staging"]
+            PSV["pl_silver<br/>DAG wave dispatch"]
+            PSW["pl_silver_wave<br/>parallel execution"]
+            PG["pl_gold<br/>cross-DB publish"]
+            PDQ["pl_dq_check"]
+        end
+    end
+
+    SRC --> EL
+    SRC --> SL
+    EL --> STG
+    SL --> STG
+    EL --> REF
+    STG --> DOM1
+    STG --> DOM2
+    REF --> DOM1
+    REF --> DOM2
+    REF --> DOMN
+    DOM1 --> FA
+    DOM2 --> FA
+    META -.->|orchestrates| STG
+    META -.->|orchestrates| DOM1
+    META -.->|orchestrates| DOM2
+    META -.->|orchestrates| FA
+    PM --> PMT
+    PMT --> PS
+    PMT --> PSV
+    PMT --> PG
+    PSV --> PSW

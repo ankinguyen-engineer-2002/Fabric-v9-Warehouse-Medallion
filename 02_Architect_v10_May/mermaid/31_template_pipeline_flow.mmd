@@ -1,0 +1,53 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1a73e8', 'primaryTextColor': '#fff'}}}%%
+flowchart TD
+    subgraph MASTER["pl_master"]
+        M1["log_start<br/>usp_LogPipelineRun"]
+        M2["lk_projects<br/>Lookup DISTINCT project"]
+        M3["fe_projects<br/>ForEach project batch=10"]
+        M4["finalize<br/>usp_FinalizePipeline<br/>rebuild lineage + log"]
+    end
+
+    subgraph MART["pl_mart (per project)"]
+        direction TB
+        MT1["invoke_staging"]
+        MT2["invoke_silver"]
+        MT3["invoke_gold"]
+    end
+
+    subgraph STAGING["pl_staging"]
+        S1["refresh_edw<br/>usp_RefreshEdwTables<br/>EDW supplement CTAS"]
+        S2["lk_ref<br/>Lookup REF tables<br/>+ smart skip filter"]
+        S3["fe_ref<br/>ForEach batch=N<br/>usp_GenericLoad"]
+    end
+
+    subgraph SILVER["pl_silver"]
+        SV1["compute_waves<br/>usp_ComputeSilverWaves"]
+        SV2["lk_waves<br/>Lookup DISTINCT wave"]
+        SV3["fe_waves<br/>ForEach wave SEQUENTIAL"]
+    end
+
+    subgraph WAVE["pl_silver_wave (per wave)"]
+        W1["lk_wave_sps<br/>Lookup tables for this wave"]
+        W2["fe_exec<br/>ForEach batch=N PARALLEL<br/>usp_GenericLoad"]
+    end
+
+    subgraph GOLDP["pl_gold"]
+        G1["Script activity<br/>CTAS to Gold Warehouse<br/>cross-DB from Processing WH"]
+    end
+
+    subgraph DQ["pl_dq_check"]
+        D1["lk_dq_rules<br/>Lookup active rules by layer"]
+        D2["fe_dq_check<br/>ForEach batch=5<br/>usp_CheckDqSingle"]
+    end
+
+    M1 --> M2 --> M3 --> M4
+    M3 -->|invoke| MART
+    MT1 --> MT2 --> MT3
+    MT1 -->|invoke| STAGING
+    MT2 -->|invoke| SILVER
+    MT3 -->|invoke| GOLDP
+    S1 --> S2 --> S3
+    SV1 --> SV2 --> SV3
+    SV3 -->|invoke per wave| WAVE
+    W1 --> W2
+    D1 --> D2

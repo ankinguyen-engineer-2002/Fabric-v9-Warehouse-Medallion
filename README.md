@@ -64,7 +64,7 @@ Pure T-SQL stored procedures. No Notebooks. No PySpark. No Lakehouse ETL.<br/>
 
 ## Architecture Overview
 
-![Architecture Overview](./02_Architect_v10_May/mermaid/render_check/20_architecture_overview.svg)
+![Architecture Overview](./02_Architect_v10_May/mermaid/render_check/30_template_architecture_overview.svg)
 
 ### 3-Layer Medallion Mapping
 
@@ -170,7 +170,7 @@ Gold_Warehouse/
 
 ## Data Flow Diagram
 
-![Silver DAG Waves](./02_Architect_v10_May/mermaid/render_check/23_silver_dag_waves.svg)
+![Silver DAG Waves](./02_Architect_v10_May/mermaid/render_check/33_template_silver_dag.svg)
 
 ```
 Source (Lakehouse/Shortcuts)
@@ -195,7 +195,7 @@ Source (Lakehouse/Shortcuts)
 
 ## Pipeline Topology
 
-![Pipeline Flow](./02_Architect_v10_May/mermaid/render_check/21_pipeline_flow.svg)
+![Pipeline Flow](./02_Architect_v10_May/mermaid/render_check/31_template_pipeline_flow.svg)
 
 ### 7 Pipelines — Parent-Child Architecture
 
@@ -318,7 +318,7 @@ When `load_type = 'scd2'`, the framework automatically adds:
 
 ## Control Plane Detail
 
-![Control Plane](./02_Architect_v10_May/mermaid/render_check/22_control_plane_detail.svg)
+![Control Plane](./02_Architect_v10_May/mermaid/render_check/32_template_control_plane.svg)
 
 ### 16 Stored Procedures
 
@@ -609,14 +609,23 @@ SELECT * FROM Meta.vw_TableDictionary;
 | 13 | `build_blueprint_after_readiness.md` | Build blueprint |
 | 14 | `step_by_step_implementation_runbook.md` | 20-phase implementation runbook |
 
-### Architecture Diagrams
+### Architecture Diagrams — Template (main)
 
 | Diagram | File |
 |---|---|
-| Architecture Overview | `mermaid/20_architecture_overview.mmd` / `.svg` |
-| Pipeline Flow | `mermaid/21_pipeline_flow.mmd` / `.svg` |
+| Architecture Overview | `mermaid/30_template_architecture_overview.mmd` / `.svg` |
+| Pipeline Flow | `mermaid/31_template_pipeline_flow.mmd` / `.svg` |
+| Control Plane Detail | `mermaid/32_template_control_plane.mmd` / `.svg` |
+| Silver DAG Waves | `mermaid/33_template_silver_dag.mmd` / `.svg` |
+
+### Architecture Diagrams — Domain Detail (domain branches)
+
+| Diagram | File |
+|---|---|
+| Architecture Overview (detail) | `mermaid/20_architecture_overview.mmd` / `.svg` |
+| Pipeline Flow (detail) | `mermaid/21_pipeline_flow.mmd` / `.svg` |
 | Control Plane Detail | `mermaid/22_control_plane_detail.mmd` / `.svg` |
-| Silver DAG Waves | `mermaid/23_silver_dag_waves.mmd` / `.svg` |
+| Silver DAG Waves (detail) | `mermaid/23_silver_dag_waves.mmd` / `.svg` |
 
 ### Decision Records (`docs/decisions/`)
 

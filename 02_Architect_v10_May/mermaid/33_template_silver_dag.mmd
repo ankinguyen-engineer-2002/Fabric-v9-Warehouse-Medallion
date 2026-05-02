@@ -1,0 +1,41 @@
+%%{init: {'theme': 'base'}}%%
+flowchart LR
+    subgraph SOURCES["Source Access"]
+        STG["Staging Tables<br/>EDW supplement"]
+        LH["Lakehouse Shortcuts<br/>Direct read sources"]
+        REF["ReferenceMaster<br/>Calendar, Master data"]
+    end
+
+    subgraph W0["Wave 0 — No Silver Dependencies (parallel)"]
+        T0A["DomainTable_A"]
+        T0B["DomainTable_B"]
+        T0C["DomainTable_C"]
+    end
+
+    subgraph W1["Wave 1 — Depends on Wave 0 (parallel)"]
+        T1A["DomainTable_D"]
+        T1B["DomainTable_E"]
+        T1C["DomainTable_F"]
+    end
+
+    subgraph W2["Wave 2 — Depends on Wave 1"]
+        T2A["DomainTable_G"]
+    end
+
+    subgraph GOLD["Gold — Dedicated Serving Warehouse"]
+        GF1["Fact_1"]
+        GF2["Fact_2"]
+    end
+
+    STG --> T0A
+    LH --> T0B
+    LH --> T0C
+    REF --> T0A
+    REF --> T0B
+    REF --> T0C
+
+    T0A --> T1A & T1B
+    T0C --> T1C
+    T1A --> T2A
+
+    T1A & T0B & T2A --> GF1 & GF2
