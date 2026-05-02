@@ -117,103 +117,99 @@ SupplyChain_Gold_Warehouse/
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│                        BRONZE — Logical Access                              │
-│                       (Không có Warehouse riêng)                            │
+│                           BRONZE — Logical Access                            │
+│                          (Không có Warehouse riêng)                          │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  Enterprise_Lakehouse                                                       │
-│  ├── OneLake shortcuts → Enterprise_Data workspace                          │
-│  ├── ~200+ tables across 20+ schemas                                        │
-│  ├── Wholesale_Codis_AFI/    codatan, COMAST, EXTORD, EXTORIT               │
-│  ├── MasterData_DW/          DimDate, DimItemMaster, DimCustomers           │
-│  ├── Customers/              AccountMaster, ShippingLocations               │
-│  ├── SupplyChain_DW/         DimAFIWarehouses                               │
-│  ├── DemandPlanning_AFI/     DemandForecast, SupplyForecast                 │
-│  ├── Wholesale_ProductSourcing_AFI/ CustomerGrouping                        │
-│  ├── + 15 more schemas (Retail, Manufacturing, ItemMaster, etc.)            │
-│  └── Vai trò: READ-ONLY access. Silver views đọc trực tiếp từ đây.        │
-│                                                                             │
-│  SupplyChain_Lakehouse                                                      │
-│  ├── 4 Dataflows feed _ver2 tables (EDW supplement)                         │
-│  │   ├── brz_saleshistory_afi__invoicedetail_ver2                           │
-│  │   ├── brz_saleshistory_afi__invoiceheader_ver2                           │
-│  │   ├── brz_supplychain_enh_1__demandforecastsnapshotdaily_ver2            │
-│  │   └── ref_product_ver2                                                   │
-│  ├── + ref_forecast_cycle, other reference tables                           │
-│  └── Vai trò: EDW supplement source khi Enterprise_Lakehouse chưa đủ       │
-│                                                                             │
+│                                                                              │
+│  Enterprise_Lakehouse                                                        │
+│  ├── OneLake shortcuts → Enterprise_Data workspace                           │
+│  ├── ~200+ tables across 20+ schemas                                         │
+│  ├── Wholesale_Codis_AFI/  codatan, COMAST, EXTORD, EXTORIT                  │
+│  ├── MasterData_DW/        DimDate, DimItemMaster                            │
+│  ├── Customers/            AccountMaster, ShippingLocations                  │
+│  ├── SupplyChain_DW/       DimAFIWarehouses                                  │
+│  ├── DemandPlanning_AFI/   DemandForecast, SupplyForecast                    │
+│  ├── + 15 more schemas (Retail, Manufacturing, etc.)                         │
+│  └── READ-ONLY. Silver views read directly from here.                        │
+│                                                                              │
+│  SupplyChain_Lakehouse                                                       │
+│  ├── 4 Dataflows → _ver2 tables (EDW supplement)                             │
+│  │   ├── brz_saleshistory_afi__invoicedetail_ver2                            │
+│  │   ├── brz_saleshistory_afi__invoiceheader_ver2                            │
+│  │   ├── brz_supplychain_enh_1__demandforecast_ver2                          │
+│  │   └── ref_product_ver2                                                    │
+│  ├── + ref_forecast_cycle, other reference tables                            │
+│  └── EDW supplement khi Enterprise_Lakehouse chưa đủ                         │
+│                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│                    SILVER — Processing Warehouse                            │
-│                    SupplyChain_Processing_Warehouse                         │
+│                  SILVER — SupplyChain_Processing_Warehouse                   │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  Staging (4 tables, 4 views, 1 SP)                                          │
-│  ├── InvoiceDetailEdw         88M rows  ← CTAS from SupplyChain_LH         │
-│  ├── InvoiceHeaderEdw         24M rows  ← CTAS from SupplyChain_LH         │
-│  ├── DemandForecastSnapshot   42M rows  ← CTAS from SupplyChain_LH         │
-│  ├── ProductEdw               379K rows ← CTAS from SupplyChain_LH         │
-│  ├── vw_Codatan/Comast/Extord/Extorit → column mapping từ EL               │
-│  └── usp_RefreshEdwTables     → CTAS 4 EDW tables                          │
-│                                                                             │
-│  ReferenceMaster (10 tables, 11 views)                                      │
-│  ├── Calendar                 21K rows  ← Enterprise_LH.DimDate            │
-│  ├── ItemMaster               381K rows ← Enterprise_LH.DimItemMaster      │
-│  ├── CustomerAccountGroup     35K rows  ← Enterprise_LH.CustomerGrouping   │
-│  ├── + 7 more REF tables                                                    │
-│  └── Vai trò: Domain reference data, loaded via usp_GenericLoad             │
-│                                                                             │
-│  SalesHistory (4 tables, 4 views)                    ── DAG Wave 0,1 ──     │
-│  ├── InvoiceDetailLineLevel   88M rows  ← Staging EDW + REF                │
-│  ├── InvoiceWeekly            37M rows  ← InvoiceDetailLineLevel            │
-│  ├── ActualDemandMonthly      2.6M rows ← InvoiceDetail + OpenOrder         │
-│  └── ActualDemandWeekly       7.8M rows ← InvoiceDetail + OpenOrder         │
-│                                                                             │
-│  ForecastHistory (2 tables, 2 views)                 ── DAG Wave 0,2 ──     │
-│  ├── ForecastDemandMonthly    42M rows  ← Staging EDW + REF                │
-│  └── NaiveForecastMonthly     2M rows   ← ActualDemandMonthly              │
-│                                                                             │
-│  OpenOrderHistory (2 tables, 2 views)                ── DAG Wave 0,1 ──     │
-│  ├── OpenOrderLineLevel       193K rows ← Enterprise_LH Codis direct       │
-│  └── OpenOrderMonthly         80K rows  ← OpenOrderLineLevel               │
-│                                                                             │
-│  Meta (20 tables, 5 views, 16 SPs, 3 functions)                             │
-│  ├── AssetRegistryV10 · 28 assets  │ DQRule · 54 rules                      │
-│  ├── LineageEdge · 52 edges        │ SourceContract · 674 cols              │
-│  ├── SilverDagWaveRuntime · 8      │ RunLog · 37+ entries                   │
-│  ├── usp_GenericLoad · 8 patterns  │ usp_ComputeSilverWaves                 │
-│  ├── usp_CheckDqSingle · 7 types  │ usp_RunSilverDag                       │
-│  └── ufn_cron_is_due · ufn_should_run · ufn_utc_to_cst                     │
-│                                                                             │
+│                                                                              │
+│  Staging (4 tables, 4 views, 1 SP)                                           │
+│  ├── InvoiceDetailEdw       88M rows ← SupplyChain_LH                        │
+│  ├── InvoiceHeaderEdw       24M rows ← SupplyChain_LH                        │
+│  ├── DemandForecastSnapshot 42M rows ← SupplyChain_LH                        │
+│  ├── ProductEdw             379K rows← SupplyChain_LH                        │
+│  ├── vw_Codatan/Comast/Extord/Extorit → column mapping                       │
+│  └── usp_RefreshEdwTables   → CTAS 4 EDW tables                              │
+│                                                                              │
+│  ReferenceMaster (10 tables, 11 views)                                       │
+│  ├── Calendar               21K rows ← EL.DimDate                            │
+│  ├── ItemMaster             381K rows← EL.DimItemMaster                      │
+│  ├── CustomerAccountGroup   35K rows ← EL.CustomerGroup                      │
+│  ├── + 7 more REF tables                                                     │
+│  └── Domain reference, loaded via usp_GenericLoad                            │
+│                                                                              │
+│  SalesHistory (4 tables, 4 views)          — DAG Wave 0,1 —                  │
+│  ├── InvoiceDetailLineLevel 88M rows ← Staging EDW + REF                     │
+│  ├── InvoiceWeekly          37M rows ← InvoiceDetailLL                       │
+│  ├── ActualDemandMonthly    2.6M rows← Invoice + OpenOrd                     │
+│  └── ActualDemandWeekly     7.8M rows← Invoice + OpenOrd                     │
+│                                                                              │
+│  ForecastHistory (2 tables, 2 views)       — DAG Wave 0,2 —                  │
+│  ├── ForecastDemandMonthly  42M rows ← Staging EDW + REF                     │
+│  └── NaiveForecastMonthly   2M rows  ← ActualDemandMthly                     │
+│                                                                              │
+│  OpenOrderHistory (2 tables, 2 views)      — DAG Wave 0,1 —                  │
+│  ├── OpenOrderLineLevel     193K rows← EL Codis direct                       │
+│  └── OpenOrderMonthly       80K rows ← OpenOrderLineLevel                    │
+│                                                                              │
+│  Meta (20 tables, 5 views, 16 SPs, 3 functions)                              │
+│  ├── AssetRegistryV10 28    │ DQRule 54 rules                                │
+│  ├── LineageEdge 52 edges   │ SourceContract 674 cols                        │
+│  ├── SilverDagWaveRuntime 8 │ RunLog 37+ entries                             │
+│  ├── usp_GenericLoad 8 pat  │ usp_ComputeSilverWaves                         │
+│  ├── usp_CheckDqSingle 7typ │ usp_RunSilverDag                               │
+│  └── ufn_cron_is_due │ ufn_should_run │ ufn_utc_to_cst                       │
+│                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│                      GOLD — SupplyChain_Gold_Warehouse                      │
+│                      GOLD — SupplyChain_Gold_Warehouse                       │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ForecastAccuracy (2 tables, 2 views)                                       │
-│  ├── FactForecastActual       47M rows  ← cross-DB CTAS từ Silver          │
-│  ├── FactForecastKpi          36M rows  ← cross-DB CTAS từ Silver          │
-│  ├── vw_FactForecastActual    → UNION ALL 3 Silver tables                   │
-│  └── vw_FactForecastKpi      → spine × horizons × forecast vs actual       │
-│                                                                             │
+│                                                                              │
+│  ForecastAccuracy (2 tables, 2 views)                                        │
+│  ├── FactForecastActual     47M rows ← cross-DB Silver                       │
+│  ├── FactForecastKpi        36M rows ← cross-DB Silver                       │
+│  ├── vw_FactForecastActual  → UNION ALL 3 Silver tables                      │
+│  └── vw_FactForecastKpi     → spine × horizons × calc                        │
+│                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│                      PIPELINE ORCHESTRATION · 7 pipelines                   │
+│                     PIPELINE ORCHESTRATION · 7 pipelines                     │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  pl_sc_master → pl_sc_mart → pl_sc_staging (EDW + REF)                      │
-│                            → pl_sc_silver (DAG waves) → pl_sc_silver_wave   │
-│                            → pl_sc_gold (cross-DB CTAS)                     │
-│  pl_dq_check (standalone · 54 rules ForEach)                                │
-│  Schedule: Daily 2:00 AM UTC+7 · Runtime: ~31 min                          │
-│                                                                             │
+│                                                                              │
+│  pl_sc_master → pl_sc_mart → pl_sc_staging (EDW + REF)                       │
+│                            → pl_sc_silver → pl_sc_silver_wave                │
+│                            → pl_sc_gold (cross-DB CTAS)                      │
+│  pl_dq_check (standalone · 54 rules ForEach)                                 │
+│  Schedule: Daily 2:00 AM UTC+7 · Runtime: ~31 min                            │
+│                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│                      LEGACY (không sử dụng bởi v10)                         │
+│                            LEGACY (không sử dụng)                            │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  SupplyChain_Warehouse    v9 objects deleted · SCP_Core by Bob's team       │
-│  ETL_Framework            Enterprise utility                                │
-│  Temp_SCPWarehouse        Enterprise temp                                   │
-│  80 Notebooks             v8 PySpark legacy                                 │
-│  12 legacy pipelines      v8/enterprise                                     │
-│                                                                             │
+│                                                                              │
+│  SupplyChain_Warehouse      v9 deleted · SCP_Core by Bob                     │
+│  ETL_Framework / Temp_SCPWarehouse   enterprise utility                      │
+│  80 Notebooks (v8 PySpark)  12 legacy pipelines                              │
+│                                                                              │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
