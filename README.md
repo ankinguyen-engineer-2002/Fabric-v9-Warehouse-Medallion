@@ -575,4 +575,4 @@ az account get-access-token --resource https://analysis.windows.net/powerbi/api 
 
 ---
 
-*Built by Aric Nguyen, DataHub VN — Ashley Furniture Industries. Architecture: Claude Code + Codex.*
+*Built by Aric Nguyen, DataHub VN — Ashley Furniture Industries. Architecture: Aric Nguyen.*
