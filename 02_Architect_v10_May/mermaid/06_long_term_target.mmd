@@ -1,0 +1,35 @@
+flowchart LR
+    SRC["Enterprise Source Products"]
+    LB["Logical Bronze<br/>Shortcuts"]
+    DS["Domain Silver<br/>SupplyChain-owned"]
+    ES["Enterprise Silver<br/>Reusable entities"]
+    STG["Exception Staging"]
+    GOLD["Gold Serving Warehouse"]
+    SEM["Semantic Model"]
+    CTRL["v9 Control Plane"]
+
+    SRC --> LB
+    SRC --> ES
+    LB --> DS
+    LB -.->|"exception"| STG
+    STG --> DS
+    ES --> DS
+    DS --> GOLD
+    GOLD --> SEM
+
+    CTRL -.->|"metadata"| LB
+    CTRL -.->|"DQ / DAG"| DS
+    CTRL -.->|"publish"| GOLD
+    CTRL -.->|"monitor"| SEM
+
+    class SRC,LB bronze
+    class STG staging
+    class DS,ES silver
+    class GOLD,SEM gold
+    class CTRL control
+
+    classDef bronze fill:#B86B2B,stroke:#6B3A12,color:#FFFFFF
+    classDef staging fill:#D9822B,stroke:#8A4A0A,color:#FFFFFF
+    classDef silver fill:#C7CCD6,stroke:#687080,color:#111111
+    classDef gold fill:#F2C94C,stroke:#9A6B00,color:#111111
+    classDef control fill:#0B3D91,stroke:#06275F,color:#FFFFFF

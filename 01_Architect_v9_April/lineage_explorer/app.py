@@ -54,9 +54,104 @@ def load_csv(filename):
     with open(path, newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
 
+def parse_json_array(raw_value):
+    if not raw_value or raw_value in ("nan", "None"):
+        return []
+    try:
+        parsed = json.loads(raw_value)
+        return parsed if isinstance(parsed, list) else []
+    except Exception:
+        return []
+
+def load_augmented_lineage_rows():
+    """
+    Base lineage comes from the exported CSV snapshot.
+    Supplement it with the documented SupplyChain_Lakehouse -> _edw bridge
+    for the four temporary EDW-backed bronze/ref tables.
+    """
+    lineage_rows = list(load_csv("lineage.csv"))
+    registry_rows = load_csv("registry.csv")
+    supplemental = []
+    seen = set()
+
+    for reg in registry_rows:
+        target_schema = (reg.get("target_schema", "") or "").strip()
+        target_table = (reg.get("target_table", "") or "").strip()
+        for src_obj in parse_json_array(reg.get("source_objects", "")):
+            src_obj = (src_obj or "").strip()
+            if not src_obj.startswith("bronze.") or not src_obj.endswith("_edw"):
+                continue
+
+            src_table = src_obj.split(".", 1)[1]
+            base_table = src_table[:-4]  # strip trailing "_edw"
+            lakehouse_source = f"SupplyChain_Lakehouse.dbo.{base_table}_ver2"
+            key = (lakehouse_source, "bronze", src_table, target_schema, target_table)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            supplemental.append({
+                "lineage_id": "",
+                "source_schema": "SupplyChain_Lakehouse",
+                "source_table": f"dbo.{base_table}_ver2",
+                "target_schema": "bronze",
+                "target_table": src_table,
+                "relationship_type": "direct",
+                "sp_name": "bronze.usp_refresh_edw_tables",
+            })
+
+    return lineage_rows + supplemental
+
+def lineage_node_id(source_schema, source_table):
+    schema = (source_schema or "").strip()
+    table = (source_table or "").strip()
+    if "Enterprise_Lakehouse" in schema or "SupplyChain_Lakehouse" in schema:
+        return f"{schema}.{table}"
+    return table
+
+def build_recursive_mini_dag(lineage_rows, selected_schema, selected_table):
+    by_target = {}
+    for row in lineage_rows:
+        key = (row.get("target_schema", "").strip(), row.get("target_table", "").strip())
+        by_target.setdefault(key, []).append(row)
+
+    mini_nodes, mini_edges, mini_seen = [], [], set()
+    visited_targets = set()
+
+    def add_node(schema, table, selected=False):
+        node_id = lineage_node_id(schema, table)
+        if node_id not in mini_seen:
+            mini_seen.add(node_id)
+            mini_nodes.append({
+                "id": node_id,
+                "layer": "gld" if selected else "other",
+                "load_type": "",
+                "status": "",
+                "last_load_date": "",
+                "rows_loaded": 0
+            })
+        return node_id
+
+    def walk(schema, table, selected=False):
+        key = (schema, table)
+        if key in visited_targets:
+            return
+        visited_targets.add(key)
+
+        target_id = add_node(schema, table, selected=selected)
+        for row in by_target.get(key, []):
+            src_schema = row.get("source_schema", "").strip()
+            src_table = row.get("source_table", "").strip()
+            src_id = add_node(src_schema, src_table, selected=False)
+            mini_edges.append({"source": src_id, "target": target_id})
+            walk(src_schema, src_table, selected=False)
+
+    walk(selected_schema, selected_table, selected=True)
+    return {"nodes": mini_nodes, "edges": mini_edges}
+
 @st.cache_data(ttl=600)
 def build_dag_data():
-    rows = load_csv("lineage.csv")
+    rows = load_augmented_lineage_rows()
     registry = {r.get("target_table", ""): r for r in load_csv("registry.csv")}
     nodes, edges, seen = [], [], set()
 
@@ -144,7 +239,7 @@ with tab2:
     st.caption("Select a table to see: sources → view → load pattern → target")
 
     registry = load_csv("registry.csv")
-    lineage = load_csv("lineage.csv")
+    lineage = load_augmented_lineage_rows()
     views = load_csv("views.csv")
 
     if registry:
@@ -176,24 +271,11 @@ with tab2:
                 except: st.code(deps)
 
             # Mini-DAG
-            table_edges = [r for r in lineage if r.get("target_table", "") == table and r.get("target_schema", "") == schema]
-            if table_edges:
+            mini_dag = build_recursive_mini_dag(lineage, schema, table)
+            if mini_dag["nodes"]:
                 st.markdown("**ETL Flow:**")
-                mini_nodes, mini_edges, mini_seen = [], [], set()
-                for r in table_edges:
-                    src_s = r.get("source_schema", "").strip()
-                    src_t = r.get("source_table", "").strip()
-                    src_id = f"{src_s}.{src_t}" if src_s else src_t
-                    if src_id not in mini_seen:
-                        mini_seen.add(src_id)
-                        mini_nodes.append({"id": src_id, "layer": "other", "load_type": "", "status": "", "last_load_date": "", "rows_loaded": 0})
-                    if selected not in mini_seen:
-                        mini_seen.add(selected)
-                        mini_nodes.append({"id": selected, "layer": "gld", "load_type": row.get("load_type", ""), "status": "", "last_load_date": "", "rows_loaded": 0})
-                    mini_edges.append({"source": src_id, "target": selected})
-
                 html_mini = html_path.read_text(encoding="utf-8")
-                html_mini = html_mini.replace("window.__LINEAGE_API_DATA__ = null;", f"window.__LINEAGE_API_DATA__ = {json.dumps({'nodes': mini_nodes, 'edges': mini_edges})};")
+                html_mini = html_mini.replace("window.__LINEAGE_API_DATA__ = null;", f"window.__LINEAGE_API_DATA__ = {json.dumps(mini_dag)};")
                 components.html(html_mini, height=300, scrolling=False)
 
             view_name = row.get("view_name", "")

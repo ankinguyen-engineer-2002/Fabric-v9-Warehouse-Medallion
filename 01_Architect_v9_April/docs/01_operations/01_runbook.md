@@ -35,6 +35,7 @@ DQ gates (dq_bronze, dq_silver, dq_gold): DEACTIVATED — skip when run
 -- 1. Last pipeline run status
 SELECT TOP 1 pipeline_run_id, status, start_time, end_time
 FROM meta.pipeline_run_log
+WHERE pipeline_name = 'pl_sc_master'
 ORDER BY start_time DESC;
 
 -- 2. Any failed tables in last 24h?
@@ -258,7 +259,7 @@ GROUP BY sp_name
 ORDER BY avg_s DESC;
 ```
 
-### Tables not loaded in 48h (stale data check)
+### Tables not loaded in 48h when due (frequency-aware stale check)
 ```sql
 SELECT r.sp_name, r.frequency, r.next_run_time,
        MAX(h.start_time) as last_run
@@ -266,8 +267,21 @@ FROM meta.sp_registry r
 LEFT JOIN meta.sp_run_history h ON r.sp_name = h.sp_name AND h.status = 'success'
 WHERE r.is_active = 1
 GROUP BY r.sp_name, r.frequency, r.next_run_time
-HAVING MAX(h.start_time) < DATEADD(HOUR, -48, GETUTCDATE())
-    OR MAX(h.start_time) IS NULL
+HAVING (
+          r.frequency IN ('daily', 'hourly', 'weekly')
+          AND (
+              MAX(h.start_time) < DATEADD(HOUR, -48, GETUTCDATE())
+              OR MAX(h.start_time) IS NULL
+          )
+       )
+    OR (
+          r.frequency = 'monthly'
+          AND r.next_run_time <= GETUTCDATE()
+          AND (
+              MAX(h.start_time) < DATEADD(HOUR, -48, GETUTCDATE())
+              OR MAX(h.start_time) IS NULL
+          )
+       )
 ORDER BY last_run;
 ```
 

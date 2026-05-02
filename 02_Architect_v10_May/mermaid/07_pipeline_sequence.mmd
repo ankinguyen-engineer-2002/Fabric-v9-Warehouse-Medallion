@@ -1,0 +1,27 @@
+sequenceDiagram
+    participant M as Master Pipeline
+    participant R as Meta Registry
+    participant SG as Schedule Gate
+    participant MR as Mart Router
+    participant C as Contract Gate
+    participant S as Staging Loader
+    participant D as Silver DAG
+    participant Q as DQ Gate
+    participant G as Gold Publisher
+    participant B as Semantic Model
+    participant L as Audit and Lineage
+
+    M->>R: Read active assets
+    R->>SG: Evaluate cron_expression and frequency
+    SG-->>M: Keep due assets only
+    M->>MR: Group due assets by project
+    MR-->>M: Run pl_sc_mart per project
+    R->>C: Validate source contracts
+    C-->>M: Direct or Stage decision
+    M->>S: Run only required staging
+    M->>D: Compute Silver waves
+    D->>Q: Validate each wave
+    Q-->>D: Pass, warn, or block
+    D->>G: Publish Gold outputs
+    G->>B: Refresh semantic model
+    B->>L: Log final status and lineage

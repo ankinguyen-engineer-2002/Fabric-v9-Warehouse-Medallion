@@ -1,0 +1,49 @@
+flowchart TD
+    REG["Asset Registry<br/>meta.sp_registry"]
+    SRC["Source Contracts"]
+    DEC["Access Decision Engine<br/>DirectShortcut / StageRequired"]
+    MART["Mart Routing Engine<br/>project + pl_sc_mart"]
+    SCHED["Schedule Gate<br/>frequency + cron_expression"]
+    SKIP["Smart Skip Engine<br/>next_run_time + ufn_should_run<br/>verify or activate"]
+    PLAN["Execution Planner<br/>batch size + concurrency"]
+    ORCH["Pipeline Orchestrator<br/>pl_sc_master"]
+    DAG["DAG / Wave Planner<br/>depends_on + slv waves"]
+    LOAD["Generic SQL Load Runner<br/>usp_generic_load"]
+    DQ["Data Quality Gate Engine<br/>dq_rules + pl_dq_check"]
+    LIN["Lineage Builder<br/>source_objects + sp_lineage"]
+    LOG["Run Audit Logger<br/>sp_run_history + pipeline_run_log"]
+    PERF["Performance / Cost Monitor<br/>wire into flow"]
+    SEM["Semantic Refresh Controller"]
+
+    REG --> DEC
+    SRC --> DEC
+    REG --> MART
+    REG --> SCHED
+    SCHED --> SKIP
+    SKIP --> MART
+    MART --> PLAN
+    PLAN --> ORCH
+    DEC --> ORCH
+    ORCH --> DAG
+    DAG --> LOAD
+    LOAD --> DQ
+    DQ --> LIN
+    LIN --> LOG
+    LOG --> PERF
+    PERF --> SEM
+
+    class REG,SRC metadata
+    class DEC,MART,SCHED,SKIP,PLAN,ORCH,DAG control
+    class LOAD execution
+    class DQ quality
+    class LIN lineage
+    class LOG,PERF monitor
+    class SEM semantic
+
+    classDef metadata fill:#E8EEF7,stroke:#50627A,color:#111111
+    classDef control fill:#0B3D91,stroke:#06275F,color:#FFFFFF
+    classDef execution fill:#6B7280,stroke:#374151,color:#FFFFFF
+    classDef quality fill:#0F766E,stroke:#064E3B,color:#FFFFFF
+    classDef lineage fill:#7C3AED,stroke:#4C1D95,color:#FFFFFF
+    classDef monitor fill:#334155,stroke:#0F172A,color:#FFFFFF
+    classDef semantic fill:#F2C94C,stroke:#9A6B00,color:#111111

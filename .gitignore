@@ -24,6 +24,14 @@ venv/
 
 # === Private / Personal ===
 _private/
+AGENTS.md
+
+# === Internal evidence / live Fabric exports ===
+02_Architect_v10_May/SQL Server Data Warehouse Standards.docx
+02_Architect_v10_May/readiness_exports/*
+!02_Architect_v10_May/readiness_exports/README.md
+02_Architect_v10_May/detail_clone_v9_forecast/*
+!02_Architect_v10_May/detail_clone_v9_forecast/README.md
 
 # === Reference repos (cloned, not project code) ===
 enterprise_reference/
@@ -32,3 +40,18 @@ _claude_extensions_backup/
 # === Archive ===
 docs/archive/
 .claude.md
+
+# === Build run artifacts (keep scripts, ignore outputs) ===
+02_Architect_v10_May/build_runs/**/items_*.json
+02_Architect_v10_May/build_runs/**/pre_*.json
+02_Architect_v10_May/build_runs/**/post_*.json
+02_Architect_v10_May/build_runs/**/sql_*.json
+02_Architect_v10_May/build_runs/**/fabric_*.json
+02_Architect_v10_May/build_runs/**/v10_*.json
+02_Architect_v10_May/build_runs/**/build_v10_full_results_*.json
+02_Architect_v10_May/build_runs/**/delete_targets_manifest.json
+02_Architect_v10_May/build_runs/**/protected_items_manifest.json
+02_Architect_v10_May/tools/__pycache__/
+
+# === Work folder info ===
+02_Architect_v10_May/.work-folder-info

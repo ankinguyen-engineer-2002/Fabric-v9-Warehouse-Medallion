@@ -50,6 +50,13 @@ bronze.brz_* tables (materialized by usp_generic_load)
 silver -> gold -> semantic model
 ```
 
+### Lineage Explorer note
+
+The raw lineage snapshot exported to `lineage_explorer/data/lineage.csv` still contains 52 edges from `meta.sp_lineage`.
+The Streamlit Lineage Explorer augments that snapshot at render time with 4 synthetic bridge edges:
+`SupplyChain_Lakehouse.dbo.*_ver2 -> bronze.*_edw -> bronze.{target_table}`.
+This keeps the graph aligned with the documented temporary EDW supplement without changing the warehouse lineage table itself.
+
 ---
 
 ## 3. Rollback to EL Source (When EL Data Is Complete)

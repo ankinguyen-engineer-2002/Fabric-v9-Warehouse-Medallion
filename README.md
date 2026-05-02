@@ -1,725 +1,557 @@
-# Warehouse-Native Medallion Architecture
-### Microsoft Fabric · Pure T-SQL · Metadata-driven · DAG Orchestration
+# Supply Chain Forecast Accuracy — Hybrid Medallion Architecture
 
-A complete architecture template for building **enterprise data warehouses** on Microsoft Fabric using **pure T-SQL stored procedures** — no Notebooks, no PySpark, no Lakehouse ETL.
+### Microsoft Fabric · OneLake Shortcuts · Warehouse-native T-SQL · Direct Lake · Metadata-driven
 
-**[Live Lineage Explorer](https://vn-fabric-lineage.streamlit.app)** — Interactive data lineage visualization (login: admin123 / admin123)
+A production-ready **enterprise data warehouse** template on Microsoft Fabric using **pure T-SQL stored procedures**, metadata-driven orchestration, and a hybrid medallion pattern with dedicated Gold serving boundary.
+
+**[Live Lineage Explorer](https://vn-fabric-lineage.streamlit.app)** — Interactive data lineage visualization
 
 ---
 
 ## Table of Contents
 
 ### Architecture & Design
-1. [Architecture Overview](#architecture-overview) — Data flow, 4 schemas, warehouse structure
-2. [Pipeline Architecture](#pipeline-architecture) — Master orchestration, bronze/silver DAG/gold, connection topology
-3. [Generic SP Architecture](#generic-sp-architecture) — 8 load patterns, 1 SP for all tables
-4. [Feature Status](#feature-status-32-features-total) — All 32 features: active, deactivated, created, blocked
+1. [Architecture Overview](#architecture-overview) — 3-layer medallion, Fabric items, data flow
+2. [Medallion Layer Detail](#medallion-layer-detail) — Bronze (logical), Silver (domain schemas), Gold (dedicated warehouse)
+3. [Pipeline Architecture](#pipeline-architecture) — 7 pipelines, multi-mart, DAG wave orchestration
+4. [Generic SP Architecture](#generic-sp-architecture) — 8 load patterns, 1 SP for all tables
+5. [Feature Status](#feature-status) — All capabilities: active, seeded, blocked
 
 ### Operations & Usage
-5. [Adding a New Table](#adding-a-new-table) — Quick-start for DA/DE (2 steps)
-6. [Data Quality Gates](#data-quality-gates) — DQ checks between layers, severity-based gating, examples
-7. [Scheduling & Concurrency](#scheduling--concurrency) — Cron, smart skip, snapshot conflict mitigation
-8. [Naming Convention](#naming-convention) — Tables, views, columns, pipelines
+6. [Control Plane](#control-plane) — Registry, DQ, lineage, DAG, smart skip, cron, timezone
+7. [Adding a New Table](#adding-a-new-table) — Quick-start for DA/DE
+8. [Data Quality Gates](#data-quality-gates) — 54 rules, severity-based gating
+9. [Scheduling & Smart Skip](#scheduling--smart-skip) — Cron expressions, frequency-aware skip
 
 ### Scale & Enterprise
-9. [Multi Data Mart Scale](#multi-data-mart-scale) — N marts parallel, cross-mart dependencies
-10. [Enterprise Compatibility](#enterprise-compatibility) — TableDictionary mapping, load pattern alignment
-11. [Semantic Model](#semantic-model) — Direct Lake, auto-refresh
-12. [Multi-Environment Roadmap](#multi-environment-roadmap) — DEV → TEST → PROD
+10. [Multi Data Mart Scale](#multi-data-mart-scale) — N projects parallel, cross-project dependencies
+11. [Enterprise Compatibility](#enterprise-compatibility) — Bob/Rakesh standards, TableDictionary adapter
+12. [EDW Supplement Strategy](#edw-supplement-strategy) — Exit candidates, fallback retention
+13. [Onboarding Guide](#onboarding-guide) — First 30 minutes for new team members
 
 ### Reference
-13. [Fabric Warehouse Constraints](#fabric-warehouse-constraints) — Known limitations + workarounds
-14. [Tech Stack](#tech-stack) — All technologies used
-15. [Documentation Index](#documentation-index) — All docs with links
+14. [Fabric Warehouse Constraints](#fabric-warehouse-constraints) — Known limitations + workarounds
+15. [Tech Stack](#tech-stack) — All technologies used
+16. [Data Parity](#data-parity) — v10 vs v9 verification
+17. [Connection Details](#connection-details) — Warehouse IDs, pipeline IDs, tokens
+18. [Documentation Index](#documentation-index) — All docs with links
 
 ---
 
 ## Architecture Overview
 
-```mermaid
-flowchart LR
-    SRC["Source Lakehouse\nexternal data via shortcuts"]
+![Architecture Overview](./02_Architect_v10_May/mermaid/render_check/20_architecture_overview.svg)
 
-    subgraph WH["Fabric Warehouse · SupplyChain_Warehouse"]
-        direction LR
-        B["bronze\n18 tables · 18 views\nraw mirror"]
-        S["silver\n8 tables · 8 views\ntransform + join"]
-        G["gold\n2 tables · 2 views\nBI-ready"]
-        M["meta\n11 tables · 10 SPs · 2 views · 3 functions\nconfig · log · DQ · DAG · contracts · cost · view_defs"]
-        B --> S --> G
-    end
+### 3-Layer Medallion Mapping
 
-    SRC --> B
-    G --> SM["Semantic Model\nDirect Lake\nSC_Control_Tower"]
-    SM --> PBI["Power BI\nReports + Dashboards"]
-```
-
-### 4 Schemas
-
-| Schema | Purpose | Objects | Pattern |
-|--------|---------|---------|---------|
-| **bronze** | Raw mirror from source systems | 18 tables + 18 views | `VIEW` reads source via 3-part naming → Generic SP does DROP + CTAS |
-| **silver** | Clean, conform, join, business rules | 8 tables + 8 views | `VIEW` reads bronze/silver → Generic SP does DROP + CTAS (DAG wave order) |
-| **gold** | Business-ready facts & dimensions | 2 tables + 2 views | `VIEW` reads silver → Generic SP does DROP + CTAS |
-| **meta** | System control plane | 11 tables + 10 SPs + 2 views + 3 fn | Config + log + DQ + DAG + lineage + timezone + contracts + cost + baseline + view_definitions |
+| Layer | Fabric Item | Role | Objects |
+|---|---|---|---|
+| **Bronze** | `Enterprise_Lakehouse` | Logical access via OneLake shortcuts | Wholesale_Codis_AFI, MasterData_DW, Customers, SupplyChain_DW |
+| | `SupplyChain_Lakehouse` | EDW supplement feeds (4 dataflows) | InvoiceDetail, InvoiceHeader, DemandForecast, Product |
+| **Silver** | `SupplyChain_Processing_Warehouse` | Domain processing + control plane | 6 schemas, 22 data tables, 27 views, 13 SPs, 3 functions, 20 meta tables |
+| **Gold** | `SupplyChain_Gold_Warehouse` | Dedicated serving boundary for Direct Lake | 1 schema, 2 physical tables, 2 views |
 
 ### Warehouse Structure
 
 ```
-SupplyChain_Warehouse/
-├── bronze/
-│   ├── Tables/    brz_{source}__{entity}, ref_{entity}     (18)
-│   └── Views/     vw_{table_name} → SELECT FROM source      (18)
+SupplyChain_Processing_Warehouse/
+├── Staging/                    EDW supplement (exception-only persistence)
+│   ├── Tables/    InvoiceDetailEdw, InvoiceHeaderEdw, ...       (4)
+│   ├── Views/     vw_Codatan, vw_Comast, vw_Extord, vw_Extorit (4)
+│   └── SPs/       usp_RefreshEdwTables                          (1)
 │
-├── silver/
-│   ├── Tables/    slv_{concept}                              (8)
-│   └── Views/     vw_slv_{concept} → JOINs, transforms      (8)
+├── ReferenceMaster/            Domain reference data
+│   ├── Tables/    Calendar, ItemMaster, CustomerAccountGroup, ...  (10)
+│   └── Views/     vw_Calendar, vw_ItemMaster, ...                  (11)
 │
-├── gold/
-│   ├── Tables/    gld_{fact|dim}_{subject}                   (2)
-│   └── Views/     vw_gld_{subject} → aggregation             (2)
+├── SalesHistory/               Domain Silver — invoice + demand
+│   ├── Tables/    InvoiceDetailLineLevel, InvoiceWeekly, ...      (4)
+│   └── Views/     vw_InvoiceDetailLineLevel, ...                   (4)
 │
-└── meta/
-    ├── Tables/    sp_registry, sp_run_history, dq_rules,
-    │              dq_results, sp_lineage, pipeline_run_log,
-    │              slv_dag_waves_runtime, view_definitions      (8)
-    ├── SPs/       usp_generic_load, usp_log_run (retry 3x),
-    │              usp_check_dq, usp_check_dq_single,
-    │              usp_build_lineage, usp_compute_slv_waves,
-    │              usp_run_silver_dag, usp_debug_loop,
-    │              usp_finalize_pipeline, usp_log_pipeline_run (10)
-    ├── Views/     vw_table_dictionary, vw_run_history_tz        (2)
-    └── Functions/ ufn_should_run, ufn_cron_is_due,
-                   ufn_utc_to_cst                              (3)
+├── ForecastHistory/            Domain Silver — forecast + naive
+│   ├── Tables/    ForecastDemandMonthly, NaiveForecastMonthly     (2)
+│   └── Views/     vw_ForecastDemandMonthly, ...                    (2)
+│
+├── OpenOrderHistory/           Domain Silver — open orders
+│   ├── Tables/    OpenOrderLineLevel, OpenOrderMonthly            (2)
+│   └── Views/     vw_OpenOrderLineLevel, vw_OpenOrderMonthly      (2)
+│
+└── Meta/                       Control plane
+    ├── Tables/    AssetRegistryV10, DQRule, LineageEdge, ...      (20)
+    ├── Views/     vw_sp_registry, vw_TableDictionary, ...          (5)
+    ├── SPs/       usp_GenericLoad, usp_LogRun, ...                (12)
+    └── Functions/ ufn_utc_to_cst, ufn_should_run, ufn_cron_is_due (3)
+
+SupplyChain_Gold_Warehouse/
+└── ForecastAccuracy/           Gold serving — Direct Lake ready
+    ├── Tables/    FactForecastActual (47M), FactForecastKpi (36M) (2)
+    └── Views/     vw_FactForecastActual, vw_FactForecastKpi       (2)
 ```
 
-> **~86 total objects** across 4 schemas. Per-table SPs have been deleted — all 28 tables loaded by 1 generic SP.
+**Grand Total: 90 objects across 2 warehouses** (42 tables, 28 views, 13 SPs, 3 functions in Processing + 2 tables, 2 views in Gold)
 
-### Key Features
+---
 
-- **Generic SP architecture** — 1 SP (`meta.usp_generic_load`) replaces 28 per-table SPs, supports 8 load patterns, aligned with Enterprise ETL_Framework
-- **2-file-per-table** — VIEW (ETL logic) + TABLE (materialized data). No per-table SP needed
-- **Metadata-driven** — adding a new table = CREATE VIEW + INSERT 1 row into `sp_registry`. No pipeline changes
-- **DAG-based silver** — `depends_on` column auto-computes execution waves (max 30 levels)
-- **Parent-child pipeline** — parallel within wave, sequential between waves (Microsoft recommended)
-- **Smart scheduling** — cron + next_run_time filter, monthly tables auto-skip when not due
-- **Snapshot conflict mitigation** — retry 3x in usp_log_run + reduced batch concurrency
-- **Config-driven DQ** — 54 rules (30 active + 24 reserved), 4 check types (completeness/row_count/freshness/uniqueness). DQ gates exist in pipeline but **deactivated** for performance (~18 min vs ~27 min)
-- **Auto-built lineage** — `source_objects` JSON → 52 source-to-target edges, rebuilt every run
-- **Performance baseline** — 28 SPs baselined with 2x threshold alerting (created, not in pipeline flow)
-- **Cost monitoring** — CU consumption tracking per pipeline run (created, not in pipeline flow)
-- **Data contracts** — 674 source columns contracted for schema drift detection (created, not in pipeline flow)
+## Medallion Layer Detail
 
-### Feature Status (32 features total)
+### Bronze — Logical Access Layer
 
-**A. Core Engine (8) — always active:**
+Bronze is **logical, not physical**. Source data is accessed through OneLake shortcuts and Lakehouse tables — no mandatory local copy.
 
-| Feature | Object | Status |
-|---------|--------|--------|
-| Generic SP (8 load patterns) | `usp_generic_load` | ✅ Active |
-| Metadata-driven config | `sp_registry` (28 tables) | ✅ Active |
-| DAG wave computation | `usp_compute_slv_waves` + `slv_dag_waves_runtime` | ✅ Active |
-| Parent-child pipeline | `pl_sc_silver` → `pl_sc_silver_wave` | ✅ Active |
-| Auto lineage (52 edges) | `usp_build_lineage` + `sp_lineage` | ✅ Active |
-| Execution logging | `usp_log_run` + `sp_run_history` (retry 3x) | ✅ Active |
-| Pipeline logging | `usp_log_pipeline_run` + `pipeline_run_log` | ✅ Active |
-| Finalize | `usp_finalize_pipeline` (lineage + log) | ✅ Active |
+| Source | Access Method | Tables |
+|---|---|---|
+| Enterprise_Lakehouse shortcuts | Direct read via 3-part naming | Codis (codatan, COMAST, EXTORD, EXTORIT), MasterData, Customers |
+| SupplyChain_Lakehouse EDW supplement | CTAS into `Staging` schema | InvoiceDetail, InvoiceHeader, DemandForecast, Product |
+| SupplyChain_Lakehouse reference | CTAS into `ReferenceMaster` | ForecastCycle |
 
-**B. Scheduling (4) — always active:**
+**Rule**: Staging is exception-only. Only stage when source SLA is unstable, snapshot consistency is required, replay/debug is needed, or EDW supplement is active.
 
-| Feature | Object | Status |
-|---------|--------|--------|
-| Cron scheduling | `ufn_cron_is_due` + `cron_expression` | ✅ Active |
-| Smart skip | `ufn_should_run` + `next_run_time` | ✅ Active |
-| Auto-trigger daily 2AM UTC+7 | Fabric Schedule | ✅ Active |
-| Snapshot retry 3-layer | SP retry 3x/2s + pipeline retry 3x/60s | ✅ Active |
+### Silver — Domain Process Schemas
 
-**C. Timezone + Enterprise (4) — always active:**
+Silver uses **PascalCase domain schemas** instead of a generic `silver` schema:
 
-| Feature | Object | Status |
-|---------|--------|--------|
-| UTC→CST timezone (DST aware) | `ufn_utc_to_cst` | ✅ Active |
-| TableDictionary (63/63 cols) | `vw_table_dictionary` | ✅ Active |
-| Run history 3 timezones | `vw_run_history_tz` | ✅ Active |
-| Multi-mart project column | `sp_registry.project` | ✅ Ready (1 mart) |
+| Schema | Tables | Largest Table | DAG Wave |
+|---|---|---|---|
+| `SalesHistory` | InvoiceDetailLineLevel (88M), InvoiceWeekly (37M), ActualDemandMonthly (2.6M), ActualDemandWeekly (7.8M) | 88M | 0, 1 |
+| `ForecastHistory` | ForecastDemandMonthly (42M), NaiveForecastMonthly (2M) | 42M | 0, 2 |
+| `OpenOrderHistory` | OpenOrderLineLevel (193K), OpenOrderMonthly (80K) | 193K | 0, 1 |
 
-**D. Data Quality (8) — deactivated for performance:**
+**Pattern**: Each table has a paired `VIEW` that defines the transformation logic. `Meta.usp_GenericLoad` reads the view and executes `DROP TABLE IF EXISTS` + `CREATE TABLE AS SELECT`.
 
-| Feature | Object | Status | Activate |
-|---------|--------|--------|----------|
-| DQ engine (7 check types) | `usp_check_dq_single` | ✅ SP exists | Always ready |
-| DQ core rules (30) | `dq_rules` 1-30 | ✅ is_active=1 | Ready |
-| DQ expansion rules (24) | `dq_rules` 31-54 | ⏸ is_active=0 | `UPDATE SET is_active=1 WHERE rule_id>30` |
-| DQ pipeline | `pl_dq_check` | ✅ Pipeline exists | Invoke manually |
-| DQ gate bronze | `dq_bronze` in pl_sc_master | ⏸ Deactivated | Right-click → Activate |
-| DQ gate silver | `dq_silver` in pl_sc_master | ⏸ Deactivated | Right-click → Activate |
-| DQ gate gold | `dq_gold` in pl_sc_master | ⏸ Deactivated | Right-click → Activate |
-| DQ results log | `dq_results` | ✅ Table exists | Has history |
+### Gold — Dedicated Serving Warehouse
 
-**E. Phase 3 Advanced (6) — created, not in pipeline flow:**
+Gold is a **separate Fabric Warehouse** (`SupplyChain_Gold_Warehouse`). Direct Lake semantic models should read from these physical tables, not from SQL views.
 
-| Feature | Object | Status | Activate |
-|---------|--------|--------|----------|
-| Performance baseline | `performance_baseline` (28 SPs) | ✅ Data exists | Re-deploy enhanced finalize SP |
-| Cost monitoring | `pipeline_cost_log` (1 row) | ✅ Data exists | Re-deploy enhanced finalize SP |
-| Schema contracts | `schema_contracts` (674 cols) + `usp_validate_schema_contracts` | ✅ Table + SP | Pipeline step or Python |
-| Legacy DQ SP | `usp_check_dq` | ✅ Exists | Replaced by usp_check_dq_single |
-| Legacy silver runner | `usp_run_silver_dag` | ✅ Exists | Backup sequential |
-| Debug utility | `usp_debug_loop` | ✅ Exists | Debug only |
-
-**F. Blocked (2) — needs IT/DevOps:**
-
-| Feature | Status | Blocker |
-|---------|--------|---------|
-| Alerting (email/Teams) | ⚠ Design ready | IT: Mail.Send / Teams / Power Automate |
-| CI/CD (.sqlproj + SqlCmdVariable) | ⚠ Design ready | Azure DevOps access |
-
-> **Pipeline runtime**: ~18-19 min (lean, DQ off) or ~27 min (full, DQ on). Full run: 28/28 tables, 1.47B rows, 0 failures.
+| Table | Rows | Source |
+|---|---:|---|
+| `ForecastAccuracy.FactForecastActual` | 47,101,597 | ActualDemand + ForecastDemand + NaiveForecast (UNION ALL) |
+| `ForecastAccuracy.FactForecastKpi` | 36,395,948 | Forecast vs Actual error metrics (spine CROSS JOIN horizons) |
 
 ---
 
 ## Pipeline Architecture
 
-### 7 Pipelines (Multi-Mart Architecture)
+![Pipeline Flow](./02_Architect_v10_May/mermaid/render_check/21_pipeline_flow.svg)
 
-| Pipeline | Type | Role | Parameter |
-|----------|------|------|-----------|
-| `pl_sc_master` | Master | log_start → ForEach projects → finalize → refresh_sm | — |
-| `pl_sc_mart` | **Mart orchestrator** | Chains bronze → silver → gold per project | `@project_name` |
-| `pl_sc_bronze` | Layer loader | Lookup sp_registry → ForEach(batch=6) → EXEC usp_generic_load | `@project_name` |
-| `pl_sc_silver` | DAG parent | compute_waves → ForEach wave → invoke pl_sc_silver_wave | `@project_name` |
-| `pl_sc_silver_wave` | DAG child | Lookup SPs for wave → ForEach(batch=8) → EXEC usp_generic_load | `@wave_number` |
-| `pl_sc_gold` | Layer loader | Lookup sp_registry → ForEach(batch=2) → EXEC usp_generic_load | `@project_name` |
-| `pl_dq_check` | DQ Gate | Lookup dq_rules → ForEach(batch=10) → EXEC usp_check_dq_single (⏸ deactivated) | `@dq_layer` |
+### 7 Pipelines
 
-> **Multi-mart**: Master pipeline dynamically discovers projects from sp_registry, runs each via `pl_sc_mart` in parallel. Adding a new mart = INSERT rows into sp_registry with new `project` value. No pipeline changes needed.
+| Pipeline | Role | Key Activities |
+|---|---|---|
+| `pl_sc_master` | Master orchestrator | log_start → Lookup projects → ForEach → finalize |
+| `pl_sc_mart` | Per-project mart | invoke staging → invoke silver → invoke gold |
+| `pl_sc_staging` | Staging + REF load | EDW refresh (155M) → Lookup REF + smart skip → ForEach batch=6 |
+| `pl_sc_silver` | Silver DAG dispatch | compute waves → Lookup waves → ForEach wave SEQUENTIAL |
+| `pl_sc_silver_wave` | Single wave executor | Lookup SPs for wave → ForEach batch=8 PARALLEL |
+| `pl_sc_gold` | Gold publish | CTAS FactForecastActual → CTAS FactForecastKpi (cross-DB) |
+| `pl_dq_check` | DQ gate | Lookup active rules → ForEach batch=5 → usp_CheckDqSingle |
 
-### Master Flow (Multi-Mart)
+### Multi-Mart Flow
 
-```mermaid
-flowchart LR
-    M["pl_sc_master\nconcurrency=1"] --> LS["log_start"]
-    LS --> LK["Lookup\nDISTINCT project\nfrom sp_registry"]
-    LK --> FE["ForEach project\nPARALLEL batch=10"]
-    FE --> MART["pl_sc_mart\n@project_name"]
-    MART --> FN["finalize\nbuild lineage + log"]
-    FN --> SM["refresh_sm\nDirect Lake"]
+```
+pl_sc_master
+  ├─ log_start (Meta.usp_LogPipelineRun)
+  ├─ Lookup DISTINCT project FROM Meta.AssetRegistryV10
+  ├─ ForEach project (batch=10, parallel)
+  │    └─ pl_sc_mart (project_name = @item().project)
+  │         ├─ pl_sc_staging (EDW refresh + REF load)
+  │         ├─ pl_sc_silver (3 DAG waves → pl_sc_silver_wave)
+  │         └─ pl_sc_gold (cross-DB CTAS to Gold Warehouse)
+  └─ finalize (rebuild lineage + log summary)
 ```
 
-### Mart Flow (per project)
+### Pipeline Run Performance
 
-```mermaid
-flowchart LR
-    MART["pl_sc_mart\n@project_name"] --> B["pl_sc_bronze\nForEach batch=6\nWHERE project=@project"]
-    B --> S["pl_sc_silver\nDAG waves\nWHERE project=@project"]
-    S --> G["pl_sc_gold\nForEach batch=2\nWHERE project=@project"]
-```
-
-> **DQ gates**: Currently **deactivated** for performance (~20 min vs ~27 min). DQ rules (30 active) and `pl_dq_check` pipeline exist — reactivate via Portal.
-> **Scaling**: 1 mart = ~20 min. N marts parallel = still ~20 min (ForEach batchCount=10).
-
-### Bronze & Gold — Lookup + Parallel ForEach
-
-```mermaid
-flowchart LR
-    L["Lookup\nsp_registry\nWHERE layer + smart skip"]
-    F["ForEach batch=6\nPARALLEL"]
-    SP["EXEC meta.usp_generic_load\n@target_schema, @target_table"]
-    L -->|"N tables"| F --> SP
-```
-
-### Silver — Parent-Child DAG
-
-```mermaid
-flowchart TD
-    subgraph PARENT["pl_sc_silver"]
-        CW["compute_waves\nreads depends_on\nassigns wave 0,1,2...N"]
-        LK["Lookup: DISTINCT wave"]
-        FE["ForEach wave\nisSequential=true"]
-        CW --> LK --> FE
-    end
-
-    subgraph CHILD["pl_sc_silver_wave (per wave)"]
-        LK2["Lookup: SPs for wave N"]
-        FE2["ForEach batch=8\nPARALLEL"]
-        SP2["EXEC usp_generic_load"]
-        LK2 --> FE2 --> SP2
-    end
-
-    FE -->|"InvokePipeline\nwave_number = @item.wave"| CHILD
-```
-
-> **Why parent-child?** Fabric does not allow ForEach inside ForEach/Until. Microsoft-recommended workaround: Execute Pipeline inside ForEach.
-
-### DAG Wave Example
-
-```mermaid
-flowchart TD
-    subgraph W0["Wave 0 — no deps (parallel)"]
-        A["forecast_demand"]
-        B["invoice_detail"]
-        C["open_order_line"]
-    end
-    subgraph W1["Wave 1 — depends on W0 (parallel)"]
-        D["actual_demand_monthly"]
-        E["actual_demand_weekly"]
-        F["invoice_weekly"]
-        G["naive_forecast"]
-        H["open_order_monthly"]
-    end
-    A --> D
-    A --> G
-    B --> D
-    B --> E
-    B --> F
-    C --> D
-    C --> E
-    C --> H
-```
-
-### Connection Topology
-
-```mermaid
-flowchart LR
-    subgraph Pipeline
-        LK["Lookup Activity"]
-        SP["SP Activity"]
-    end
-    LH["Lakehouse SQL Endpoint\ncross-DB query"]
-    WH["Warehouse\nDataWarehouse linkedService"]
-    LK -->|"SELECT FROM\nWarehouse.meta.*"| LH
-    LH -.->|"3-part naming"| WH
-    SP -->|"EXEC SP"| WH
-```
-
-> Fabric Pipeline Lookup supports `LakehouseTableSource` but not Warehouse directly. Workaround: cross-DB 3-part naming through Lakehouse.
-
-### Pipeline Performance
-
-| Run | Duration | Tables | Notes |
-|-----|----------|--------|-------|
-| Typical daily | **17-20 min** | 28/28 | All layers sequential |
-| With smart skip | **~15 min** | 18/28 | 10 monthly tables skipped |
-| Failed run | 4 min | partial | Snapshot conflict → retry next trigger |
+| Metric | Value |
+|---|---|
+| Full end-to-end runtime | **~31 minutes** |
+| Staging refresh | ~6 min (155M rows EDW CTAS) |
+| Silver wave 0 | ~8 min (88M + 42M + 193K parallel) |
+| Silver wave 1 | ~4 min (4 tables parallel) |
+| Silver wave 2 | ~6 min (NaiveForecast) |
+| Gold publish | ~7 min (47M + 36M cross-DB CTAS) |
+| Schedule | Daily 2:00 AM UTC+7 (auto-trigger) |
 
 ---
 
 ## Generic SP Architecture
 
-Instead of 28 per-table SPs, a single **Generic SP** handles all loads:
+`Meta.usp_GenericLoad` handles all table loads with a single generic SP. The load pattern is determined by the `load_type` column in `Meta.AssetRegistryV10`.
 
-```mermaid
-flowchart LR
-    REG["sp_registry\ntarget, view, load_type\nwatermark, PK, date_key"]
-    GSP["meta.usp_generic_load\n@target_schema\n@target_table"]
-    V["VIEW\nETL logic"]
-    T["TABLE\nMaterialized data"]
-    REG -->|"config"| GSP
-    V -->|"reads"| GSP -->|"CTAS/INSERT/MERGE"| T
-```
+| Load Pattern | When To Use | How It Works |
+|---|---|---|
+| `overwrite` | Full refresh (default) | DROP TABLE + CTAS from view |
+| `incremental` | Append new rows by watermark | INSERT WHERE watermark > last value |
+| `upsert` | Update existing + insert new | DELETE matching PKs + INSERT |
+| `datekey` | Replace today's partition | DELETE today + INSERT today |
+| `daterange` | Rolling window reload | DELETE N days + INSERT N days |
+| `identity` | Append by identity column | INSERT WHERE PK > MAX(PK) |
+| `cdc` | Apply CDC changes | DELETE changed PKs + INSERT |
+| `scd2` | Slowly changing dimension Type 2 | Close old versions + insert new |
 
-### 8 Load Patterns
+**Current deployment**: All 22 tables use `overwrite`. Other patterns are implemented and ready for tables that require them.
 
-| Pattern | load_type | Description | Required columns |
-|---------|-----------|-------------|-----------------|
-| Overwrite | `overwrite` | DROP + CTAS from view (default) | — |
-| Incremental | `incremental` | INSERT WHERE watermark > last value | `watermark_column` |
-| Upsert | `upsert` | DELETE matching + INSERT on PK | `primary_key` |
-| DateKey | `datekey` | DELETE + INSERT by date column | `date_key` |
-| DateRange | `daterange` | DELETE last N days + INSERT | `date_key` + `date_range_days` |
-| Identity | `identity` | INSERT WHERE PK > MAX existing | `primary_key` |
-| CDC | `cdc` | Apply change data capture ops | `primary_key` |
-| SCD2 | `scd2` | Slowly changing dimension type 2 | `primary_key` |
+---
 
-### Usage
+## Feature Status
 
-```sql
--- Pipeline ForEach calls this for every table:
-EXEC meta.usp_generic_load @target_schema = 'bronze', @target_table = 'brz_saleshistory_afi__invoicedetail';
+| Category | Feature | Status | Evidence |
+|---|---|---|---|
+| **Core** | Generic load framework (8 patterns) | Active | `Meta.usp_GenericLoad` |
+| | Metadata-driven registry | Active | `Meta.AssetRegistryV10` (28 assets) |
+| | Run logging (UTC + CST) | Active | `Meta.usp_LogRun` with retry 3x |
+| | Pipeline logging | Active | `Meta.usp_LogPipelineRun` |
+| | Lineage auto-rebuild | Active | `Meta.usp_BuildLineage` → 52 edges |
+| | Finalizer | Active | `Meta.usp_FinalizePipeline` |
+| **DAG** | Silver DAG wave computation | Active | `Meta.usp_ComputeSilverWaves` → 3 waves |
+| | Silver wave pipeline dispatch | Active | `pl_sc_silver` → sequential ForEach |
+| | Parallel execution within wave | Active | `pl_sc_silver_wave` → batch=8 |
+| **Schedule** | Smart skip (next_run_time) | Active | Lookup SQL WHERE filter |
+| | Cron parser (5-field) | Active | `Meta.ufn_cron_is_due` |
+| | DST-aware timezone | Active | `Meta.ufn_utc_to_cst` |
+| | Daily auto-trigger | Active | Schedule 2:00 AM UTC+7 |
+| **DQ** | 54 DQ rules (4 check types) | Seeded | completeness, row_count, uniqueness, freshness |
+| | Per-rule DQ engine | Active | `Meta.usp_CheckDqSingle` |
+| | DQ pipeline (ForEach) | Active | `pl_dq_check` |
+| **Contracts** | Source contracts (674 columns) | Seeded | `Meta.SourceContract` |
+| | Reconciliation (6 rules) | Seeded | `Meta.ReconciliationRule` |
+| **Scale** | Multi-mart routing | Active | ForEach DISTINCT project |
+| | Enterprise TableDictionary adapter | Active | `Meta.vw_TableDictionary` (63 Enterprise columns) |
+| | v9 compatibility view | Active | `Meta.vw_sp_registry` |
+| **Blocked** | Alerting | Blocked | IT permissions (Mail.Send, Teams, Data Activator) |
+| | CI/CD | Blocked | Azure DevOps access not granted |
 
--- The SP reads sp_registry to find view_name, load_type, watermark, PK, date_key
--- Then routes to the correct load pattern automatically.
-```
+---
+
+## Control Plane
+
+![Control Plane Detail](./02_Architect_v10_May/mermaid/render_check/22_control_plane_detail.svg)
+
+### Meta Schema — 20 tables, 5 views, 13 SPs, 3 functions
+
+| Component | Table / SP | Rows | Purpose |
+|---|---|---:|---|
+| **Asset Registry** | `Meta.AssetRegistryV10` | 28 | Canonical registry: asset, layer, access mode, physical location |
+| | `Meta.AssetAccessPolicy` | 28 | Access decision: DirectShortcut, EDWSupplement, WarehouseTransform |
+| | `Meta.ObjectClassification` | 28 | Physical classification for each asset |
+| | `Meta.SourceFeed` | 52 | Source feed metadata |
+| **Quality** | `Meta.DQRule` | 54 | DQ rules: completeness, row_count, uniqueness, freshness |
+| | `Meta.DQGateRun` | — | DQ execution results |
+| | `Meta.SourceContract` | 674 | Column-level schema contracts |
+| | `Meta.ReconciliationRule` | 6 | Source-target row count checks |
+| **Observability** | `Meta.RunLog` | 37+ | Per-table execution log (start/end UTC+CST, rows, status) |
+| | `Meta.PipelineRunLog` | 2+ | Pipeline-level audit trail |
+| | `Meta.LineageEdge` | 52 | Auto-built lineage from source_objects |
+| | `Meta.SilverDagWaveRuntime` | 8 | Computed wave assignments |
+| **Scheduling** | `Meta.ufn_should_run` | — | next_run_time check |
+| | `Meta.ufn_cron_is_due` | — | 5-field cron expression parser |
+| | `Meta.ufn_utc_to_cst` | — | DST-aware UTC → CST |
 
 ---
 
 ## Adding a New Table
 
-With Generic SP, adding a new table = **2 steps**, no SP creation, no pipeline changes.
-
-### Bronze (2 steps)
+### Step 1: Register the asset
 
 ```sql
--- 1. Create view (ETL logic)
-CREATE OR ALTER VIEW bronze.vw_brz_{name} AS
-SELECT * FROM {Source_Lakehouse}.{schema}.{source_table};
-
--- 2. Register in sp_registry
-INSERT INTO meta.sp_registry (sp_name, view_name, target_schema, target_table,
-    layer, load_type, frequency, execution_order, is_active, source_objects, project, cron_expression)
-VALUES ('meta.usp_generic_load', 'bronze.vw_brz_{name}',
-    'bronze', 'brz_{name}', 'BRZ', 'overwrite', 'daily', 1, 1,
-    '["{Source_Lakehouse}.{schema}.{source_table}"]', '{project}', '0 2 * * *');
+INSERT INTO Meta.AssetRegistryV10 (
+    asset_id, canonical_layer, access_mode, physical_schema, physical_object,
+    load_type, frequency, cron_expression, project, is_active,
+    source_objects, legacy_view_name
+) VALUES (
+    'newsource.new_table', 'DomainSilver', 'WarehouseTransform',
+    'SalesHistory', 'NewTable', 'overwrite', 'daily', '0 2 * * *',
+    'supplychain', 1,
+    '["Staging.InvoiceDetailEdw"]',
+    'SalesHistory.vw_NewTable'
+);
 ```
 
-### Silver (with DAG dependency)
+### Step 2: Create the view
 
 ```sql
--- 1. Create view
--- 2. Register with depends_on:
-INSERT INTO meta.sp_registry (..., depends_on)
-VALUES (..., '["silver.slv_upstream_table"]');
--- Pipeline auto picks up → wave auto-computed → parallel execution
+CREATE VIEW SalesHistory.vw_NewTable AS
+SELECT col1, col2, SUM(qty) AS total_qty
+FROM Staging.InvoiceDetailEdw
+GROUP BY col1, col2;
 ```
 
-> **Full step-by-step guide**: See [onboarding.md](docs/operations/onboarding.md) — covers all layers, load types, DQ rules, testing, FAQ.
+### Step 3: Test
+
+```sql
+EXEC Meta.usp_GenericLoad @target_schema='SalesHistory', @target_table='NewTable';
+SELECT COUNT(*) FROM SalesHistory.NewTable;
+```
+
+The framework handles everything else: logging, watermark update, next_run_time, lineage rebuild.
 
 ---
 
 ## Data Quality Gates
 
-> **Status (2026-04-18)**: DQ gates are **deactivated** in pipeline for performance (~18 min vs ~27 min).
-> All DQ components exist (rules, SP, pipeline) and can be reactivated anytime.
-> See [Feature Status](#feature-status-32-features-total) for details.
+### 54 Rules Across All Layers
 
-DQ checks are designed to run **between every layer** in the master pipeline. If a CRITICAL check fails, the pipeline stops — downstream layers do not run on bad data.
-
-### How It Works (when activated)
-
-```mermaid
-flowchart LR
-    B["bronze load\n18 tables"] --> DQB["dq_bronze\n22 rules\n⏸ deactivated"]
-    DQB -->|"ALL PASS"| S["silver load\n8 tables"]
-    DQB -->|"CRITICAL FAIL"| STOP1["STOP"]
-    S --> DQS["dq_silver\n8 rules\n⏸ deactivated"]
-    DQS -->|"ALL PASS"| G["gold load\n2 tables"]
-    DQS -->|"CRITICAL FAIL"| STOP2["STOP"]
-    G --> DQG["dq_gold\n4 rules\n⏸ deactivated"]
-    DQG -->|"ALL PASS"| FN["finalize + SM"]
-```
-
-### What Happens Step by Step
-
-1. **Bronze finishes** → master calls `pl_dq_check` with `layer = 'BRZ','REF'`
-2. `pl_dq_check` does a **Lookup**: `SELECT rule_id FROM meta.dq_rules WHERE layer IN ('BRZ','REF') AND is_active = 1` → returns 22 rule IDs
-3. **ForEach** (batch=10, parallel) calls `EXEC meta.usp_check_dq_single @rule_id = {each rule}` for every rule
-4. The SP reads the rule config, generates a SQL check, runs it, and writes PASS/FAIL to `meta.dq_results`
-5. If **CRITICAL** rule fails → SP throws error → pipeline stops
-6. If **WARNING** rule fails → logged only → pipeline continues
-
-### Example: Completeness Check (Rule 1)
-
-```
-Rule config in meta.dq_rules:
-  rule_id = 1
-  check_type = 'completeness'
-  target = bronze.brz_saleshistory_afi__invoicedetail
-  column = 'id_invoice'
-  severity = CRITICAL
-
-SP generates and runs:
-  SELECT SUM(CASE WHEN [id_invoice] IS NULL THEN 0 ELSE 1 END) * 100.0 / COUNT(*)
-  FROM [bronze].[brz_saleshistory_afi__invoicedetail]
-
-Result: 100.00% → PASS ✓
-```
-
-### Example: Row Count Check (Rule 13)
-
-```
-Rule config:
-  rule_id = 13
-  check_type = 'row_count'
-  target = bronze.brz_saleshistory_afi__invoicedetail
-  threshold = 1,000,000
-  severity = CRITICAL
-
-SP generates and runs:
-  SELECT COUNT(*) FROM [bronze].[brz_saleshistory_afi__invoicedetail]
-
-Result: 35,658,453 >= 1,000,000 → PASS ✓
-
-If result was 500 → FAIL → THROW error → pipeline STOPS, silver does NOT run
-```
+| Layer | Rules | Check Types |
+|---|---:|---|
+| Staging | 12 | row_count, completeness, freshness |
+| ReferenceMaster | 6 | row_count, completeness |
+| DomainSilver | 23 | row_count, completeness, uniqueness, freshness |
+| Gold | 13 | row_count, completeness |
 
 ### Severity Behavior
 
-| Severity | On FAIL | Use case |
-|----------|---------|----------|
-| **CRITICAL** | Pipeline **stops** — downstream layers do not run | Key columns NULL, table empty/too small |
-| **WARNING** | Logged to `dq_results`, pipeline **continues** | Row count slightly low, non-essential checks |
+| Severity | On FAIL |
+|---|---|
+| `CRITICAL` | THROW → pipeline stops |
+| `WARNING` | Log only → pipeline continues |
 
-### Current Rules (30 total)
+---
 
-| Layer | Rules | What they check |
-|-------|-------|----------------|
-| BRZ (8) | completeness | Key columns (`id_invoice`, `id_item_sku`, `id_order`) must not be NULL |
-| REF (8) | completeness + row_count | Key columns not NULL + minimum row counts (e.g., ref_calendar ≥ 10K) |
-| SLV (8) | completeness + row_count | Key columns not NULL + minimum row counts (e.g., slv_invoice ≥ 1M) |
-| GLD (4) | completeness + row_count | Key columns not NULL + minimum row counts (e.g., gld_fact ≥ 100K) |
+## Silver DAG Waves
 
-### Adding DQ Rules for a New Table
+![Silver DAG Waves](./02_Architect_v10_May/mermaid/render_check/23_silver_dag_waves.svg)
 
-When you add a new table, DQ does **not** auto-check it. Add rules manually:
+| Wave | Tables | Parallelism | Dependencies |
+|---|---|---|---|
+| 0 | InvoiceDetailLineLevel, ForecastDemandMonthly, OpenOrderLineLevel | 3 parallel | None (reads from Staging/Enterprise_Lakehouse) |
+| 1 | ActualDemandMonthly, ActualDemandWeekly, InvoiceWeekly, OpenOrderMonthly | 4 parallel | Wave 0 tables |
+| 2 | NaiveForecastMonthly | 1 | ActualDemandMonthly (wave 1) |
 
-```sql
--- Completeness: key column must not be NULL
-INSERT INTO meta.dq_rules (rule_id, rule_name, target_schema, target_table,
-    check_type, column_name, severity, is_active, layer)
-VALUES (
-    (SELECT ISNULL(MAX(rule_id),0)+1 FROM meta.dq_rules),
-    'new_table id_key not null',
-    'bronze', 'brz_new_table',
-    'completeness', 'id_key', 'CRITICAL', 1, 'BRZ'
-);
+Waves are computed dynamically by `Meta.usp_ComputeSilverWaves` based on `depends_on` in the registry.
 
--- Row count: minimum expected rows
-INSERT INTO meta.dq_rules (rule_id, rule_name, target_schema, target_table,
-    check_type, severity, threshold, is_active, layer)
-VALUES (
-    (SELECT ISNULL(MAX(rule_id),0)+1 FROM meta.dq_rules),
-    'new_table min 1K rows',
-    'bronze', 'brz_new_table',
-    'row_count', 'WARNING', 1000, 1, 'BRZ'
-);
+---
+
+## Scheduling & Smart Skip
+
+| Table Type | Frequency | Cron | Smart Skip |
+|---|---|---|---|
+| Staging (EDW) | Daily | `0 2 * * *` | next_run_time filter in Lookup SQL |
+| ReferenceMaster | Monthly | `0 2 1 * *` | Skipped if not due (verified: REF tables skipped on daily runs) |
+| Silver | Daily | `0 2 * * *` | Always runs when triggered |
+| Gold | Daily | `0 2 * * *` | Always runs when triggered |
+
 ```
-
-No pipeline changes needed — `pl_dq_check` Lookup dynamically reads `dq_rules`.
-
-### 7 Supported Check Types
-
-| check_type | What it checks | Required columns |
-|------------|---------------|-----------------|
-| `completeness` | Column NOT NULL % ≥ threshold | `column_name` |
-| `row_count` | Table row count ≥ threshold | `threshold` |
-| `uniqueness` | No duplicate values in column | `column_name` |
-| `freshness` | Data loaded within N hours | `threshold` (hours) |
-| `referential_integrity` | FK exists in parent table | `params` (SQL) |
-| `validity` | Values in expected set | `params` (SQL) |
-| `custom_sql` | Any arbitrary SQL check | `params` (SQL returning 0=pass) |
-
----
-
-## Scheduling & Concurrency
-
-| Aspect | Current state |
-|--------|--------------|
-| **Pipeline trigger** | Manual (auto schedule not yet enabled on Fabric Portal) |
-| **Table frequency** | 18 daily (`0 2 * * *`) + 10 monthly (`0 2 1 * *`) via sp_registry |
-| **Smart skip** | Active — Lookup WHERE `next_run_time <= GETUTCDATE()` |
-| **Concurrency** | Master: concurrency=1, Bronze: batch=6, Silver wave: batch=8, Gold: batch=2 |
-| **Snapshot conflict** | Mitigated: usp_log_run retry 3x + reduced batch + pipeline retry 3x60s |
-
-> **Full details**: See [scheduling.md](docs/operations/scheduling.md) — trigger scenarios, CU estimates, cron setup.
-
----
-
-## Naming Convention
-
-### Objects
-
-| Schema | Tables | Views | Pipelines |
-|--------|--------|-------|-----------|
-| bronze | `brz_{src}__{tbl}` / `ref_{entity}` | `vw_brz_*` / `vw_ref_*` | `pl_bronze_{project}` |
-| silver | `slv_{concept}` | `vw_slv_*` | `pl_silver_{project}` |
-| gold | `gld_{fact\|dim}_{subject}` | `vw_gld_*` | `pl_gold_{project}` |
-| meta | descriptive | `vw_*` | `pl_sc_master` (unique) |
-
-### Column Prefixes
-
-`id_` keys · `code_` categories · `name_` descriptions · `qty_` quantities · `amt_` amounts · `dt_` dates · `num_` numbers · `ts_` timestamps · `pct_` percentages · `is_` flags (0/1)
+Schedule: Daily 2:00 AM UTC+7 (SE Asia Standard Time)
+Pipeline: pl_sc_master → auto-trigger
+```
 
 ---
 
 ## Multi Data Mart Scale
 
-The architecture supports **N data marts running in parallel**. Each mart = 1 complete bronze→silver→gold flow for a specific project/domain.
+The framework supports N data marts running in parallel. Each mart is defined by a `project` value in the registry.
 
-```mermaid
-flowchart TD
-    subgraph MASTER["pl_sc_master"]
-        LS["log_start"]
-        subgraph MARTS["ForEach mart (PARALLEL)"]
-            M1["Mart: Forecast\nbronze→silver→gold"]
-            M2["Mart: Inventory\nbronze→silver→gold"]
-            MN["Mart: ...N"]
-        end
-        FIN["finalize"]
-        subgraph SMS["SM Refresh (PARALLEL)"]
-            SM1["SC_Control_Tower"]
-            SM2["...N SMs"]
-        end
-        LS --> MARTS --> FIN --> SMS
-    end
+```
+pl_sc_master
+  └─ Lookup DISTINCT project → ["supplychain", "inventory", ...]
+     └─ ForEach project (parallel batch=10)
+        └─ pl_sc_mart(project_name)
+           └─ Only loads tables WHERE project = @project_name
 ```
 
-| Aspect | Detail |
-|--------|--------|
-| **Parallel execution** | N marts simultaneously (ForEach isSequential=false) |
-| **Project filter** | `sp_registry.project` column filters tables per mart |
-| **Cross-mart deps** | Silver in mart B can depend on bronze from mart A via `depends_on` |
-| **Cost optimization** | Total time = max(mart), not sum(marts) |
-
-> **Full design**: See [multi_mart_scale.md](docs/enterprise/multi_mart_scale.md)
+Currently: 1 project (`supplychain`). Adding a new project requires only registry INSERT — no pipeline changes.
 
 ---
 
 ## Enterprise Compatibility
 
-### Mapping Status
+### Bob/Rakesh Standards Alignment
 
-| Area | Coverage | Detail |
-|------|----------|--------|
-| **Load patterns** | **8/8 (100%)** | overwrite, incremental, upsert, datekey, daterange, identity, cdc, scd2 |
-| **TableDictionary** | **63/63 cols (100%)** | `meta.vw_table_dictionary` maps all Enterprise columns + 6 v9 extras |
-| **Audit log** | **Mapped** | `sp_run_history` = Enterprise `AuditLog` |
-| **Pipeline orchestration** | **Mapped** | Fabric Pipelines = Azure Pipelines |
-| **DAG orchestration** | **v9 ahead** | Enterprise does not have depends_on/wave computation |
-| **Auto lineage** | **v9 ahead** | Enterprise does not have auto-built lineage |
-| **DQ config-driven** | **v9 ahead** | Enterprise DQ is simpler (row count only) |
-| **Alerts/email** | **Not implemented** | Enterprise has `usp_DataWarehouseDataFeedAlert_Fabric` |
-| **fn_GetDate timezone** | **Implemented (CST)** | `meta.ufn_utc_to_cst` — DST aware, maps to TableDictionary `[Modified]` |
-| **.sqlproj validation** | **Not implemented** | Enterprise has build-time schema validation |
-| **Multi-environment** | **Not implemented** | Enterprise has Dev → Prod via publish profiles |
-
-### Load Pattern Mapping
-
-| v9 load_type | Enterprise Equivalent | Enterprise SP |
-|-------------|----------------------|--------------|
-| `overwrite` | DELINSERT | usp_IncrementalTableLoad |
-| `incremental` | Append/DateKey | usp_IncrementalTableLoad |
-| `upsert` | Upsert | usp_IncrementalTableLoad |
-| `datekey` | DateKey | usp_IncrementalTableLoad |
-| `daterange` | DateRange | usp_UpdateCuratedTableFromView_DateRange |
-| `identity` | Identity | usp_IncrementalTableLoad |
-| `cdc` | CDC | usp_IncrementalTableLoad |
-| `scd2` | SCD2 | usp_SCD2_TableLoad |
-
-> **Full comparison**: See [fabric_vs_enterprise.md](docs/enterprise/fabric_vs_enterprise.md)
+| Standard | v10 Implementation |
+|---|---|
+| Bronze mimics source | OneLake shortcuts = source-aligned logical Bronze |
+| Silver PascalCase schemas | SalesHistory, ForecastHistory, OpenOrderHistory, ReferenceMaster |
+| Gold dedicated serving | Separate `SupplyChain_Gold_Warehouse` |
+| TableDictionary metadata | `Meta.vw_TableDictionary` — 63 Enterprise-compatible columns |
+| Schema security model | Workspace/item/SQL endpoint permissions (pending IT) |
 
 ---
 
-## Semantic Model
+## EDW Supplement Strategy
 
-| Aspect | Detail |
-|--------|--------|
-| **Name** | SC_Control_Tower |
-| **Mode** | Direct Lake (reads Parquet from Warehouse, no import) |
-| **Tables** | dim_calendar, dim_customer_grouping, dim_warehouse, dim_product, dim_forecast_horizon, fact_flat_forecast_actual, fact_forecast_kpi |
-| **Refresh** | Auto — `PBISemanticModelRefresh` activity at end of every master pipeline run |
-| **Source remapping** | Display names match v8 so reports switch source without breaking |
-| **Deployment** | Fabric REST API with TMDL definition |
+4 tables still use EDW supplement (Lakehouse dataflow → Staging):
+
+| Object | Status | Exit Condition |
+|---|---|---|
+| InvoiceDetailEdw | `ExitCandidate` | Dual-read validation + approval |
+| InvoiceHeaderEdw | `NotReady` | Date coverage/SLA must pass |
+| DemandForecastSnapshotDailyEdw | `NotReady` | Grain/snapshot coverage validation |
+| ProductEdw | `ExitCandidate` | Source validation + ownership decision |
+
+**Rule**: No bulk switch. Object-by-object exit per ADR-002.
 
 ---
 
-## Multi-Environment Roadmap
+## Onboarding Guide
 
-> **⚠ BLOCKED**: Requires Azure DevOps access (not yet granted as of 2026-04-18).
-> CI/CD setup (.sqlproj, SqlCmdVariable, PR gates, build validation) cannot proceed until access is provided.
-> See [roadmap.md](docs/enterprise/roadmap.md) Phase 2 for full details.
+### First 30 Minutes
 
-```mermaid
-flowchart LR
-    DEV["DEV Workspace\nOperational\nv9 complete"]
-    TEST["TEST Workspace\nNext\nValidation + UAT"]
-    PROD["PROD Workspace\nLater\nProduction"]
-    DEV -->|"Deployment Pipeline\nor Git sync"| TEST -->|"Approval gate"| PROD
+1. **Get access**: Request Workspace Viewer role on `SupplyChain Dev` workspace
+2. **Connect**: Use SQL endpoint `7woj2wroypauvkpn72b56t46ju-...datawarehouse.fabric.microsoft.com`
+3. **Explore**: Query `Meta.vw_sp_registry` for all registered assets
+4. **Understand DAG**: Query `Meta.SilverDagWaveRuntime` for wave assignments
+5. **Check health**: Query `Meta.RunLog` for recent runs
+6. **Read docs**: Start with this README → then `02_Architect_v10_May/14_v10_step_by_step_implementation_runbook.md`
+
+### Key Queries
+
+```sql
+-- All registered assets
+SELECT asset_id, canonical_layer, access_mode, physical_schema, physical_object, load_type, frequency
+FROM Meta.AssetRegistryV10 ORDER BY canonical_layer, asset_id;
+
+-- Recent run history
+SELECT asset_id, status, rows_loaded, start_time_utc, end_time_utc
+FROM Meta.RunLog ORDER BY start_time_utc DESC;
+
+-- Silver DAG waves
+SELECT wave_number, asset_id FROM Meta.SilverDagWaveRuntime ORDER BY wave_number;
+
+-- Lineage
+SELECT source_asset, target_asset, edge_type FROM Meta.LineageEdge ORDER BY target_asset;
 ```
-
-- **Fabric Git Integration**: Auto-exports all objects as .sqlproj + .sql files
-- **Deployment Pipelines**: DEV → TEST → PROD promotion (Fabric native)
-- **SqlCmdVariable**: Enterprise uses `$(Source_Data)`. Convert 3-part naming via `sqlpackage publish` — **do NOT convert SQL files until deploy flow is ready** (Fabric cannot interpret `$(...)` directly)
-- **.sqlproj Build Validation**: `dotnet build *.sqlproj` catches schema errors before deploy. Matches Enterprise DacFx pattern
 
 ---
 
 ## Fabric Warehouse Constraints
 
-| Not Supported | Workaround |
-|---------------|------------|
-| DEFAULT constraint | Set values in SP |
-| IDENTITY | ROW_NUMBER() or MAX(id)+1 |
-| PRIMARY KEY / UNIQUE | DQ uniqueness check |
-| Recursive CTE | SP iterative WHILE loop |
-| ForEach inside Until | Parent-child pipeline pattern |
-| Variables in distributed queries | sp_executesql with parameters |
-| `DATETIME2` without precision | Always `DATETIME2(6)` |
-| `datetime` in CTAS | `CAST(GETUTCDATE() AS DATETIME2(6))` |
-| Warehouse Lookup in Pipeline | LakehouseTableSource + cross-DB |
-| Concurrent writes to same table | usp_log_run retry 3x + WAITFOR DELAY |
+| Constraint | Workaround |
+|---|---|
+| No DEFAULT | Set in SP |
+| No IDENTITY | ROW_NUMBER() or MAX(id)+1 |
+| ForEach inside ForEach | Parent-child pipeline (pl_sc_silver → pl_sc_silver_wave) |
+| Warehouse Lookup requires Lakehouse source | LakehouseTableSource + cross-DB 3-part naming |
+| Concurrent writes snapshot conflict | SP retry 3x + reduced batch + pipeline retry |
+| BIT type unstable | Use INT (0/1) |
+| datetime in CTAS | CAST(GETUTCDATE() AS DATETIME2(6)) |
+| CAST AS NVARCHAR no length | Always specify length |
+| Table-valued functions | Not supported — use scalar functions |
+| Decimal date columns (CODIS) | CAST(CAST(col AS BIGINT) AS VARCHAR) → TRY_CONVERT(DATE, ...) |
 
 ---
 
 ## Tech Stack
 
-- **Platform**: Microsoft Fabric F256 (Synapse Data Warehouse)
-- **Language**: T-SQL (pure, no PySpark/Notebooks)
-- **Orchestration**: Fabric Data Pipelines (parent-child pattern, metadata-driven)
-- **ETL Engine**: Generic SP — 8 load patterns, aligned with Enterprise ETL_Framework
-- **Scheduling**: Cron-based (sp_registry) + smart skip filter
-- **Semantic Model**: Direct Lake (TMDL via Fabric REST API)
-- **BI**: Power BI Direct Lake
-- **Lineage**: Interactive Streamlit app ([live](https://vn-fabric-lineage.streamlit.app))
-- **Version Control**: GitHub
-- **Deployment**: Fabric REST API + Claude Code
-- **Environments**: DEV (operational) → TEST → PROD (roadmap)
+| Category | Technology |
+|---|---|
+| Platform | Microsoft Fabric F256 |
+| Compute | Fabric Warehouse (Serverless T-SQL) |
+| Storage | OneLake (Delta Lake) |
+| Language | Pure T-SQL (no PySpark, no Notebooks) |
+| Orchestration | Fabric Data Pipelines |
+| BI | Power BI Direct Lake |
+| Source Access | OneLake Shortcuts + Lakehouse Dataflows |
+| Scheduling | Fabric Pipeline Schedule (cron) |
+| DQ | Custom T-SQL DQ engine (4 check types) |
+| Lineage | Auto-built from metadata (52 edges) |
+| API | Fabric REST API + Power BI REST API |
+| Auth | Azure AD (az login) |
+| CI/CD | GitHub + Fabric REST API (manual deploy) |
+| Monitoring | Streamlit lineage app (auto-refresh) |
+
+---
+
+## Data Parity
+
+### v10 vs v9 Verification (2026-05-02)
+
+| Category | Metric | v9 | v10 | Status |
+|---|---|---:|---:|---|
+| Registry | Asset entries | 28 | 28 | EXACT |
+| Quality | DQ rules | 54 | 54 | EXACT |
+| Lineage | Edges | 52 | 52 | EXACT |
+| DAG | Silver waves | 8 | 8 | EXACT |
+| Contracts | Source columns | 674 | 674 | EXACT |
+| Staging | InvoiceDetail | 88,169,954 | 88,277,086 | ~YES |
+| Staging | DemandForecast | 42,406,201 | 42,406,201 | EXACT |
+| Silver | InvoiceDetailLineLevel | 88,169,954 | 88,277,089 | ~YES |
+| Gold | FactForecastActual | 40,550,760 | 47,101,597 | +16% (newer data) |
+
+---
+
+## Connection Details
+
+| Resource | ID |
+|---|---|
+| Workspace DEV | `c8d9fc83-18b6-4e1d-8264-0b49eed36fe0` |
+| Processing Warehouse | `c0262cef-b8a7-495f-bccc-53b098c7948c` |
+| Gold Warehouse | `98e2a911-5af9-442e-9cc8-5d8dadb8b762` |
+| SQL Endpoint | `7woj2wroypauvkpn72b56t46ju-qp6ntsfwdaou5atebne65u3p4a.datawarehouse.fabric.microsoft.com` |
+
+### Pipeline IDs
+
+| Pipeline | ID |
+|---|---|
+| `pl_sc_master` | `f36f56b8-5668-4a0c-b991-2c28302f1710` |
+| `pl_sc_mart` | `20db5725-80e3-4081-9ef5-01700acdf3b3` |
+| `pl_sc_staging` | `10221fb2-6e30-4911-9d95-d8dd67440d84` |
+| `pl_sc_silver` | `7dc6ecda-56cc-4797-893c-1c502863323f` |
+| `pl_sc_silver_wave` | `797b1a02-f973-4584-bd27-bb0151549d4b` |
+| `pl_sc_gold` | `50ff6263-659d-4b09-9e45-b42a3434e093` |
+| `pl_dq_check` | `3c7c61f6-c184-41e5-8309-f9ac3260d38d` |
+
+### Token Commands
+
+```bash
+# Warehouse (pyodbc / sqlcmd)
+az account get-access-token --resource https://database.windows.net/ --query accessToken -o tsv
+
+# Fabric REST API
+az account get-access-token --resource https://api.fabric.microsoft.com --query accessToken -o tsv
+
+# Power BI API
+az account get-access-token --resource https://analysis.windows.net/powerbi/api --query accessToken -o tsv
+```
 
 ---
 
 ## Documentation Index
 
-### Architecture Diagrams (`diagrams/`)
+### Architecture Docs (`02_Architect_v10_May/`)
 
-| File | Audience | Description |
-|------|----------|-------------|
-| [v9_presentation.mmd](diagrams/v9_presentation.mmd) | DA / BU / Leadership | **Presentation** — Overview: data flow, pipeline with DQ gates, scorecard, metrics |
-| [template_full_architecture.mmd](diagrams/template_full_architecture.mmd) | DE / Architect | **System Design** — Full detail: all objects, SPs, functions, connections, lineage |
-| [v9_supplychain_full_architecture.mmd](diagrams/v9_supplychain_full_architecture.mmd) | DE (v9 project) | **v9 Actual** — 85 objects, 7 pipelines, 1.47B rows, all IDs |
+| # | Document | Purpose |
+|---|---|---|
+| 01 | `01_super_plan_medallion_refactor.md` | Master refactor plan (v9 → v10) |
+| 02 | `02_architecture_blueprint_mermaid.md` | Mermaid architecture diagrams |
+| 03 | `03_v9_feature_parity_checklist.md` | v9 feature parity verification |
+| 04 | `04_revised_bob_standards_proposal.md` | Bob/Rakesh standards adaptation |
+| 05 | `05_deep_audit_protocol.md` | Audit protocol for v9→v10 migration |
+| 06 | `06_v9_source_inventory_and_chronology.md` | v9 source inventory |
+| 07 | `07_v9_capability_evidence_ledger.md` | v9 capability evidence |
+| 08 | `08_v10_gap_matrix.md` | v10 gap analysis |
+| 09 | `09_bob_standards_mapping_matrix.md` | Enterprise standards mapping |
+| 10 | `10_final_v10_amendment_plan.md` | Final amendment plan |
+| 11 | `11_v10_implementation_readiness_pack.md` | Readiness verification |
+| 12 | `12_v10_object_classification_mapping.md` | Object classification |
+| 13 | `13_v10_build_blueprint_after_readiness.md` | Build blueprint |
+| 14 | `14_v10_step_by_step_implementation_runbook.md` | Step-by-step runbook (20 phases) |
+| 15 | `15_v10_edw_supplement_exit_strategy.md` | EDW exit strategy |
+| 16 | `16_v10_readiness_scorecard_and_v9_cleanup.md` | Readiness score: 88/100 |
 
-### Onboarding & Operations (`docs/operations/`)
+### Architecture Diagrams (`02_Architect_v10_May/mermaid/`)
 
-| File | Description |
-|------|-------------|
-| [onboarding.md](docs/operations/onboarding.md) | **Start here** — Step-by-step: add new ETL table (for DA/DE) |
-| [runbook.md](docs/operations/runbook.md) | **Operations** — Pipeline troubleshooting, common errors, re-run guide, escalation |
-| [alerting.md](docs/operations/alerting.md) | **Alerting** — Power Automate + Teams: setup guide, Adaptive Card design |
-| [health_check.py](scripts/health_check.py) | **Health Check** — 49 automated checks: `python3 scripts/health_check.py` |
-| [scheduling.md](docs/operations/scheduling.md) | Scheduling: cron, smart skip, concurrency, snapshot conflict mitigation |
-| [sqlproj_validation.md](docs/operations/sqlproj_validation.md) | .sqlproj validation: 3 approaches (lint / sqlproj / full ProjectRef) |
-| [timezone_sync.md](docs/operations/timezone_sync.md) | Timezone sync: UTC + CST + VN, map Enterprise fn_GetDate |
-| [generic_sp_migration.md](docs/operations/generic_sp_migration.md) | Migration history: 28 per-table SPs → 1 generic SP |
+| Diagram | File |
+|---|---|
+| Architecture Overview | `20_architecture_overview.mmd` / `.svg` |
+| Pipeline Flow | `21_pipeline_flow.mmd` / `.svg` |
+| Control Plane Detail | `22_control_plane_detail.mmd` / `.svg` |
+| Silver DAG Waves | `23_silver_dag_waves.mmd` / `.svg` |
 
-### Templates (`docs/templates/`)
+### Decision Records (`docs/decisions/`)
 
-| File | Description |
-|------|-------------|
-| [architecture.md](docs/templates/architecture.md) | Architecture reference: schemas, pipelines, DAG, meta, DQ, naming |
-| [pipeline_guide.md](docs/templates/pipeline_guide.md) | Pipeline execution trace: what happens when master triggers |
-| [setup_guide.md](docs/templates/setup_guide.md) | Phase-by-phase setup: DDL, SP templates, pipeline JSON, REST API |
+| ADR | Decision |
+|---|---|
+| ADR-001 | Adopt Hybrid Medallion v10 for Supply Chain Fabric Refactor |
+| ADR-002 | EDW Supplement Exit Strategy for v10 |
 
-### Project-specific (`docs/supplychain/`)
+### Build Evidence (`02_Architect_v10_May/build_runs/`)
 
-| File | Description |
-|------|-------------|
-| [architecture.md](docs/supplychain/architecture.md) | All 76 objects: names, row counts, pipeline IDs, source mappings, SM |
-| [pipeline.md](docs/supplychain/pipeline.md) | Execution trace: actual SP names, durations, wave assignments |
-| [setup.md](docs/supplychain/setup.md) | Implementation log: Spark→T-SQL conversions, bugs, fixes |
-
-### Scale & Enterprise (`docs/enterprise/`)
-
-| File | Description |
-|------|-------------|
-| [multi_mart_scale.md](docs/enterprise/multi_mart_scale.md) | Multi Data Mart: N marts parallel, cross-mart deps, cost optimization |
-| [fabric_vs_enterprise.md](docs/enterprise/fabric_vs_enterprise.md) | Enterprise vs v9: ETL framework, load patterns, CI/CD, naming |
-| [roadmap.md](docs/enterprise/roadmap.md) | Future roadmap: production hardening, CI/CD, scale, enterprise integration |
-
-### Apps & Scripts
-
-| File | Description |
-|------|-------------|
-| [lineage_explorer/](lineage_explorer/) | **Lineage Explorer** — Streamlit app: interactive DAG visualization |
-| [scripts/health_check.py](scripts/health_check.py) | **Health Check** — 49 automated checks |
+| Artifact | Purpose |
+|---|---|
+| `build_v10_full.py` | Full v10 build script (functions, views, data load) |
+| `scaffold_v10_sql.py` | Initial SQL scaffold (tables, meta seed) |
+| `create_v10_meta_operations.py` | Meta SPs + reconciliation + DAG seed |
+| `pipeline_ids.json` | All 7 pipeline IDs |
 
 ---
 
-*Built with Claude Code + Fabric MCP Server*
+*Built by Aric Nguyen, DataHub VN — Ashley Furniture Industries. Architecture: Claude Code + Codex.*

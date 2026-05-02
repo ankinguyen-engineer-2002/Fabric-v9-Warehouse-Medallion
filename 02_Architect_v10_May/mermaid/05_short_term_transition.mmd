@@ -1,0 +1,34 @@
+flowchart LR
+    LH["Logical Bronze<br/>Shortcut Lakehouse"]
+    OLD["Current v9 Warehouse<br/>Compatibility Layer"]
+    EDW["EDW Supplement<br/>4 fallback objects<br/>ADR-002 lifecycle"]
+    STG["Staging Exceptions"]
+    SIL["New Domain Silver"]
+    GOLD["New Gold Serving"]
+    CTRL["Existing v9 Control Plane"]
+
+    LH --> OLD
+    OLD --> STG
+    OLD --> EDW
+    EDW --> STG
+    EDW -.->|"2 ExitCandidate<br/>2 NotReady"| LH
+    OLD --> SIL
+    STG --> SIL
+    SIL --> GOLD
+    CTRL -.->|"controls"| OLD
+    CTRL -.->|"extends"| SIL
+    CTRL -.->|"validates"| GOLD
+
+    class LH bronze
+    class OLD legacy
+    class EDW,STG staging
+    class SIL silver
+    class GOLD gold
+    class CTRL control
+
+    classDef bronze fill:#B86B2B,stroke:#6B3A12,color:#FFFFFF
+    classDef legacy fill:#64748B,stroke:#334155,color:#FFFFFF
+    classDef staging fill:#D9822B,stroke:#8A4A0A,color:#FFFFFF
+    classDef silver fill:#C7CCD6,stroke:#687080,color:#111111
+    classDef gold fill:#F2C94C,stroke:#9A6B00,color:#111111
+    classDef control fill:#0B3D91,stroke:#06275F,color:#FFFFFF
