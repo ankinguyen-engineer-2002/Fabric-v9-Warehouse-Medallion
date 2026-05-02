@@ -1,6 +1,6 @@
 # Setup Guide -- Warehouse-Native Medallion Architecture
 > Step-by-step instructions to build SupplyChain_Warehouse v9 from scratch
-> Both approaches: Fabric UI and Fabric REST API + Claude Code
+> Both approaches: Fabric UI and Fabric REST API + AI assistant
 > Microsoft Fabric F256
 
 ---
@@ -22,7 +22,7 @@
 | Approach | When to Use | Tools |
 |----------|-------------|-------|
 | **Fabric UI** | Interactive setup, small changes, debugging | Warehouse query editor in browser |
-| **API + Claude Code** | Bulk deployment, automation, CI/CD | pyodbc + `az account get-access-token` |
+| **API + AI assistant** | Bulk deployment, automation, CI/CD | pyodbc + `az account get-access-token` |
 
 ### API Connection Template (pyodbc)
 

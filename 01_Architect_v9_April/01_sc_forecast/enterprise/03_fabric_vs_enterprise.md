@@ -36,7 +36,7 @@ flowchart TD
 |--------|-----------|-----|
 | Scale | 17 warehouses, 48 source schemas, 2578 files | 1 warehouse, 4 schemas, 100 objects |
 | Language | T-SQL (.sqlproj) | T-SQL (direct on Warehouse) |
-| Deployment | DacFx (.dacpac) via Azure Pipelines | Fabric REST API + Claude Code |
+| Deployment | DacFx (.dacpac) via Azure Pipelines | Fabric REST API + AI assistant |
 | Framework | Shared ETL_Framework (generic SPs) | meta schema (per-project) |
 
 ---

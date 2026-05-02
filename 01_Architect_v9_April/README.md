@@ -661,7 +661,7 @@ flowchart LR
 - **BI**: Power BI Direct Lake
 - **Lineage**: Interactive Streamlit app ([live](https://vn-fabric-lineage.streamlit.app))
 - **Version Control**: GitHub
-- **Deployment**: Fabric REST API + Claude Code
+- **Deployment**: Fabric REST API + AI assistant
 - **Environments**: DEV (operational) → TEST → PROD (roadmap)
 
 ---
@@ -722,4 +722,4 @@ flowchart LR
 
 ---
 
-*Built with Claude Code + Fabric MCP Server*
+*Built with AI assistant + Fabric MCP Server*
