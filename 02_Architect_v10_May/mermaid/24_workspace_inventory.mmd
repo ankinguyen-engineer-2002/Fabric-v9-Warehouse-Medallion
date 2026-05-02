@@ -1,0 +1,119 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1a73e8', 'primaryTextColor': '#fff', 'primaryBorderColor': '#1557b0', 'lineColor': '#555', 'secondaryColor': '#e8f0fe', 'tertiaryColor': '#f1f3f4', 'fontSize': '13px'}}}%%
+flowchart TB
+    subgraph WORKSPACE["SupplyChain Dev Workspace"]
+        direction TB
+
+        subgraph BRONZE_LAYER["BRONZE — Logical Access Layer (no Warehouse)"]
+            direction LR
+            subgraph EL["Enterprise_Lakehouse<br/><i>584e7d2c</i>"]
+                EL1["OneLake Shortcuts → Enterprise_Data"]
+                EL2["Wholesale_Codis_AFI/<br/>codatan · COMAST · EXTORD · EXTORIT"]
+                EL3["MasterData_DW/<br/>DimDate · DimItemMaster"]
+                EL4["Customers/<br/>AccountMaster · ShippingLocations"]
+                EL5["SupplyChain_DW/<br/>DimAFIWarehouses"]
+                EL6["+ 15 more schemas · 200+ tables"]
+            end
+            subgraph SL["SupplyChain_Lakehouse<br/><i>62a3081e</i>"]
+                SL1["4 Dataflow Feeds"]
+                SL2["invoicedetail_ver2 · 88M"]
+                SL3["invoiceheader_ver2 · 24M"]
+                SL4["demandforecast_ver2 · 42M"]
+                SL5["ref_product_ver2 · 379K"]
+                SL6["ref_forecast_cycle · 43"]
+            end
+        end
+
+        subgraph SILVER_LAYER["SILVER — SupplyChain_Processing_Warehouse · <i>c0262cef</i>"]
+            direction TB
+            subgraph STG_BOX["Staging · 4 tables · 4 views · 1 SP"]
+                STG1["InvoiceDetailEdw · 88M rows"]
+                STG2["InvoiceHeaderEdw · 24M rows"]
+                STG3["DemandForecastSnapshotDailyEdw · 42M"]
+                STG4["ProductEdw · 379K rows"]
+                STG5["vw_Codatan · vw_Comast · vw_Extord · vw_Extorit"]
+                STG6["usp_RefreshEdwTables"]
+            end
+            subgraph REF_BOX["ReferenceMaster · 10 tables · 11 views"]
+                REF1["Calendar · 21K"]
+                REF2["ItemMaster · 381K"]
+                REF3["CustomerAccountGroup · 35K"]
+                REF4["CustomerShippingLocation · 127K"]
+                REF5["ForecastCycle · 43 | ForecastHorizon · 8"]
+                REF6["OrderType · 29 | Warehouse · 55"]
+            end
+            subgraph SH_BOX["SalesHistory · 4 tables · 4 views"]
+                SH1["InvoiceDetailLineLevel · 88M"]
+                SH2["InvoiceWeekly · 37M"]
+                SH3["ActualDemandMonthly · 2.6M"]
+                SH4["ActualDemandWeekly · 7.8M"]
+            end
+            subgraph FH_BOX["ForecastHistory · 2 tables · 2 views"]
+                FH1["ForecastDemandMonthly · 42M"]
+                FH2["NaiveForecastMonthly · 2M"]
+            end
+            subgraph OH_BOX["OpenOrderHistory · 2 tables · 2 views"]
+                OH1["OpenOrderLineLevel · 193K"]
+                OH2["OpenOrderMonthly · 80K"]
+            end
+            subgraph META_BOX["Meta Control Plane · 20 tables · 5 views · 16 SPs · 3 fn"]
+                META1["AssetRegistryV10 · 28 assets"]
+                META2["DQRule · 54 rules | LineageEdge · 52"]
+                META3["SourceContract · 674 cols"]
+                META4["RunLog · SilverDagWaveRuntime · 8 waves"]
+                META5["usp_GenericLoad · 8 load patterns"]
+                META6["ufn_cron_is_due · ufn_should_run · ufn_utc_to_cst"]
+            end
+        end
+
+        subgraph GOLD_LAYER["GOLD — SupplyChain_Gold_Warehouse · <i>98e2a911</i>"]
+            subgraph FA_BOX["ForecastAccuracy · 2 tables · 2 views"]
+                FA1["FactForecastActual · 47M rows"]
+                FA2["FactForecastKpi · 36M rows"]
+                FA3["vw_FactForecastActual"]
+                FA4["vw_FactForecastKpi"]
+                FA5["Direct Lake ready"]
+            end
+        end
+
+        subgraph PIPELINES["Pipeline Orchestration · 7 pipelines"]
+            direction LR
+            PL1["pl_sc_master<br/>multi-mart ForEach"]
+            PL2["pl_sc_mart<br/>staging→silver→gold"]
+            PL3["pl_sc_staging<br/>EDW + REF"]
+            PL4["pl_sc_silver<br/>DAG waves"]
+            PL5["pl_sc_silver_wave<br/>parallel batch=8"]
+            PL6["pl_sc_gold<br/>cross-DB CTAS"]
+            PL7["pl_dq_check<br/>54 rules"]
+        end
+
+        subgraph LEGACY["Legacy / Enterprise (not used by v10)"]
+            direction LR
+            LEG1["SupplyChain_Warehouse<br/>v9 deleted · SCP_Core by Bob"]
+            LEG2["ETL_Framework"]
+            LEG3["Temp_SCPWarehouse"]
+            LEG4["80 Notebooks (v8)"]
+        end
+    end
+
+    EL --> STG_BOX
+    EL --> REF_BOX
+    EL --> OH_BOX
+    SL --> STG_BOX
+    STG_BOX --> SH_BOX
+    STG_BOX --> FH_BOX
+    REF_BOX --> SH_BOX
+    REF_BOX --> FH_BOX
+    REF_BOX --> OH_BOX
+    SH_BOX --> FA_BOX
+    FH_BOX --> FA_BOX
+    OH_BOX --> SH_BOX
+    META_BOX -.->|orchestrates| STG_BOX
+    META_BOX -.->|orchestrates| SH_BOX
+    META_BOX -.->|orchestrates| FH_BOX
+    META_BOX -.->|orchestrates| OH_BOX
+    META_BOX -.->|orchestrates| FA_BOX
+    PL1 --> PL2
+    PL2 --> PL3
+    PL2 --> PL4
+    PL2 --> PL6
+    PL4 --> PL5
