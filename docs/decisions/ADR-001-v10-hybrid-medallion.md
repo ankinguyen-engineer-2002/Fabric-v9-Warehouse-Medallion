@@ -47,6 +47,7 @@ Preserve the v9 control plane as a horizontal operating layer:
 - DAG/wave planner.
 - DQ gate engine.
 - Source contract and source-target reconciliation gates.
+- EDW supplement lifecycle and fallback retirement governed by ADR-002.
 - Lineage builder.
 - Run/pipeline audit logging.
 - Finalizer.
@@ -113,11 +114,16 @@ Implementation must proceed in phases:
 5. Extend metadata and control-plane logic before physical moves.
 6. Build v10 side-by-side, then run parallel validation before cutover.
 
+EDW supplement handling is not decided generically in this ADR. It is governed by `ADR-002` because the four `_edw` objects have different readiness states and require object-level validation.
+
 ## References
 
 - `02_Architect_v10_May/10_final_v10_amendment_plan.md`
 - `02_Architect_v10_May/07_v9_capability_evidence_ledger.md`
 - `02_Architect_v10_May/08_v10_gap_matrix.md`
 - `02_Architect_v10_May/09_bob_standards_mapping_matrix.md`
+- `02_Architect_v10_May/15_v10_edw_supplement_exit_strategy.md`
+- `02_Architect_v10_May/16_v10_readiness_scorecard_and_v9_cleanup.md`
+- `docs/decisions/ADR-002-edw-supplement-exit-strategy.md`
 - Microsoft Direct Lake overview: https://learn.microsoft.com/en-us/fabric/fundamentals/direct-lake-overview
 - Microsoft Fabric medallion architecture: https://learn.microsoft.com/en-us/fabric/onelake/onelake-medallion-lakehouse-architecture

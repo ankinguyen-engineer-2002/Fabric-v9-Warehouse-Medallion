@@ -53,6 +53,8 @@
 - [Verified] implementation readiness pack: `02_Architect_v10_May/11_v10_implementation_readiness_pack.md`
 - [Verified] object classification mapping: `02_Architect_v10_May/12_v10_object_classification_mapping.md`
 - [Verified] post-readiness build blueprint: `02_Architect_v10_May/13_v10_build_blueprint_after_readiness.md`
+- [Verified] EDW supplement decision: `docs/decisions/ADR-002-edw-supplement-exit-strategy.md`
+- [Verified] v10 readiness scorecard and v9 cleanup candidate list: `02_Architect_v10_May/16_v10_readiness_scorecard_and_v9_cleanup.md`
 - [Verified] live readiness export: `02_Architect_v10_May/readiness_exports/20260430_230936/` (local-only raw evidence; intentionally ignored from Git)
 - [Verified] Bob standard DOCX: `02_Architect_v10_May/SQL Server Data Warehouse Standards.docx` (local-only evidence; intentionally ignored from Git unless sharing is approved)
 
@@ -69,7 +71,7 @@ SupplyChain Dev / approved Enterprise_SupplyChain workspace
        Logical Bronze through OneLake shortcuts
        Current physical item may be Enterprise_Lakehouse; do not rename until approved
 
-  -> SupplyChain_Processing_Warehouse_v10
+  -> SupplyChain_Processing_Warehouse
        Meta / control plane
        Staging for exceptions only
        ReferenceMaster for domain reference objects not owned by EnterpriseData
@@ -77,7 +79,7 @@ SupplyChain Dev / approved Enterprise_SupplyChain workspace
        ForecastHistory for Supply Chain domain Silver
        OpenOrderHistory for Supply Chain domain Silver
 
-  -> SupplyChain_Gold_Warehouse_v10
+  -> SupplyChain_Gold_Warehouse
        ForecastAccuracy physical Gold tables
 
   -> SupplyChain semantic model
@@ -89,8 +91,8 @@ SupplyChain Dev / approved Enterprise_SupplyChain workspace
 ### 4.1 Create now in v10 side-by-side
 
 - Create a v10 implementation branch/folder/package for deployment scripts and run evidence.
-- Create or designate `SupplyChain_Processing_Warehouse_v10` as the v10 processing Warehouse.
-- Create or designate `SupplyChain_Gold_Warehouse_v10` as the v10 Gold serving Warehouse.
+- Create or designate `SupplyChain_Processing_Warehouse` as the v10 processing Warehouse.
+- Create or designate `SupplyChain_Gold_Warehouse` as the v10 Gold serving Warehouse.
 - Create v10 `Meta` schema and companion control-plane tables/views without altering live v9 tables first.
 - Create v10 `Staging` schema for EDW supplement and exception-only persisted mirrors.
 - Create v10 Pascal Case domain schemas: `SalesHistory`, `ForecastHistory`, `OpenOrderHistory`, `ReferenceMaster`.
@@ -117,6 +119,7 @@ SupplyChain Dev / approved Enterprise_SupplyChain workspace
 - Keep `meta.usp_generic_load` concept and load pattern routing.
 - Keep v9 smart-skip logic for Bronze/REF and Gold.
 - Keep EDW supplement staging for the four known EDW-backed assets until source SLA/coverage/grain/performance is approved.
+- Keep the four Dataflows that load `SupplyChain_Lakehouse` for v8/v9; v10 maps them as upstream `LegacyDataflowBridge` feeds, not cleanup targets.
 - Keep semantic model refresh/framing discipline after Gold publish.
 - Keep compatibility views only where they are needed for transition or non-Direct-Lake consumers.
 
@@ -135,6 +138,7 @@ SupplyChain Dev / approved Enterprise_SupplyChain workspace
 - Do not delete v9 `bronze`, `silver`, `gold`, or `meta` schemas.
 - Do not delete v9 tables, views, stored procedures, functions, pipelines, semantic model, or lineage exports.
 - Do not delete EDW supplement tables.
+- Do not delete any Dataflow during v10 cleanup/build, especially the four feeds that populate `SupplyChain_Lakehouse` for v8.
 - Do not delete old semantic model/report dependencies.
 - Do not delete compatibility views until after cutover and consumer sign-off.
 
@@ -197,6 +201,7 @@ SupplyChain Dev / approved Enterprise_SupplyChain workspace
 - [ ] Step 9: Ask for TableDictionary decision: v10 adapter view only or physical sync/export to EnterpriseData.
 - [ ] Step 10: Ask for security owner: workspace roles, item permissions, SQL endpoint grants, semantic RLS/OLS.
 - [ ] Step 11: Ask for EDW supplement exit criteria: SLA, grain, completeness, row parity, performance.
+- [ ] Step 12: Attach `ADR-002` and the readiness scorecard so `_edw` fallback is reviewed as object-level lifecycle, not a blanket Bronze duplication exception.
 
 **Exit gate:**
 
@@ -209,8 +214,8 @@ SupplyChain Dev / approved Enterprise_SupplyChain workspace
 
 **Fabric items:**
 
-- Create or designate: `SupplyChain_Processing_Warehouse_v10`
-- Create or designate: `SupplyChain_Gold_Warehouse_v10`
+- Create or designate: `SupplyChain_Processing_Warehouse`
+- Create or designate: `SupplyChain_Gold_Warehouse`
 - Designate logical role: `Enterprise_Access_Lakehouse`
 - Keep current item if applicable: `Enterprise_Lakehouse`
 
@@ -218,9 +223,9 @@ SupplyChain Dev / approved Enterprise_SupplyChain workspace
 
 - [ ] Step 1: List current workspace items from the SupplyChain Dev workspace.
 - [ ] Step 2: Confirm whether a v10 processing Warehouse already exists.
-- [ ] Step 3: If it does not exist, create `SupplyChain_Processing_Warehouse_v10` as a new Warehouse.
+- [ ] Step 3: If it does not exist, create `SupplyChain_Processing_Warehouse` as a new Warehouse.
 - [ ] Step 4: Confirm whether a v10 Gold Warehouse already exists.
-- [ ] Step 5: If it does not exist, create `SupplyChain_Gold_Warehouse_v10` as a new Warehouse.
+- [ ] Step 5: If it does not exist, create `SupplyChain_Gold_Warehouse` as a new Warehouse.
 - [ ] Step 6: Do not rename `Enterprise_Lakehouse` yet. Register it as logical role `Enterprise_Access_Lakehouse` in metadata.
 - [ ] Step 7: Record Warehouse IDs, SQL endpoints, and workspace IDs in the build run folder.
 - [ ] Step 8: Do not create EnterpriseData Silver objects in this phase unless approval exists.
@@ -237,7 +242,7 @@ SupplyChain Dev / approved Enterprise_SupplyChain workspace
 
 **Schemas:**
 
-- Create in `SupplyChain_Processing_Warehouse_v10`: `Meta`
+- Create in `SupplyChain_Processing_Warehouse`: `Meta`
 
 **Tables / views to create:**
 
@@ -317,7 +322,9 @@ GoldPublish
 - [ ] Step 3: Load `Meta.ObjectClassification` from `12_v10_object_classification_mapping.md`.
 - [ ] Step 4: Load `Meta.AssetRegistryV10` from the v9 readiness export, not by querying mutable live objects during initial design.
 - [ ] Step 5: Set direct-read Bronze candidates to `canonical_layer = LogicalBronze` and `access_mode = DirectShortcut`.
-- [ ] Step 6: Set EDW supplement objects to `canonical_layer = Staging` and `access_mode = EDWSupplement`.
+- [ ] Step 6: Set all four EDW supplement objects to `canonical_layer = Staging` and `access_mode = EDWSupplement`.
+- [ ] Step 6a: Mark `brz_saleshistory_afi__invoicedetail` and `ref_product` as `edw_exit_status = ExitCandidate`.
+- [ ] Step 6b: Mark `brz_saleshistory_afi__invoiceheader` and `brz_supplychain_enh_1__demandforecastsnapshotdaily` as `edw_exit_status = NotReady`.
 - [ ] Step 7: Set domain Silver objects to `canonical_layer = DomainSilver` and `access_mode = WarehouseTransform`.
 - [ ] Step 8: Set Gold objects to `canonical_layer = Gold` and `access_mode = GoldPublish`.
 - [ ] Step 9: Mark reusable/reference candidates as `approval_status = NeedsOwnerDecision`.
@@ -343,6 +350,11 @@ GoldPublish
 
 ```text
 If access_mode = EDWSupplement
+and edw_exit_status = ExitCandidate
+and reconciliation_status != Passed
+  -> use Staging and run dual-read validation
+
+Else if access_mode = EDWSupplement
   -> use Staging
 
 Else if source_contract_status != Stable
@@ -365,10 +377,12 @@ Else if canonical_layer in DomainSilver, Gold
 - [ ] Step 3: Add `resolved_source_reference` output column.
 - [ ] Step 4: Add `resolved_target_reference` output column.
 - [ ] Step 5: Test the four direct CODIS source objects resolve as `DirectShortcut`.
-- [ ] Step 6: Test the three EDW-backed Bronze objects resolve as `EDWSupplement`.
-- [ ] Step 7: Test `ref_product` remains exception/owner decision until approval.
-- [ ] Step 8: Test all eight Silver objects resolve as `WarehouseTransform`.
-- [ ] Step 9: Test both Gold objects resolve as `GoldPublish`.
+- [ ] Step 6: Test all four EDW-backed objects resolve as `EDWSupplement` for initial build.
+- [ ] Step 7: Test `brz_saleshistory_afi__invoicedetail` and `ref_product` expose `edw_exit_status = ExitCandidate` but do not cut over without validation.
+- [ ] Step 8: Test `brz_saleshistory_afi__invoiceheader` and `brz_supplychain_enh_1__demandforecastsnapshotdaily` expose `edw_exit_status = NotReady`.
+- [ ] Step 9: Test `ref_product` also remains owner-decision gated until Bob/Rakesh approval.
+- [ ] Step 10: Test all eight Silver objects resolve as `WarehouseTransform`.
+- [ ] Step 11: Test both Gold objects resolve as `GoldPublish`.
 
 **Exit gate:**
 
@@ -393,7 +407,7 @@ Else if canonical_layer in DomainSilver, Gold
 
 **Steps:**
 
-- [ ] Step 1: Create `Staging` schema in `SupplyChain_Processing_Warehouse_v10`.
+- [ ] Step 1: Create `Staging` schema in `SupplyChain_Processing_Warehouse`.
 - [ ] Step 2: Create only EDW supplement / exception tables in `Staging`.
 - [ ] Step 3: Do not recreate all v9 Bronze tables in `Staging`.
 - [ ] Step 4: Add source contract checks before loading each staged table.
@@ -503,7 +517,7 @@ Else if canonical_layer in DomainSilver, Gold
 
 **Create:**
 
-- Warehouse: `SupplyChain_Gold_Warehouse_v10`
+- Warehouse: `SupplyChain_Gold_Warehouse`
 - Schema: `ForecastAccuracy`
 - Physical tables:
   - `ForecastAccuracy.FactForecastActual`
@@ -942,6 +956,8 @@ Rollback path recorded
 - Compatibility views no longer used.
 - Deprecated docs replaced by v10 runbook.
 
+Detailed candidate list: `02_Architect_v10_May/16_v10_readiness_scorecard_and_v9_cleanup.md`.
+
 **Steps:**
 
 - [ ] Step 1: Wait through approved rollback period.
@@ -959,12 +975,18 @@ Rollback path recorded
 
 ### 6.1 EDW supplement / staging exceptions
 
-| Current object | v10 target | Action |
-|---|---|---|
-| `bronze.brz_saleshistory_afi__invoicedetail` | `Staging` | Keep persisted staging until source SLA/coverage/grain/performance approved |
-| `bronze.brz_saleshistory_afi__invoiceheader` | `Staging` | Keep persisted staging until source SLA/coverage/grain/performance approved |
-| `bronze.brz_supplychain_enh_1__demandforecastsnapshotdaily` | `Staging` | Keep persisted staging until source SLA/coverage/grain/performance approved |
-| `bronze.ref_product` | `ReferenceMaster` or EnterpriseData | Keep exception/owner decision because it is EDW-backed today |
+| Current object | v10 target | EDW exit status | Action |
+|---|---|---|---|
+| `bronze.brz_saleshistory_afi__invoicedetail` | `Staging` initially, then direct shortcut if approved | `ExitCandidate` | Keep persisted fallback; run dual-read validation before cutover |
+| `bronze.brz_saleshistory_afi__invoiceheader` | `Staging` | `NotReady` | Keep persisted staging until date coverage/SLA passes |
+| `bronze.brz_supplychain_enh_1__demandforecastsnapshotdaily` | `Staging` | `NotReady` | Keep persisted staging; validate grain and snapshot coverage before any cutover |
+| `bronze.ref_product` | `ReferenceMaster` or EnterpriseData | `ExitCandidate` + owner decision | Keep persisted fallback; validate source and get owner approval |
+
+Detailed exit runbook:
+
+- `docs/decisions/ADR-002-edw-supplement-exit-strategy.md`
+- `02_Architect_v10_May/15_v10_edw_supplement_exit_strategy.md`
+- `02_Architect_v10_May/16_v10_readiness_scorecard_and_v9_cleanup.md`
 
 ### 6.2 Logical Bronze direct-read candidates
 
@@ -1029,6 +1051,7 @@ Status: ready to start v10 side-by-side build planning and non-destructive scaff
 Status: not ready for production cutover.
 Status: not ready to remove BronzeMirror/Staging.
 Status: not ready to move EnterpriseData Silver objects without sign-off.
+Readiness score: 88/100 for documentation and side-by-side planning; not a production cutover score.
 ```
 
 Recommended first engineering unit:

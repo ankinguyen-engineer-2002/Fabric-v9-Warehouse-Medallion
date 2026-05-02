@@ -1,693 +1,557 @@
-# Supply Chain v10 Hybrid Medallion Architecture
-### Microsoft Fabric · OneLake Shortcuts · Warehouse-native T-SQL · Direct Lake · Bob/Rakesh-aligned
+# Supply Chain Forecast Accuracy — Hybrid Medallion Architecture
 
-This repository now contains the architecture transition from **v9 Warehouse-native Medallion** to **v10 Hybrid Medallion** for Supply Chain analytics on Microsoft Fabric.
+### Microsoft Fabric · OneLake Shortcuts · Warehouse-native T-SQL · Direct Lake · Metadata-driven
 
-The v10 design is not a rewrite. It is a controlled refactor that preserves the strongest v9 operating model while aligning the physical architecture with Fabric medallion guidance and the Enterprise Data Warehouse standards preferred by Bob/Rakesh.
+A production-ready **enterprise data warehouse** template on Microsoft Fabric using **pure T-SQL stored procedures**, metadata-driven orchestration, and a hybrid medallion pattern with dedicated Gold serving boundary.
 
-Current build decision:
-
-```text
-Ready for v10 side-by-side build planning and non-destructive scaffolding.
-Not ready for production cutover.
-Not ready to remove Staging / BronzeMirror.
-Not ready to move EnterpriseData Silver objects without approval.
-```
+**[Live Lineage Explorer](https://vn-fabric-lineage.streamlit.app)** — Interactive data lineage visualization
 
 ---
 
-## Table Of Contents
+## Table of Contents
 
-### Architecture
-1. [Executive Summary](#executive-summary)
-2. [Architecture Diagram](#architecture-diagram)
-3. [Why v10 Exists](#why-v10-exists)
-4. [Target Physical Items](#target-physical-items)
-5. [Medallion Layer Interpretation](#medallion-layer-interpretation)
-6. [Control Plane](#control-plane)
-7. [Short-Term vs Long-Term Target](#short-term-vs-long-term-target)
+### Architecture & Design
+1. [Architecture Overview](#architecture-overview) — 3-layer medallion, Fabric items, data flow
+2. [Medallion Layer Detail](#medallion-layer-detail) — Bronze (logical), Silver (domain schemas), Gold (dedicated warehouse)
+3. [Pipeline Architecture](#pipeline-architecture) — 7 pipelines, multi-mart, DAG wave orchestration
+4. [Generic SP Architecture](#generic-sp-architecture) — 8 load patterns, 1 SP for all tables
+5. [Feature Status](#feature-status) — All capabilities: active, seeded, blocked
 
-### Build Plan
-8. [Implementation Status](#implementation-status)
-9. [What To Create, Keep, Defer, And Avoid](#what-to-create-keep-defer-and-avoid)
-10. [Step-By-Step Build Order](#step-by-step-build-order)
-11. [Object Mapping Summary](#object-mapping-summary)
-12. [Validation Gates](#validation-gates)
+### Operations & Usage
+6. [Control Plane](#control-plane) — Registry, DQ, lineage, DAG, smart skip, cron, timezone
+7. [Adding a New Table](#adding-a-new-table) — Quick-start for DA/DE
+8. [Data Quality Gates](#data-quality-gates) — 54 rules, severity-based gating
+9. [Scheduling & Smart Skip](#scheduling--smart-skip) — Cron expressions, frequency-aware skip
 
-### Governance
-13. [Bob/Rakesh Alignment](#bobrakesh-alignment)
-14. [Power BI Direct Lake Rule](#power-bi-direct-lake-rule)
-15. [TableDictionary Strategy](#tabledictionary-strategy)
-16. [Security And Approval Model](#security-and-approval-model)
+### Scale & Enterprise
+10. [Multi Data Mart Scale](#multi-data-mart-scale) — N projects parallel, cross-project dependencies
+11. [Enterprise Compatibility](#enterprise-compatibility) — Bob/Rakesh standards, TableDictionary adapter
+12. [EDW Supplement Strategy](#edw-supplement-strategy) — Exit candidates, fallback retention
+13. [Onboarding Guide](#onboarding-guide) — First 30 minutes for new team members
 
 ### Reference
-17. [Repository Layout](#repository-layout)
-18. [Diagram Gallery](#diagram-gallery)
-19. [Documentation Index](#documentation-index)
-20. [Official Sources](#official-sources)
+14. [Fabric Warehouse Constraints](#fabric-warehouse-constraints) — Known limitations + workarounds
+15. [Tech Stack](#tech-stack) — All technologies used
+16. [Data Parity](#data-parity) — v10 vs v9 verification
+17. [Connection Details](#connection-details) — Warehouse IDs, pipeline IDs, tokens
+18. [Documentation Index](#documentation-index) — All docs with links
 
 ---
 
-## Executive Summary
+## Architecture Overview
 
-v9 implemented Bronze, Silver, Gold, and Meta as schemas inside one Supply Chain Warehouse. That worked operationally because it kept the whole framework Warehouse-native and metadata-driven, but it did not fully match the standard Fabric medallion pattern expected by the US DE team.
+![Architecture Overview](./02_Architect_v10_May/mermaid/render_check/20_architecture_overview.svg)
 
-v10 changes the architecture interpretation:
+### 3-Layer Medallion Mapping
 
-```text
-EnterpriseData source products
-  -> Enterprise Lakehouse shortcuts as logical Bronze
-  -> optional Staging only when required
-  -> Supply Chain domain Silver process schemas
-  -> dedicated Supply Chain Gold Warehouse
-  -> Direct Lake semantic model
+| Layer | Fabric Item | Role | Objects |
+|---|---|---|---|
+| **Bronze** | `Enterprise_Lakehouse` | Logical access via OneLake shortcuts | Wholesale_Codis_AFI, MasterData_DW, Customers, SupplyChain_DW |
+| | `SupplyChain_Lakehouse` | EDW supplement feeds (4 dataflows) | InvoiceDetail, InvoiceHeader, DemandForecast, Product |
+| **Silver** | `SupplyChain_Processing_Warehouse` | Domain processing + control plane | 6 schemas, 22 data tables, 27 views, 13 SPs, 3 functions, 20 meta tables |
+| **Gold** | `SupplyChain_Gold_Warehouse` | Dedicated serving boundary for Direct Lake | 1 schema, 2 physical tables, 2 views |
+
+### Warehouse Structure
+
+```
+SupplyChain_Processing_Warehouse/
+├── Staging/                    EDW supplement (exception-only persistence)
+│   ├── Tables/    InvoiceDetailEdw, InvoiceHeaderEdw, ...       (4)
+│   ├── Views/     vw_Codatan, vw_Comast, vw_Extord, vw_Extorit (4)
+│   └── SPs/       usp_RefreshEdwTables                          (1)
+│
+├── ReferenceMaster/            Domain reference data
+│   ├── Tables/    Calendar, ItemMaster, CustomerAccountGroup, ...  (10)
+│   └── Views/     vw_Calendar, vw_ItemMaster, ...                  (11)
+│
+├── SalesHistory/               Domain Silver — invoice + demand
+│   ├── Tables/    InvoiceDetailLineLevel, InvoiceWeekly, ...      (4)
+│   └── Views/     vw_InvoiceDetailLineLevel, ...                   (4)
+│
+├── ForecastHistory/            Domain Silver — forecast + naive
+│   ├── Tables/    ForecastDemandMonthly, NaiveForecastMonthly     (2)
+│   └── Views/     vw_ForecastDemandMonthly, ...                    (2)
+│
+├── OpenOrderHistory/           Domain Silver — open orders
+│   ├── Tables/    OpenOrderLineLevel, OpenOrderMonthly            (2)
+│   └── Views/     vw_OpenOrderLineLevel, vw_OpenOrderMonthly      (2)
+│
+└── Meta/                       Control plane
+    ├── Tables/    AssetRegistryV10, DQRule, LineageEdge, ...      (20)
+    ├── Views/     vw_sp_registry, vw_TableDictionary, ...          (5)
+    ├── SPs/       usp_GenericLoad, usp_LogRun, ...                (12)
+    └── Functions/ ufn_utc_to_cst, ufn_should_run, ufn_cron_is_due (3)
+
+SupplyChain_Gold_Warehouse/
+└── ForecastAccuracy/           Gold serving — Direct Lake ready
+    ├── Tables/    FactForecastActual (47M), FactForecastKpi (36M) (2)
+    └── Views/     vw_FactForecastActual, vw_FactForecastKpi       (2)
 ```
 
-Core decisions:
-
-- [Verified] The shortcut-backed Enterprise Lakehouse is treated as the **logical Bronze** layer.
-- [Verified] Local Warehouse `bronze` is no longer the canonical Bronze layer in the target architecture.
-- [Verified] `Staging` / `BronzeMirror` remains only for exception cases such as EDW supplement, unstable sources, snapshot consistency, replay/debug, or performance reasons.
-- [Verified] Domain-specific Supply Chain transformations stay in Supply Chain-owned processing schemas unless Bob/Rakesh approve promotion into EnterpriseData.
-- [Verified] Gold becomes a dedicated Warehouse boundary for business-ready serving.
-- [Verified] Power BI Direct Lake should consume physical Gold tables by default, not non-materialized SQL views.
-- [Verified] v9 control-plane strengths remain mandatory: registry, generic runner, mart routing, smart skip, DAG, DQ, lineage, audit, finalizer, TableDictionary adapter, and semantic refresh.
+**Grand Total: 90 objects across 2 warehouses** (42 tables, 28 views, 13 SPs, 3 functions in Processing + 2 tables, 2 views in Gold)
 
 ---
 
-## Architecture Diagram
+## Medallion Layer Detail
 
-![v10 main architecture](./02_Architect_v10_May/mermaid/render_check/02_main_architecture.svg)
+### Bronze — Logical Access Layer
 
-Text view:
+Bronze is **logical, not physical**. Source data is accessed through OneLake shortcuts and Lakehouse tables — no mandatory local copy.
 
-```text
-Enterprise_Data workspace
-  -> upstream source products
-  -> enterprise reusable / conformed Silver only after approval
-
-SupplyChain Dev / Enterprise_SupplyChain workspace
-  -> Enterprise_Access_Lakehouse
-       Logical Bronze through OneLake shortcuts
-
-  -> SupplyChain_Processing_Warehouse_v10
-       Meta control plane
-       Staging exception mirrors
-       ReferenceMaster
-       SalesHistory
-       ForecastHistory
-       OpenOrderHistory
-
-  -> SupplyChain_Gold_Warehouse_v10
-       ForecastAccuracy physical Gold tables
-
-  -> SupplyChain semantic model
-       Direct Lake over Gold physical tables
-```
-
----
-
-## Why v10 Exists
-
-Bob's feedback identified four main architecture concerns:
-
-| Concern | v9 behavior | v10 answer |
+| Source | Access Method | Tables |
 |---|---|---|
-| Bronze duplication | Source Lakehouse data was copied into Warehouse `bronze` | Treat shortcut-backed Enterprise Lakehouse as logical Bronze; stage only exceptions |
-| Medallion as schemas | Bronze/Silver/Gold were schemas inside one Warehouse | Split logical/physical responsibilities across access, processing, Gold serving |
-| Silver placement | Silver was inside SupplyChain Warehouse | Keep domain Silver locally; promote only conformed/reusable Silver to EnterpriseData |
-| Gold serving | Gold was a schema in SupplyChain Warehouse | Create dedicated SupplyChain Gold Warehouse for BI/Direct Lake |
+| Enterprise_Lakehouse shortcuts | Direct read via 3-part naming | Codis (codatan, COMAST, EXTORD, EXTORIT), MasterData, Customers |
+| SupplyChain_Lakehouse EDW supplement | CTAS into `Staging` schema | InvoiceDetail, InvoiceHeader, DemandForecast, Product |
+| SupplyChain_Lakehouse reference | CTAS into `ReferenceMaster` | ForecastCycle |
 
-The critical point: v10 does **not** blindly remove staging. Staging remains a controlled operational pattern because current v9 evidence shows EDW supplement and source stability exceptions still exist.
+**Rule**: Staging is exception-only. Only stage when source SLA is unstable, snapshot consistency is required, replay/debug is needed, or EDW supplement is active.
+
+### Silver — Domain Process Schemas
+
+Silver uses **PascalCase domain schemas** instead of a generic `silver` schema:
+
+| Schema | Tables | Largest Table | DAG Wave |
+|---|---|---|---|
+| `SalesHistory` | InvoiceDetailLineLevel (88M), InvoiceWeekly (37M), ActualDemandMonthly (2.6M), ActualDemandWeekly (7.8M) | 88M | 0, 1 |
+| `ForecastHistory` | ForecastDemandMonthly (42M), NaiveForecastMonthly (2M) | 42M | 0, 2 |
+| `OpenOrderHistory` | OpenOrderLineLevel (193K), OpenOrderMonthly (80K) | 193K | 0, 1 |
+
+**Pattern**: Each table has a paired `VIEW` that defines the transformation logic. `Meta.usp_GenericLoad` reads the view and executes `DROP TABLE IF EXISTS` + `CREATE TABLE AS SELECT`.
+
+### Gold — Dedicated Serving Warehouse
+
+Gold is a **separate Fabric Warehouse** (`SupplyChain_Gold_Warehouse`). Direct Lake semantic models should read from these physical tables, not from SQL views.
+
+| Table | Rows | Source |
+|---|---:|---|
+| `ForecastAccuracy.FactForecastActual` | 47,101,597 | ActualDemand + ForecastDemand + NaiveForecast (UNION ALL) |
+| `ForecastAccuracy.FactForecastKpi` | 36,395,948 | Forecast vs Actual error metrics (spine CROSS JOIN horizons) |
 
 ---
 
-## Target Physical Items
+## Pipeline Architecture
 
-### SupplyChain Workspace
+![Pipeline Flow](./02_Architect_v10_May/mermaid/render_check/21_pipeline_flow.svg)
 
-| Fabric item | Target role | Notes |
+### 7 Pipelines
+
+| Pipeline | Role | Key Activities |
 |---|---|---|
-| `Enterprise_Access_Lakehouse` | Logical Bronze access layer | Current physical item may be `Enterprise_Lakehouse`; rename is deferred until approval |
-| `SupplyChain_Processing_Warehouse_v10` | Domain processing and control plane | Holds `Meta`, `Staging`, `ReferenceMaster`, `SalesHistory`, `ForecastHistory`, `OpenOrderHistory` |
-| `SupplyChain_Gold_Warehouse_v10` | Gold serving boundary | Holds physical Gold tables for semantic model consumption |
-| Supply Chain semantic model | Power BI semantic contract | Direct Lake over physical Gold tables |
+| `pl_sc_master` | Master orchestrator | log_start → Lookup projects → ForEach → finalize |
+| `pl_sc_mart` | Per-project mart | invoke staging → invoke silver → invoke gold |
+| `pl_sc_staging` | Staging + REF load | EDW refresh (155M) → Lookup REF + smart skip → ForEach batch=6 |
+| `pl_sc_silver` | Silver DAG dispatch | compute waves → Lookup waves → ForEach wave SEQUENTIAL |
+| `pl_sc_silver_wave` | Single wave executor | Lookup SPs for wave → ForEach batch=8 PARALLEL |
+| `pl_sc_gold` | Gold publish | CTAS FactForecastActual → CTAS FactForecastKpi (cross-DB) |
+| `pl_dq_check` | DQ gate | Lookup active rules → ForEach batch=5 → usp_CheckDqSingle |
 
-### EnterpriseData Workspace
+### Multi-Mart Flow
 
-| Fabric item | Target role | Notes |
-|---|---|---|
-| Upstream source products | Governed source data products | Source ownership remains EnterpriseData-side |
-| EnterpriseData `SupplyChain_Warehouse` or approved Silver item | Reusable/conformed Silver | Only for entities approved as reusable across domains |
-| Enterprise governance metadata | SLA, schema contracts, dictionary standards | Requires Bob/Rakesh or assigned owner approval |
+```
+pl_sc_master
+  ├─ log_start (Meta.usp_LogPipelineRun)
+  ├─ Lookup DISTINCT project FROM Meta.AssetRegistryV10
+  ├─ ForEach project (batch=10, parallel)
+  │    └─ pl_sc_mart (project_name = @item().project)
+  │         ├─ pl_sc_staging (EDW refresh + REF load)
+  │         ├─ pl_sc_silver (3 DAG waves → pl_sc_silver_wave)
+  │         └─ pl_sc_gold (cross-DB CTAS to Gold Warehouse)
+  └─ finalize (rebuild lineage + log summary)
+```
+
+### Pipeline Run Performance
+
+| Metric | Value |
+|---|---|
+| Full end-to-end runtime | **~31 minutes** |
+| Staging refresh | ~6 min (155M rows EDW CTAS) |
+| Silver wave 0 | ~8 min (88M + 42M + 193K parallel) |
+| Silver wave 1 | ~4 min (4 tables parallel) |
+| Silver wave 2 | ~6 min (NaiveForecast) |
+| Gold publish | ~7 min (47M + 36M cross-DB CTAS) |
+| Schedule | Daily 2:00 AM UTC+7 (auto-trigger) |
 
 ---
 
-## Medallion Layer Interpretation
+## Generic SP Architecture
 
-### Bronze
+`Meta.usp_GenericLoad` handles all table loads with a single generic SP. The load pattern is determined by the `load_type` column in `Meta.AssetRegistryV10`.
 
-[Verified] In v10, Bronze is logical and source-aligned:
+| Load Pattern | When To Use | How It Works |
+|---|---|---|
+| `overwrite` | Full refresh (default) | DROP TABLE + CTAS from view |
+| `incremental` | Append new rows by watermark | INSERT WHERE watermark > last value |
+| `upsert` | Update existing + insert new | DELETE matching PKs + INSERT |
+| `datekey` | Replace today's partition | DELETE today + INSERT today |
+| `daterange` | Rolling window reload | DELETE N days + INSERT N days |
+| `identity` | Append by identity column | INSERT WHERE PK > MAX(PK) |
+| `cdc` | Apply CDC changes | DELETE changed PKs + INSERT |
+| `scd2` | Slowly changing dimension Type 2 | Close old versions + insert new |
 
-```text
-EnterpriseData source products
-  -> OneLake shortcut
-  -> Enterprise_Access_Lakehouse
-  -> logical Bronze
-```
+**Current deployment**: All 22 tables use `overwrite`. Other patterns are implemented and ready for tables that require them.
 
-Bronze rules:
+---
 
-- Mimic source structures.
-- Do not add significant business enhancement.
-- Prefer direct shortcut access when source contract, grain, SLA, and performance are stable.
-- Use Staging only when direct access is not safe.
+## Feature Status
 
-### Staging
-
-Staging is not canonical Bronze. It is exception-only operational persistence.
-
-Use Staging when:
-
-- Source contract or SLA is unstable.
-- Source coverage is incomplete.
-- EDW supplement remains active.
-- Snapshot consistency is required for deterministic runs.
-- Replay/debug/audit needs exact persisted input.
-- Direct shortcut read is too slow or unstable.
-- Warehouse-native DML/CTAS/persisted state is required.
-
-### Silver
-
-Silver becomes process/metric schemas, not a generic `silver` schema:
-
-```text
-SalesHistory
-ForecastHistory
-OpenOrderHistory
-ReferenceMaster
-```
-
-Silver placement rule:
-
-- Enterprise reusable/conformed Silver -> EnterpriseData after approval.
-- Supply Chain-specific forecasting/inventory/operational logic -> SupplyChain processing Warehouse.
-
-### Gold
-
-Gold becomes a dedicated serving item:
-
-```text
-SupplyChain_Gold_Warehouse_v10
-  -> ForecastAccuracy
-       -> FactForecastActual
-       -> FactForecastKpi
-```
-
-Gold rules:
-
-- Physical tables are the default semantic model source.
-- SQL views are compatibility-only unless Import/DirectQuery/fallback is intentionally accepted.
-- Gold is the only default BI serving boundary.
+| Category | Feature | Status | Evidence |
+|---|---|---|---|
+| **Core** | Generic load framework (8 patterns) | Active | `Meta.usp_GenericLoad` |
+| | Metadata-driven registry | Active | `Meta.AssetRegistryV10` (28 assets) |
+| | Run logging (UTC + CST) | Active | `Meta.usp_LogRun` with retry 3x |
+| | Pipeline logging | Active | `Meta.usp_LogPipelineRun` |
+| | Lineage auto-rebuild | Active | `Meta.usp_BuildLineage` → 52 edges |
+| | Finalizer | Active | `Meta.usp_FinalizePipeline` |
+| **DAG** | Silver DAG wave computation | Active | `Meta.usp_ComputeSilverWaves` → 3 waves |
+| | Silver wave pipeline dispatch | Active | `pl_sc_silver` → sequential ForEach |
+| | Parallel execution within wave | Active | `pl_sc_silver_wave` → batch=8 |
+| **Schedule** | Smart skip (next_run_time) | Active | Lookup SQL WHERE filter |
+| | Cron parser (5-field) | Active | `Meta.ufn_cron_is_due` |
+| | DST-aware timezone | Active | `Meta.ufn_utc_to_cst` |
+| | Daily auto-trigger | Active | Schedule 2:00 AM UTC+7 |
+| **DQ** | 54 DQ rules (4 check types) | Seeded | completeness, row_count, uniqueness, freshness |
+| | Per-rule DQ engine | Active | `Meta.usp_CheckDqSingle` |
+| | DQ pipeline (ForEach) | Active | `pl_dq_check` |
+| **Contracts** | Source contracts (674 columns) | Seeded | `Meta.SourceContract` |
+| | Reconciliation (6 rules) | Seeded | `Meta.ReconciliationRule` |
+| **Scale** | Multi-mart routing | Active | ForEach DISTINCT project |
+| | Enterprise TableDictionary adapter | Active | `Meta.vw_TableDictionary` (63 Enterprise columns) |
+| | v9 compatibility view | Active | `Meta.vw_sp_registry` |
+| **Blocked** | Alerting | Blocked | IT permissions (Mail.Send, Teams, Data Activator) |
+| | CI/CD | Blocked | Azure DevOps access not granted |
 
 ---
 
 ## Control Plane
 
-![v9 feature parity control plane](./02_Architect_v10_May/mermaid/render_check/09_v9_feature_parity_control_plane.svg)
+![Control Plane Detail](./02_Architect_v10_May/mermaid/render_check/22_control_plane_detail.svg)
 
-v10 keeps the v9 control plane as a horizontal operating layer across logical Bronze, Staging, Silver, Gold, and Semantic Model.
+### Meta Schema — 20 tables, 5 views, 13 SPs, 3 functions
 
-| Control-plane capability | v9 mechanism | v10 name | v10 action |
+| Component | Table / SP | Rows | Purpose |
+|---|---|---:|---|
+| **Asset Registry** | `Meta.AssetRegistryV10` | 28 | Canonical registry: asset, layer, access mode, physical location |
+| | `Meta.AssetAccessPolicy` | 28 | Access decision: DirectShortcut, EDWSupplement, WarehouseTransform |
+| | `Meta.ObjectClassification` | 28 | Physical classification for each asset |
+| | `Meta.SourceFeed` | 52 | Source feed metadata |
+| **Quality** | `Meta.DQRule` | 54 | DQ rules: completeness, row_count, uniqueness, freshness |
+| | `Meta.DQGateRun` | — | DQ execution results |
+| | `Meta.SourceContract` | 674 | Column-level schema contracts |
+| | `Meta.ReconciliationRule` | 6 | Source-target row count checks |
+| **Observability** | `Meta.RunLog` | 37+ | Per-table execution log (start/end UTC+CST, rows, status) |
+| | `Meta.PipelineRunLog` | 2+ | Pipeline-level audit trail |
+| | `Meta.LineageEdge` | 52 | Auto-built lineage from source_objects |
+| | `Meta.SilverDagWaveRuntime` | 8 | Computed wave assignments |
+| **Scheduling** | `Meta.ufn_should_run` | — | next_run_time check |
+| | `Meta.ufn_cron_is_due` | — | 5-field cron expression parser |
+| | `Meta.ufn_utc_to_cst` | — | DST-aware UTC → CST |
+
+---
+
+## Adding a New Table
+
+### Step 1: Register the asset
+
+```sql
+INSERT INTO Meta.AssetRegistryV10 (
+    asset_id, canonical_layer, access_mode, physical_schema, physical_object,
+    load_type, frequency, cron_expression, project, is_active,
+    source_objects, legacy_view_name
+) VALUES (
+    'newsource.new_table', 'DomainSilver', 'WarehouseTransform',
+    'SalesHistory', 'NewTable', 'overwrite', 'daily', '0 2 * * *',
+    'supplychain', 1,
+    '["Staging.InvoiceDetailEdw"]',
+    'SalesHistory.vw_NewTable'
+);
+```
+
+### Step 2: Create the view
+
+```sql
+CREATE VIEW SalesHistory.vw_NewTable AS
+SELECT col1, col2, SUM(qty) AS total_qty
+FROM Staging.InvoiceDetailEdw
+GROUP BY col1, col2;
+```
+
+### Step 3: Test
+
+```sql
+EXEC Meta.usp_GenericLoad @target_schema='SalesHistory', @target_table='NewTable';
+SELECT COUNT(*) FROM SalesHistory.NewTable;
+```
+
+The framework handles everything else: logging, watermark update, next_run_time, lineage rebuild.
+
+---
+
+## Data Quality Gates
+
+### 54 Rules Across All Layers
+
+| Layer | Rules | Check Types |
+|---|---:|---|
+| Staging | 12 | row_count, completeness, freshness |
+| ReferenceMaster | 6 | row_count, completeness |
+| DomainSilver | 23 | row_count, completeness, uniqueness, freshness |
+| Gold | 13 | row_count, completeness |
+
+### Severity Behavior
+
+| Severity | On FAIL |
+|---|---|
+| `CRITICAL` | THROW → pipeline stops |
+| `WARNING` | Log only → pipeline continues |
+
+---
+
+## Silver DAG Waves
+
+![Silver DAG Waves](./02_Architect_v10_May/mermaid/render_check/23_silver_dag_waves.svg)
+
+| Wave | Tables | Parallelism | Dependencies |
 |---|---|---|---|
-| Metadata registry | `meta.sp_registry` | Asset Registry | Extend, do not replace |
-| Generic loader | `meta.usp_generic_load` | Generic SQL Load Runner | Preserve load patterns; add access routing |
-| Load patterns | `load_type` | Load Pattern Router | Preserve overwrite, incremental, upsert, datekey, daterange, identity, CDC, SCD2 |
-| Mart routing | `project`, `pl_sc_master`, `pl_sc_mart` | Mart Routing Engine | Preserve and make Silver project-aware |
-| Smart skip | `next_run_time`, cron metadata | Smart Skip Engine | Preserve Bronze/Gold due filters; extend Silver if mixed frequency appears |
-| Silver DAG | `depends_on`, waves runtime | DAG Wave Planner | Preserve; use canonical IDs and project-aware waves |
-| DQ | `dq_rules`, `pl_dq_check` | DQ Gate Engine | Preserve; add `Off`, `WarnOnly`, `CriticalStops` mode |
-| Lineage | `source_objects`, `sp_lineage` | Lineage Builder | Add logical vs physical edge types |
-| Audit | run and pipeline logs | Run/Pipeline Audit Logger | Preserve and extend to v10 stages |
-| Finalizer | `usp_finalize_pipeline` | Finalizer | Cover staging, direct, Silver, Gold, semantic refresh |
-| TableDictionary | `vw_table_dictionary` | Enterprise Dictionary Adapter | Extend with workspace/item/access mode fields |
-| Source contracts | `schema_contracts` | Source Contract Gate | Promote from optional metadata to active preflight gate |
-| Reconciliation | planned in v9 | Source-Target Reconciliation | Build as v10 requirement |
-| Performance/cost | baseline/cost tables | Performance/Cost Monitor | Wire into finalizer or monitoring path |
-| Semantic refresh | Power BI refresh/framing | Semantic Refresh Controller | Preserve after Gold publish |
+| 0 | InvoiceDetailLineLevel, ForecastDemandMonthly, OpenOrderLineLevel | 3 parallel | None (reads from Staging/Enterprise_Lakehouse) |
+| 1 | ActualDemandMonthly, ActualDemandWeekly, InvoiceWeekly, OpenOrderMonthly | 4 parallel | Wave 0 tables |
+| 2 | NaiveForecastMonthly | 1 | ActualDemandMonthly (wave 1) |
+
+Waves are computed dynamically by `Meta.usp_ComputeSilverWaves` based on `depends_on` in the registry.
 
 ---
 
-## Short-Term vs Long-Term Target
+## Scheduling & Smart Skip
 
-![short term transition](./02_Architect_v10_May/mermaid/render_check/05_short_term_transition.svg)
+| Table Type | Frequency | Cron | Smart Skip |
+|---|---|---|---|
+| Staging (EDW) | Daily | `0 2 * * *` | next_run_time filter in Lookup SQL |
+| ReferenceMaster | Monthly | `0 2 1 * *` | Skipped if not due (verified: REF tables skipped on daily runs) |
+| Silver | Daily | `0 2 * * *` | Always runs when triggered |
+| Gold | Daily | `0 2 * * *` | Always runs when triggered |
 
-![long term target](./02_Architect_v10_May/mermaid/render_check/06_long_term_target.svg)
-
-### Short term
-
-```text
-v9 remains live
-v10 is built side-by-side
-EDW supplement stays staged
-Direct shortcut path is validated table-by-table
-Gold Warehouse is introduced
-Semantic model is validated against v10 Gold
 ```
-
-### Long term
-
-```text
-Direct shortcut access becomes the default for stable Bronze sources
-Staging remains only for approved exceptions
-Reusable Silver moves to EnterpriseData when approved
-Domain Silver remains SupplyChain-owned
-Gold Warehouse becomes the only default BI serving boundary
-v9 objects are archived only after rollback window closes
+Schedule: Daily 2:00 AM UTC+7 (SE Asia Standard Time)
+Pipeline: pl_sc_master → auto-trigger
 ```
 
 ---
 
-## Implementation Status
+## Multi Data Mart Scale
 
-| Area | Status | Evidence |
-|---|---|---|
-| v9 baseline export | Complete locally | `02_Architect_v10_May/readiness_exports/20260430_230936/`; raw exports are intentionally ignored from Git |
-| v10 architecture plan | Complete | `01_super_plan_medallion_refactor.md` |
-| Bob standards adaptation | Complete | `04_revised_bob_standards_proposal.md` |
-| v9 feature parity audit | Complete | `03_v9_feature_parity_checklist.md`, `07_v9_capability_evidence_ledger.md` |
-| Gap matrix | Complete | `08_v10_gap_matrix.md` |
-| Bob standards mapping | Complete | `09_bob_standards_mapping_matrix.md` |
-| Implementation readiness pack | Complete | `11_v10_implementation_readiness_pack.md` |
-| Object classification | Complete | `12_v10_object_classification_mapping.md` |
-| Build blueprint | Complete | `13_v10_build_blueprint_after_readiness.md` |
-| Step-by-step implementation runbook | Complete | `14_v10_step_by_step_implementation_runbook.md` |
-| Physical v10 build | Not started | Requires sign-off and non-destructive execution plan |
-| Production cutover | Not ready | Requires parallel runs, validation, approvals |
+The framework supports N data marts running in parallel. Each mart is defined by a `project` value in the registry.
+
+```
+pl_sc_master
+  └─ Lookup DISTINCT project → ["supplychain", "inventory", ...]
+     └─ ForEach project (parallel batch=10)
+        └─ pl_sc_mart(project_name)
+           └─ Only loads tables WHERE project = @project_name
+```
+
+Currently: 1 project (`supplychain`). Adding a new project requires only registry INSERT — no pipeline changes.
 
 ---
 
-## What To Create, Keep, Defer, And Avoid
+## Enterprise Compatibility
 
-### Create side-by-side
+### Bob/Rakesh Standards Alignment
 
-- `SupplyChain_Processing_Warehouse_v10`
-- `SupplyChain_Gold_Warehouse_v10`
-- v10 `Meta` schema and compatibility metadata.
-- v10 `Staging` schema for exceptions only.
-- v10 process schemas: `SalesHistory`, `ForecastHistory`, `OpenOrderHistory`, `ReferenceMaster`.
-- v10 Gold schema: `ForecastAccuracy`.
-- v10 pipeline copies.
-- v10 validation artifacts: source contracts, reconciliation, DQ gate runs, Direct Lake validation.
-
-### Keep initially
-
-- Current v9 Warehouse and pipelines.
-- Current v9 `meta.sp_registry` baseline.
-- v9 generic runner concept.
-- v9 smart skip behavior for Bronze/REF and Gold.
-- EDW supplement staging until source readiness is approved.
-- v9 lineage evidence and lineage explorer behavior.
-- Semantic refresh/framing discipline.
-
-### Defer
-
-- Physical EnterpriseData Silver moves.
-- Final naming suffix convention.
-- Physical TableDictionary sync/export.
-- Security grant changes.
-- Production semantic model/report cutover.
-- Deactivation of v9 schedules.
-- Rename of `Enterprise_Lakehouse`.
-
-### Avoid during build
-
-- No destructive delete/drop/truncate.
-- No production cutover before parity validation.
-- No full direct-only conversion without source contract and reconciliation.
-- No Power BI SQL view layer as default for strict Direct Lake.
-- No EnterpriseData object move without approval.
-
----
-
-## Step-By-Step Build Order
-
-![pipeline sequence](./02_Architect_v10_May/mermaid/render_check/07_pipeline_sequence.svg)
-
-The authoritative implementation runbook is:
-
-[v10 step-by-step implementation runbook](./02_Architect_v10_May/14_v10_step_by_step_implementation_runbook.md)
-
-Recommended order:
-
-1. Freeze v9 evidence and create build run folder.
-2. Prepare Bob/Rakesh approval pack.
-3. Create/designate v10 physical Fabric items.
-4. Create v10 metadata compatibility layer.
-5. Build access decision engine.
-6. Create exception-only Staging layer.
-7. Build logical Bronze direct-read validation path.
-8. Build Domain Silver process schemas.
-9. Classify EnterpriseData Silver candidates.
-10. Build dedicated Gold Warehouse.
-11. Create v10 pipeline copies.
-12. Make Silver DAG project-aware.
-13. Activate source contract gate.
-14. Activate source-target reconciliation.
-15. Activate explicit DQ gate modes.
-16. Extend Enterprise Dictionary Adapter.
-17. Define security matrix.
-18. Build semantic model contract.
-19. Add CI/CD and deployment guardrails.
-20. Run v9/v10 in parallel.
-21. Cut over only after approval.
-22. Decommission only after rollback window and explicit approval.
-
----
-
-## Object Mapping Summary
-
-### Staging / EDW supplement
-
-| Current object | v10 target | Decision |
-|---|---|---|
-| `bronze.brz_saleshistory_afi__invoicedetail` | `Staging` | Keep staged until source SLA/coverage/grain/performance passes |
-| `bronze.brz_saleshistory_afi__invoiceheader` | `Staging` | Keep staged until source SLA/coverage/grain/performance passes |
-| `bronze.brz_supplychain_enh_1__demandforecastsnapshotdaily` | `Staging` | Keep staged until source SLA/coverage/grain/performance passes |
-| `bronze.ref_product` | `ReferenceMaster` or EnterpriseData | Owner decision; EDW-backed today |
-
-### Logical Bronze direct-read candidates
-
-| Current object | v10 target | Decision |
-|---|---|---|
-| `bronze.brz_wholesale_codis_afi__codatan` | Enterprise Lakehouse shortcut | Direct if source contract/performance passes |
-| `bronze.brz_wholesale_codis_afi__comast` | Enterprise Lakehouse shortcut | Direct if source contract/performance passes |
-| `bronze.brz_wholesale_codis_afi__extord` | Enterprise Lakehouse shortcut | Direct if source contract/performance passes |
-| `bronze.brz_wholesale_codis_afi__extorit` | Enterprise Lakehouse shortcut | Direct if source contract/performance passes |
-
-### Domain Silver
-
-| v9 object | v10 target |
+| Standard | v10 Implementation |
 |---|---|
-| `silver.slv_invoice_detail_line_level` | `SalesHistory.InvoiceDetailLineLevel` |
-| `silver.slv_invoice_weekly` | `SalesHistory.InvoiceWeekly` |
-| `silver.slv_actual_demand_monthly` | `SalesHistory.ActualDemandMonthly` |
-| `silver.slv_actual_demand_weekly` | `SalesHistory.ActualDemandWeekly` |
-| `silver.slv_forecast_demand_monthly` | `ForecastHistory.ForecastDemandMonthly` |
-| `silver.slv_naive_forecast_monthly` | `ForecastHistory.NaiveForecastMonthly` |
-| `silver.slv_open_order_line_level` | `OpenOrderHistory.OpenOrderLineLevel` |
-| `silver.slv_open_order_monthly` | `OpenOrderHistory.OpenOrderMonthly` |
-
-### Gold serving
-
-| v9 object | v10 target |
-|---|---|
-| `gold.gld_fact_flat_forecast_actual` | `ForecastAccuracy.FactForecastActual` |
-| `gold.gld_fact_forecast_kpi` | `ForecastAccuracy.FactForecastKpi` |
-
-Full mapping:
-
-[v10 object classification mapping](./02_Architect_v10_May/12_v10_object_classification_mapping.md)
+| Bronze mimics source | OneLake shortcuts = source-aligned logical Bronze |
+| Silver PascalCase schemas | SalesHistory, ForecastHistory, OpenOrderHistory, ReferenceMaster |
+| Gold dedicated serving | Separate `SupplyChain_Gold_Warehouse` |
+| TableDictionary metadata | `Meta.vw_TableDictionary` — 63 Enterprise-compatible columns |
+| Schema security model | Workspace/item/SQL endpoint permissions (pending IT) |
 
 ---
 
-## Validation Gates
+## EDW Supplement Strategy
 
-v10 cannot cut over until these gates pass:
+4 tables still use EDW supplement (Lakehouse dataflow → Staging):
 
-| Gate | Required evidence |
-|---|---|
-| Source contract | Source schema, grain, SLA, access, and stability validated |
-| Direct vs staging | Each source classified as `DirectShortcut`, `StageRequired`, or `EDWSupplement` |
-| DQ | Critical checks pass or approved as `WarnOnly` |
-| Reconciliation | Row counts, key counts, date ranges, and KPI parity accepted |
-| Silver DAG | Project-aware wave execution works |
-| Smart skip | Due/not-due behavior preserved |
-| Lineage | Source shortcut to Gold lineage is complete |
-| TableDictionary | All managed objects appear in adapter |
-| Security | Workspace/item/SQL endpoint/semantic access model approved |
-| Direct Lake | Semantic model stays Direct Lake or fallback is explicitly accepted |
-| Parallel run | At least three successful daily runs |
-| Approval | Bob/Rakesh or assigned approver signs off |
-
----
-
-## Bob/Rakesh Alignment
-
-### Applied directly
-
-- Bronze/source-aligned objects mimic source structure.
-- Significant enhancements belong in Silver/process schemas, not Bronze.
-- Silver and Gold use Pascal Case after naming approval.
-- Schemas group related tables/views/procs by business process or metric group.
-- Gold is a clean serving boundary.
-- TableDictionary metadata is required.
-- Technical design approval is required before production development.
-
-### Adapted for Fabric
-
-| Bob standard intent | Fabric v10 interpretation |
-|---|---|
-| Source-like data should not be maintained unnecessarily in Warehouse | Use shortcuts as logical Bronze; stage only exceptions |
-| Silver schemas group related metrics/processes | Use `SalesHistory`, `ForecastHistory`, `OpenOrderHistory`, `ReferenceMaster` |
-| Gold is business-ready | Use dedicated Gold Warehouse with physical serving tables |
-| Power BI should be decoupled from physical structures | Use Gold physical tables plus semantic model contract for Direct Lake |
-| PolyBase/external table pattern | Use OneLake shortcuts plus source contracts |
-| SQL Agent alerting | Use Fabric pipeline logs, alert hooks, health dashboard/runbook |
-| ADW indexing/distribution standards | Use Fabric performance, Direct Lake, row group, and reconciliation validation |
-
-### Requires decision
-
-- Pure Pascal Case vs suffix style: `ForecastHistory` vs `ForecastHistory_ENH`.
-- Which reference/Silver entities are enterprise reusable.
-- Whether `vw_table_dictionary` is enough or physical EnterpriseData sync is required.
-- Exact security ownership.
-- Exact EDW supplement exit criteria.
-
----
-
-## Power BI Direct Lake Rule
-
-[Verified] Direct Lake is the preferred serving mode for large Fabric Gold analytics tables.
-
-v10 rule:
-
-```text
-Power BI semantic model reads Gold physical tables by default.
-SQL views are compatibility-only unless fallback/import/DirectQuery is accepted.
-```
-
-Reason:
-
-- Direct Lake works over Delta-backed Fabric data and is especially suitable for Gold analytics layers.
-- Non-materialized SQL views can cause fallback to DirectQuery or be unsupported depending on Direct Lake mode.
-- The semantic model, not a SQL view layer, should be the primary BI contract for names, relationships, measures, perspectives, and report-facing semantics.
-
----
-
-## TableDictionary Strategy
-
-v9 already built a TableDictionary adapter. v10 extends it rather than rebuilding it.
-
-Important design rule:
-
-```text
-Do not create one physical TableDictionary base table with 63 or 69 columns.
-Keep normalized control-plane tables small.
-Expose Bob/Enterprise-compatible columns through a view adapter.
-```
-
-Recommended shape:
-
-| Object | Purpose | Expected width |
+| Object | Status | Exit Condition |
 |---|---|---|
-| `Meta.AssetRegistryV10` | Core asset/control-plane metadata | Only operational fields needed by the framework |
-| `Meta.AssetGovernance` | Owner, approval, classification, security metadata | Small supplemental table |
-| `Meta.SourceContract*` | Source/schema/SLA checks | Contract-specific fields only |
-| `Meta.DQ*` / `Meta.Reconciliation*` | Quality and reconciliation results | Result-specific fields only |
-| `Meta.vw_TableDictionary` | Bob/Enterprise adapter view | 63 Enterprise-compatible columns + v9/v10 extension columns |
-| `Meta.TableDictionaryExport` | Optional physical export/sync if required | Same shape as the adapter view |
+| InvoiceDetailEdw | `ExitCandidate` | Dual-read validation + approval |
+| InvoiceHeaderEdw | `NotReady` | Date coverage/SLA must pass |
+| DemandForecastSnapshotDailyEdw | `NotReady` | Grain/snapshot coverage validation |
+| ProductEdw | `ExitCandidate` | Source validation + ownership decision |
 
-[Verified] Current v9 `meta.vw_table_dictionary` exposes **69 columns**: 63 Enterprise-compatible columns plus 6 v9 extension columns. v10 should preserve that external compatibility unless Bob/Rakesh approve a new contract.
+**Rule**: No bulk switch. Object-by-object exit per ADR-002.
 
-The v10 control-plane base tables only need these core governance inputs; the adapter view derives/maps them into the 63/69-column output:
+---
 
-```text
-workspace_name
-item_name
-schema_name
-object_name
-object_type
-canonical_layer
-access_mode
-domain_group
-project
-primary_key
-refresh_frequency
-cron_expression
-next_run_time
-source_objects
-load_type
-owner_name
-approval_status
-last_run_status
-rows_loaded
-dq_status
-source_contract_status
-security_classification
-```
+## Onboarding Guide
 
-Default:
+### First 30 Minutes
 
-```text
-Meta.vw_TableDictionary
-```
+1. **Get access**: Request Workspace Viewer role on `SupplyChain Dev` workspace
+2. **Connect**: Use SQL endpoint `7woj2wroypauvkpn72b56t46ju-...datawarehouse.fabric.microsoft.com`
+3. **Explore**: Query `Meta.vw_sp_registry` for all registered assets
+4. **Understand DAG**: Query `Meta.SilverDagWaveRuntime` for wave assignments
+5. **Check health**: Query `Meta.RunLog` for recent runs
+6. **Read docs**: Start with this README → then `02_Architect_v10_May/14_v10_step_by_step_implementation_runbook.md`
 
-Optional if Bob/Rakesh require physical EnterpriseData integration:
+### Key Queries
 
-```text
-Meta.TableDictionaryExport
-scheduled sync/export to EnterpriseData
+```sql
+-- All registered assets
+SELECT asset_id, canonical_layer, access_mode, physical_schema, physical_object, load_type, frequency
+FROM Meta.AssetRegistryV10 ORDER BY canonical_layer, asset_id;
+
+-- Recent run history
+SELECT asset_id, status, rows_loaded, start_time_utc, end_time_utc
+FROM Meta.RunLog ORDER BY start_time_utc DESC;
+
+-- Silver DAG waves
+SELECT wave_number, asset_id FROM Meta.SilverDagWaveRuntime ORDER BY wave_number;
+
+-- Lineage
+SELECT source_asset, target_asset, edge_type FROM Meta.LineageEdge ORDER BY target_asset;
 ```
 
 ---
 
-## Security And Approval Model
+## Fabric Warehouse Constraints
 
-v10 needs a Fabric-specific security matrix before production cutover.
-
-Security layers:
-
-- Workspace roles.
-- Item permissions.
-- Warehouse SQL endpoint permissions.
-- Lakehouse SQL endpoint permissions.
-- OneLake data access.
-- Semantic model permissions.
-- RLS/OLS if required.
-- Fixed identity if required.
-
-Approval gates:
-
-- Architecture and naming approval.
-- Source contract and SLA approval.
-- EnterpriseData ownership approval.
-- Security owner approval.
-- Semantic model cutover approval.
-- Decommission approval.
+| Constraint | Workaround |
+|---|---|
+| No DEFAULT | Set in SP |
+| No IDENTITY | ROW_NUMBER() or MAX(id)+1 |
+| ForEach inside ForEach | Parent-child pipeline (pl_sc_silver → pl_sc_silver_wave) |
+| Warehouse Lookup requires Lakehouse source | LakehouseTableSource + cross-DB 3-part naming |
+| Concurrent writes snapshot conflict | SP retry 3x + reduced batch + pipeline retry |
+| BIT type unstable | Use INT (0/1) |
+| datetime in CTAS | CAST(GETUTCDATE() AS DATETIME2(6)) |
+| CAST AS NVARCHAR no length | Always specify length |
+| Table-valued functions | Not supported — use scalar functions |
+| Decimal date columns (CODIS) | CAST(CAST(col AS BIGINT) AS VARCHAR) → TRY_CONVERT(DATE, ...) |
 
 ---
 
-## Repository Layout
+## Tech Stack
 
-```text
-.
-├── 01_Architect_v9_April/
-│   ├── README.md
-│   ├── 01_sc_forecast/
-│   ├── diagrams/
-│   ├── docs/
-│   ├── lineage_explorer/
-│   └── scripts/
-│
-├── 02_Architect_v10_May/
-│   ├── 01_super_plan_medallion_refactor.md
-│   ├── 02_architecture_blueprint_mermaid.md
-│   ├── 03_v9_feature_parity_checklist.md
-│   ├── 04_revised_bob_standards_proposal.md
-│   ├── 05_deep_audit_protocol.md
-│   ├── 06_v9_source_inventory_and_chronology.md
-│   ├── 07_v9_capability_evidence_ledger.md
-│   ├── 08_v10_gap_matrix.md
-│   ├── 09_bob_standards_mapping_matrix.md
-│   ├── 10_final_v10_amendment_plan.md
-│   ├── 11_v10_implementation_readiness_pack.md
-│   ├── 12_v10_object_classification_mapping.md
-│   ├── 13_v10_build_blueprint_after_readiness.md
-│   ├── 14_v10_step_by_step_implementation_runbook.md
-│   ├── SQL Server Data Warehouse Standards.docx   (local-only, ignored from Git)
-│   ├── mermaid/
-│   ├── readiness_exports/                         (local-only raw evidence, ignored except README)
-│   └── tools/
-│
-├── docs/
-│   └── decisions/
-│
-└── README.md
+| Category | Technology |
+|---|---|
+| Platform | Microsoft Fabric F256 |
+| Compute | Fabric Warehouse (Serverless T-SQL) |
+| Storage | OneLake (Delta Lake) |
+| Language | Pure T-SQL (no PySpark, no Notebooks) |
+| Orchestration | Fabric Data Pipelines |
+| BI | Power BI Direct Lake |
+| Source Access | OneLake Shortcuts + Lakehouse Dataflows |
+| Scheduling | Fabric Pipeline Schedule (cron) |
+| DQ | Custom T-SQL DQ engine (4 check types) |
+| Lineage | Auto-built from metadata (52 edges) |
+| API | Fabric REST API + Power BI REST API |
+| Auth | Azure AD (az login) |
+| CI/CD | GitHub + Fabric REST API (manual deploy) |
+| Monitoring | Streamlit lineage app (auto-refresh) |
+
+---
+
+## Data Parity
+
+### v10 vs v9 Verification (2026-05-02)
+
+| Category | Metric | v9 | v10 | Status |
+|---|---|---:|---:|---|
+| Registry | Asset entries | 28 | 28 | EXACT |
+| Quality | DQ rules | 54 | 54 | EXACT |
+| Lineage | Edges | 52 | 52 | EXACT |
+| DAG | Silver waves | 8 | 8 | EXACT |
+| Contracts | Source columns | 674 | 674 | EXACT |
+| Staging | InvoiceDetail | 88,169,954 | 88,277,086 | ~YES |
+| Staging | DemandForecast | 42,406,201 | 42,406,201 | EXACT |
+| Silver | InvoiceDetailLineLevel | 88,169,954 | 88,277,089 | ~YES |
+| Gold | FactForecastActual | 40,550,760 | 47,101,597 | +16% (newer data) |
+
+---
+
+## Connection Details
+
+| Resource | ID |
+|---|---|
+| Workspace DEV | `c8d9fc83-18b6-4e1d-8264-0b49eed36fe0` |
+| Processing Warehouse | `c0262cef-b8a7-495f-bccc-53b098c7948c` |
+| Gold Warehouse | `98e2a911-5af9-442e-9cc8-5d8dadb8b762` |
+| SQL Endpoint | `7woj2wroypauvkpn72b56t46ju-qp6ntsfwdaou5atebne65u3p4a.datawarehouse.fabric.microsoft.com` |
+
+### Pipeline IDs
+
+| Pipeline | ID |
+|---|---|
+| `pl_sc_master` | `f36f56b8-5668-4a0c-b991-2c28302f1710` |
+| `pl_sc_mart` | `20db5725-80e3-4081-9ef5-01700acdf3b3` |
+| `pl_sc_staging` | `10221fb2-6e30-4911-9d95-d8dd67440d84` |
+| `pl_sc_silver` | `7dc6ecda-56cc-4797-893c-1c502863323f` |
+| `pl_sc_silver_wave` | `797b1a02-f973-4584-bd27-bb0151549d4b` |
+| `pl_sc_gold` | `50ff6263-659d-4b09-9e45-b42a3434e093` |
+| `pl_dq_check` | `3c7c61f6-c184-41e5-8309-f9ac3260d38d` |
+
+### Token Commands
+
+```bash
+# Warehouse (pyodbc / sqlcmd)
+az account get-access-token --resource https://database.windows.net/ --query accessToken -o tsv
+
+# Fabric REST API
+az account get-access-token --resource https://api.fabric.microsoft.com --query accessToken -o tsv
+
+# Power BI API
+az account get-access-token --resource https://analysis.windows.net/powerbi/api --query accessToken -o tsv
 ```
-
----
-
-## Diagram Gallery
-
-| Diagram | Image | Mermaid source |
-|---|---|---|
-| Target flow | [SVG](./02_Architect_v10_May/mermaid/render_check/01_super_plan_target_flow.svg) | [MMD](./02_Architect_v10_May/mermaid/01_super_plan_target_flow.mmd) |
-| Main architecture | [SVG](./02_Architect_v10_May/mermaid/render_check/02_main_architecture.svg) | [MMD](./02_Architect_v10_May/mermaid/02_main_architecture.mmd) |
-| Control plane | [SVG](./02_Architect_v10_May/mermaid/render_check/03_control_plane.svg) | [MMD](./02_Architect_v10_May/mermaid/03_control_plane.mmd) |
-| Direct vs staging decision | [SVG](./02_Architect_v10_May/mermaid/render_check/04_direct_vs_staging_decision.svg) | [MMD](./02_Architect_v10_May/mermaid/04_direct_vs_staging_decision.mmd) |
-| Short-term transition | [SVG](./02_Architect_v10_May/mermaid/render_check/05_short_term_transition.svg) | [MMD](./02_Architect_v10_May/mermaid/05_short_term_transition.mmd) |
-| Long-term target | [SVG](./02_Architect_v10_May/mermaid/render_check/06_long_term_target.svg) | [MMD](./02_Architect_v10_May/mermaid/06_long_term_target.mmd) |
-| Pipeline sequence | [SVG](./02_Architect_v10_May/mermaid/render_check/07_pipeline_sequence.svg) | [MMD](./02_Architect_v10_May/mermaid/07_pipeline_sequence.mmd) |
-| Mart schedule and smart skip | [SVG](./02_Architect_v10_May/mermaid/render_check/08_mart_schedule_smart_skip.svg) | [MMD](./02_Architect_v10_May/mermaid/08_mart_schedule_smart_skip.mmd) |
-| v9 feature parity | [SVG](./02_Architect_v10_May/mermaid/render_check/09_v9_feature_parity_control_plane.svg) | [MMD](./02_Architect_v10_May/mermaid/09_v9_feature_parity_control_plane.mmd) |
-| Bob standards overlay | [SVG](./02_Architect_v10_May/mermaid/render_check/10_bob_standards_overlay.svg) | [MMD](./02_Architect_v10_May/mermaid/10_bob_standards_overlay.mmd) |
 
 ---
 
 ## Documentation Index
 
-| File | Purpose |
+### Architecture Docs (`02_Architect_v10_May/`)
+
+| # | Document | Purpose |
+|---|---|---|
+| 01 | `01_super_plan_medallion_refactor.md` | Master refactor plan (v9 → v10) |
+| 02 | `02_architecture_blueprint_mermaid.md` | Mermaid architecture diagrams |
+| 03 | `03_v9_feature_parity_checklist.md` | v9 feature parity verification |
+| 04 | `04_revised_bob_standards_proposal.md` | Bob/Rakesh standards adaptation |
+| 05 | `05_deep_audit_protocol.md` | Audit protocol for v9→v10 migration |
+| 06 | `06_v9_source_inventory_and_chronology.md` | v9 source inventory |
+| 07 | `07_v9_capability_evidence_ledger.md` | v9 capability evidence |
+| 08 | `08_v10_gap_matrix.md` | v10 gap analysis |
+| 09 | `09_bob_standards_mapping_matrix.md` | Enterprise standards mapping |
+| 10 | `10_final_v10_amendment_plan.md` | Final amendment plan |
+| 11 | `11_v10_implementation_readiness_pack.md` | Readiness verification |
+| 12 | `12_v10_object_classification_mapping.md` | Object classification |
+| 13 | `13_v10_build_blueprint_after_readiness.md` | Build blueprint |
+| 14 | `14_v10_step_by_step_implementation_runbook.md` | Step-by-step runbook (20 phases) |
+| 15 | `15_v10_edw_supplement_exit_strategy.md` | EDW exit strategy |
+| 16 | `16_v10_readiness_scorecard_and_v9_cleanup.md` | Readiness score: 88/100 |
+
+### Architecture Diagrams (`02_Architect_v10_May/mermaid/`)
+
+| Diagram | File |
 |---|---|
-| [v10 super plan](./02_Architect_v10_May/01_super_plan_medallion_refactor.md) | Overall Hybrid Medallion architecture direction |
-| [architecture blueprint](./02_Architect_v10_May/02_architecture_blueprint_mermaid.md) | Detailed architecture narrative and diagram references |
-| [v9 feature parity checklist](./02_Architect_v10_May/03_v9_feature_parity_checklist.md) | Non-negotiable v9 capabilities to preserve |
-| [Bob standards proposal](./02_Architect_v10_May/04_revised_bob_standards_proposal.md) | Fabric adaptation of Bob SQL DW standards |
-| [deep audit protocol](./02_Architect_v10_May/05_deep_audit_protocol.md) | Audit process for v9/v10 comparison |
-| [source inventory](./02_Architect_v10_May/06_v9_source_inventory_and_chronology.md) | Source inventory and chronology |
-| [capability evidence ledger](./02_Architect_v10_May/07_v9_capability_evidence_ledger.md) | Evidence-backed v9 capability analysis |
-| [gap matrix](./02_Architect_v10_May/08_v10_gap_matrix.md) | Open gaps and required amendments |
-| [Bob standards mapping](./02_Architect_v10_May/09_bob_standards_mapping_matrix.md) | DOCX-to-Fabric mapping |
-| [final amendment plan](./02_Architect_v10_May/10_final_v10_amendment_plan.md) | Final amendments before readiness |
-| [readiness pack](./02_Architect_v10_May/11_v10_implementation_readiness_pack.md) | Five-step readiness evidence pack |
-| [object classification mapping](./02_Architect_v10_May/12_v10_object_classification_mapping.md) | Object-by-object v9 to v10 mapping |
-| [build blueprint](./02_Architect_v10_May/13_v10_build_blueprint_after_readiness.md) | Concrete target build after readiness |
-| [implementation runbook](./02_Architect_v10_May/14_v10_step_by_step_implementation_runbook.md) | Step-by-step create/change/defer/avoid plan |
-| [v9 archive](./01_Architect_v9_April/README.md) | Previous v9 Warehouse-native architecture |
+| Architecture Overview | `20_architecture_overview.mmd` / `.svg` |
+| Pipeline Flow | `21_pipeline_flow.mmd` / `.svg` |
+| Control Plane Detail | `22_control_plane_detail.mmd` / `.svg` |
+| Silver DAG Waves | `23_silver_dag_waves.mmd` / `.svg` |
+
+### Decision Records (`docs/decisions/`)
+
+| ADR | Decision |
+|---|---|
+| ADR-001 | Adopt Hybrid Medallion v10 for Supply Chain Fabric Refactor |
+| ADR-002 | EDW Supplement Exit Strategy for v10 |
+
+### Build Evidence (`02_Architect_v10_May/build_runs/`)
+
+| Artifact | Purpose |
+|---|---|
+| `build_v10_full.py` | Full v10 build script (functions, views, data load) |
+| `scaffold_v10_sql.py` | Initial SQL scaffold (tables, meta seed) |
+| `create_v10_meta_operations.py` | Meta SPs + reconciliation + DAG seed |
+| `pipeline_ids.json` | All 7 pipeline IDs |
 
 ---
 
-## Official Sources
-
-- Microsoft Fabric medallion architecture: https://learn.microsoft.com/en-us/fabric/onelake/onelake-medallion-lakehouse-architecture
-- OneLake shortcuts: https://learn.microsoft.com/en-us/fabric/onelake/onelake-shortcuts
-- Lakehouse SQL analytics endpoint: https://learn.microsoft.com/en-us/fabric/data-engineering/lakehouse-sql-analytics-endpoint
-- Fabric Warehouse T-SQL surface area: https://learn.microsoft.com/en-us/fabric/data-warehouse/tsql-surface-area
-- Direct Lake overview: https://learn.microsoft.com/en-us/fabric/fundamentals/direct-lake-overview
-- Power BI semantic models in Fabric Warehouse: https://learn.microsoft.com/en-us/fabric/data-warehouse/semantic-models
-
----
-
-## Current Recommendation
-
-Start with this sequence:
-
-```text
-1. Review README and v10 runbook.
-2. Get Bob/Rakesh approval on naming, ownership, Direct Lake Gold serving, TableDictionary, and security.
-3. Build v10 metadata/control-plane compatibility layer.
-4. Build access decision engine and exception-only Staging.
-5. Build Domain Silver and dedicated Gold side-by-side.
-6. Run parallel validation.
-7. Cut over only after approval.
-```
-
-The safest first engineering unit is:
-
-```text
-v10 metadata/control-plane compatibility layer
-  -> registry extension
-  -> access_mode routing
-  -> project-aware Silver DAG
-  -> DQ/source-contract/reconciliation gates
-```
+*Built by Aric Nguyen, DataHub VN — Ashley Furniture Industries. Architecture: Claude Code + Codex.*

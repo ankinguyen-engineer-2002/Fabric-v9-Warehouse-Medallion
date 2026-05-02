@@ -39,6 +39,7 @@ Rules:
 - Bronze does not contain significant business enhancement.
 - If current `bronze` objects have casts, standardization, filters, joins, or business meaning, classify them as Staging or Silver candidates.
 - Optional `BronzeMirror`/`Staging` remains as an operational pattern, not as the default medallion layer.
+- `_edw` fallback exits are governed by `docs/decisions/ADR-002-edw-supplement-exit-strategy.md`; two objects start as `ExitCandidate`, two remain `NotReady`.
 
 ### Amendment B - Staging Exception Policy
 
@@ -51,7 +52,7 @@ Keep staging only when one of these is true:
 - Replay/debug/audit of exact source input is required.
 - Direct shortcut read is too slow or unstable.
 - Warehouse-native CTAS/DML/persisted state is required.
-- EDW supplement remains active.
+- EDW supplement remains active; two ready objects become dual-read exit candidates, while not-ready objects stay staged.
 
 ### Amendment C - Silver Placement
 
@@ -228,7 +229,8 @@ Exit gate:
 
 - Reclassify current Warehouse `bronze` as Staging/BronzeMirror only where justified.
 - Direct-read candidates read from `Enterprise_Access_Lakehouse`.
-- EDW supplement remains explicit `EDWSupplement`.
+- EDW supplement remains explicit `EDWSupplement`; exit to `DirectShortcut` is object-by-object after reconciliation and approval.
+- Use `ADR-002` and `15_v10_edw_supplement_exit_strategy.md` as the controlling lifecycle for `_edw` fallback.
 - No destructive rename/drop during transition.
 
 Exit gate:
@@ -312,6 +314,9 @@ Local project evidence:
 - `01_Architect_v9_April/docs/01_operations/07_sqlproj_validation.md`
 - `01_Architect_v9_April/01_sc_forecast/enterprise/01_roadmap.md`
 - `01_Architect_v9_April/01_sc_forecast/docs/operations/edw_source_swap.md`
+- `docs/decisions/ADR-002-edw-supplement-exit-strategy.md`
+- `02_Architect_v10_May/15_v10_edw_supplement_exit_strategy.md`
+- `02_Architect_v10_May/16_v10_readiness_scorecard_and_v9_cleanup.md`
 
 Official docs checked:
 

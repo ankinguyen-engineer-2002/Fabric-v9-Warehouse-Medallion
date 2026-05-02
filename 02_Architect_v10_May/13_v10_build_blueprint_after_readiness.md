@@ -15,6 +15,8 @@ compare outputs
 cut over only after sign-off and repeated successful validation
 ```
 
+Current documentation readiness score is `88/100` in `16_v10_readiness_scorecard_and_v9_cleanup.md`; this permits non-destructive scaffolding/planning only, not production cutover.
+
 ## 2. Target Physical Items
 
 ### SupplyChain Dev Workspace
@@ -145,7 +147,8 @@ Rules:
 
 | Current group | v10 target |
 |---|---|
-| 3 EDW-backed Bronze facts | `Staging` as `EDWSupplement` |
+| 3 EDW-backed Bronze facts | `Staging` as `EDWSupplement`; 1 ExitCandidate and 2 NotReady |
+| 1 EDW-backed reference object (`ref_product`) | `ReferenceMaster` or EnterpriseData after validation and owner sign-off |
 | 4 direct Bronze source mirrors | Logical Bronze direct-read candidates |
 | 10 monthly REF + 1 daily REF | `ReferenceMaster` or EnterpriseData reference after ownership sign-off |
 | 8 Silver tables | Domain Silver schemas |
@@ -155,6 +158,8 @@ Rules:
 Detailed mapping:
 
 - `02_Architect_v10_May/12_v10_object_classification_mapping.md`
+- `docs/decisions/ADR-002-edw-supplement-exit-strategy.md`
+- `02_Architect_v10_May/16_v10_readiness_scorecard_and_v9_cleanup.md`
 
 ## 6. Validation Gates
 
@@ -167,6 +172,7 @@ Before cutover:
 - Silver DAG execution order verified.
 - Smart skip due/not-due cases tested.
 - EDW supplement lineage bridge preserved.
+- EDW supplement exit strategy applied object-by-object; no bulk cutover.
 - Gold metrics reconciled.
 - Direct Lake semantic mode validated.
 - Bob/Rakesh naming and ownership sign-off captured.

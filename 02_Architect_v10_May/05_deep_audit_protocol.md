@@ -45,6 +45,8 @@ Read all files under `02_Architect_v10_May`:
 | Architecture diagrams | `02_architecture_blueprint_mermaid.md`, `mermaid/*.mmd` | Physical/logical architecture, control plane, staging/direct decision |
 | Feature parity | `03_v9_feature_parity_checklist.md` | Claimed v9 capabilities preserved in v10 |
 | Bob alignment | `04_revised_bob_standards_proposal.md` | Current interpretation of Bob standards and Direct Lake/TableDictionary corrections |
+| EDW fallback | `15_v10_edw_supplement_exit_strategy.md`, `docs/decisions/ADR-002-edw-supplement-exit-strategy.md` | Object-level `_edw` fallback lifecycle, validation, and retirement |
+| Readiness/cleanup | `16_v10_readiness_scorecard_and_v9_cleanup.md` | Readiness score and non-destructive v9 cleanup candidate list |
 | Bob standards | `SQL Server Data Warehouse Standards.docx` | Enterprise standards to map against v10; local-only evidence unless sharing is approved |
 
 ### 2.3 Version-Control Evidence
@@ -95,6 +97,7 @@ Exit criteria:
 
 - No source file remains unclassified.
 - Historical commits with architecture impact are identified.
+- ADR and readiness outputs are linked when the audit finds a decision-worthy risk.
 
 ### Phase B - v9 Capability Extraction
 

@@ -179,8 +179,22 @@ v10 action:
 
 v10 action:
 
-- Keep these as `EDWSupplement` / `StagingException`.
-- Do not move them to direct shortcut until source completeness, grain, and SLA are approved.
+- Keep all four as `EDWSupplement` / `StagingException` for initial v10 build.
+- Split status between `ExitCandidate` and `NotReady`; do not treat all four as the same maturity.
+- Do not move any object to direct shortcut until source completeness, grain, SLA, performance, and owner approval are validated.
+
+| Object | V9 note | Live v9 source | Initial v10 status | Build action |
+|---|---|---|---|---|
+| `brz_saleshistory_afi__invoicedetail` | `Ready` | `_edw` | `EDWSupplement_ExitCandidate` | Keep fallback active; enable dual-read validation |
+| `brz_saleshistory_afi__invoiceheader` | `Not Ready` | `_edw` | `EDWSupplement_NotReady` | Keep fallback active; block direct cutover |
+| `brz_supplychain_enh_1__demandforecastsnapshotdaily` | `Not Ready` | `_edw` | `EDWSupplement_NotReady` | Keep fallback active; validate grain and snapshot coverage before any cutover |
+| `ref_product` | `Ready` | `_edw` | `EDWSupplement_ExitCandidate` + owner decision | Keep fallback active; validate source and decide EnterpriseData ownership |
+
+Detailed runbook:
+
+- `02_Architect_v10_May/15_v10_edw_supplement_exit_strategy.md`
+- `docs/decisions/ADR-002-edw-supplement-exit-strategy.md`
+- `02_Architect_v10_May/16_v10_readiness_scorecard_and_v9_cleanup.md`
 
 ## 4. Step 3 - Object Classification Mapping
 
@@ -192,7 +206,7 @@ Summary:
 
 | Target class | Count | Build decision |
 |---|---:|---|
-| StagingException / EDWSupplement | 3 BRZ + 1 REF candidate | Keep persisted staging |
+| StagingException / EDWSupplement | 4 total: 2 ExitCandidate + 2 NotReady | Keep persisted staging initially; validate ExitCandidates first |
 | LogicalBronzeCandidate / DirectReadCandidate | 4 BRZ | Direct by default if source contract passes |
 | ReferenceMaster / NeedOwnerDecision | 7 REF | Bob/Rakesh ownership decision |
 | ReferenceMaster / DomainReference | 3 REF | Keep local unless EnterpriseData takes ownership |
@@ -211,7 +225,7 @@ Sign-off questions:
 4. Power BI serving: is Gold physical table + Direct Lake semantic contract accepted as the Fabric interpretation of the old view rule?
 5. Security: who owns workspace/item/semantic/SQL endpoint access approval?
 6. DQ mode: should v10 run DQ gates in `WarnOnly` first, then move to `CriticalStops`?
-7. EDW supplement: what exact SLA/coverage evidence is required before removing staging for the 4 EDW-backed objects?
+7. EDW supplement: what exact SLA/coverage/grain/performance evidence and approval window are required before switching each `_edw` object to direct `Enterprise_Lakehouse`?
 
 ## 6. Step 5 - What To Build Next
 

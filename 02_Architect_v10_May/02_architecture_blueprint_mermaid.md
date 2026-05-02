@@ -33,6 +33,7 @@ SupplyChain Dev:
 
 - `Enterprise_Access_Lakehouse`: shortcut access layer, logical Bronze for Supply Chain.
 - Optional `Staging` / `BronzeMirror`: only when direct shortcut is not enough.
+- `EDWSupplement`: explicit staging/fallback lifecycle governed by `ADR-002`, not a permanent Bronze layer.
 - Domain Silver schemas: Supply Chain-owned transformation.
 - Gold serving warehouse/item: BI-ready consumption boundary.
 - Semantic model / reports.
@@ -274,13 +275,17 @@ Pure Mermaid file: [`mermaid/04_direct_vs_staging_decision.mmd`](mermaid/04_dire
 
 ```mermaid
 flowchart TD
-    A["New Source Entity"] --> B["Check Source Contract"]
+    A["New Source Entity"] --> X{"Known EDW supplement?"}
+    X -->|"Yes"| ES["EDWSupplement<br/>keep fallback active<br/>apply ADR-002"]
+    X -->|"No"| B["Check Source Contract"]
     B --> C{"Stable schema and SLA?"}
     C -->|"Yes"| D{"Performance acceptable direct?"}
     C -->|"No"| S["Use Staging / BronzeMirror"]
 
     D -->|"Yes"| E["Direct to Silver"]
     D -->|"No"| S
+    ES --> S
+    ES -.->|"ExitCandidate only<br/>after dual-read validation + approval"| E
 
     S --> F["Persist snapshot with audit columns"]
     F --> G["Run staging DQ"]
@@ -293,9 +298,9 @@ flowchart TD
     J -->|"No"| L["Block / Warn / Quarantine"]
 
     class A,B neutral
-    class C,D,J decision
+    class C,D,J,X decision
     class E,H silver
-    class S,F,G staging
+    class S,F,G,ES staging
     class I,L quality
     class K gold
 
@@ -321,6 +326,7 @@ Use staging only when:
 - replay/debug is required
 - direct query performance is not acceptable
 - warehouse-native DML/CTAS/MERGE is required
+- object is one of the current `_edw` supplements and has not completed the `ADR-002` lifecycle
 ```
 
 ## 8. Short-Term vs Long-Term
@@ -344,16 +350,20 @@ Pure Mermaid file: [`mermaid/05_short_term_transition.mmd`](mermaid/05_short_ter
 
 ```mermaid
 flowchart LR
-    LH["Logical Bronze<br/>Shortcut Lakehouse"]
-    OLD["Current v9 Warehouse<br/>Compatibility Layer"]
-    STG["Staging Exceptions"]
+	    LH["Logical Bronze<br/>Shortcut Lakehouse"]
+	    OLD["Current v9 Warehouse<br/>Compatibility Layer"]
+	    EDW["EDW Supplement<br/>4 fallback objects<br/>ADR-002 lifecycle"]
+	    STG["Staging Exceptions"]
     SIL["New Domain Silver"]
     GOLD["New Gold Serving"]
     CTRL["Existing v9 Control Plane"]
 
-    LH --> OLD
-    OLD --> STG
-    OLD --> SIL
+	    LH --> OLD
+	    OLD --> STG
+	    OLD --> EDW
+	    EDW --> STG
+	    EDW -.->|"2 ExitCandidate<br/>2 NotReady"| LH
+	    OLD --> SIL
     STG --> SIL
     SIL --> GOLD
     CTRL -.->|"controls"| OLD
@@ -362,7 +372,7 @@ flowchart LR
 
     class LH bronze
     class OLD legacy
-    class STG staging
+	    class EDW,STG staging
     class SIL silver
     class GOLD gold
     class CTRL control
@@ -465,6 +475,17 @@ Meta.StagingPolicy
   - retention_policy
   - replay_required
 
+Meta.EDWExitPolicy
+  - asset_name
+  - edw_exit_status
+  - logical_source_reference
+  - fallback_source_reference
+  - coverage_status
+  - grain_status
+  - performance_status
+  - cutover_approved_by
+  - fallback_retention_until
+
 Meta.DqRule
   - asset_name
   - rule_type
@@ -503,6 +524,7 @@ pl_master
 
 pl_domain_mart
   -> source contract validation
+  -> EDW supplement lifecycle check
   -> staging decision
   -> run staging loads if required
   -> compute Silver DAG waves
@@ -569,6 +591,7 @@ Diem thay doi la: v9 khong con assume "Bronze = local warehouse schema bat buoc"
 ```text
 AccessMode = DirectShortcut
 AccessMode = StageRequired
+AccessMode = EDWSupplement
 AccessMode = ManualSeed
 AccessMode = EnterpriseSilver
 AccessMode = GoldServing
@@ -581,6 +604,7 @@ AccessMode = GoldServing
 - [Verified] Lakehouse SQL Analytics Endpoint read-only, nen khong thay the hoan toan Warehouse-native processing neu can write/DML/CTAS/MERGE.
 - [Likely] Hybrid la best fit cho v9 vi giu duoc diem manh van hanh nhung giam duplication.
 - [Likely] Long-term nen giam staging dan, nhung khong xoa staging capability khoi framework.
+- [Verified] Current documentation readiness score is `88/100`, enough for non-destructive side-by-side planning but not enough for cutover/decommission.
 
 ## 13. Nguon Chinh
 
@@ -591,3 +615,5 @@ AccessMode = GoldServing
 - Better Together Lakehouse and Warehouse: https://learn.microsoft.com/en-us/fabric/data-warehouse/get-started-lakehouse-sql-analytics-endpoint
 - Warehouse vs Lakehouse Decision Guide: https://learn.microsoft.com/en-us/fabric/fundamentals/decision-guide-lakehouse-warehouse
 - Fabric Warehouse T-SQL Surface Area: https://learn.microsoft.com/en-us/fabric/data-warehouse/tsql-surface-area
+- ADR-002 EDW Supplement Exit Strategy: ../docs/decisions/ADR-002-edw-supplement-exit-strategy.md
+- v10 Readiness Scorecard And v9 Cleanup Candidate List: 16_v10_readiness_scorecard_and_v9_cleanup.md

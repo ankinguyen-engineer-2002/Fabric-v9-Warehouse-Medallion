@@ -41,6 +41,7 @@ This checklist is a non-negotiable design guardrail: v10 must preserve the stron
 | Dedicated Gold serving boundary | Separates transformation from consumption | Improves BI/semantic model discipline |
 | Source contract gate | Prevents direct-read instability | Makes shortcut usage governed, not blind |
 | Enterprise-reusable flag | Decides SupplyChain-owned vs EnterpriseData-owned Silver | Avoids over-moving domain-specific logic |
+| EDW supplement exit lifecycle | Keeps `_edw` fallback initially while making exit object-level and auditable | Preserves v9 fallback, but prevents permanent Bronze duplication |
 
 ## 3. Acceptance Rule
 
@@ -62,5 +63,6 @@ After the 2026-04-30 deep-read, do not interpret every row above as "fully activ
 - [Verified] Source-target reconciliation is a v10 work item, not a completed v9 feature.
 - [Verified] Alerting and CI/CD are designed but blocked/not active.
 - [Verified] Multi-mart routing is active at master/mart level, but live Silver DAG execution is not yet project-filtered. v10 must fix this before true multi-mart scale.
+- [Verified] EDW supplement must follow `ADR-002`: two objects are `ExitCandidate`, two are `NotReady`, and no `_edw` fallback is removed without dual-read validation and approval.
 
 v10 requirement: preserve all mature v9 capabilities and explicitly implement or activate the designed-but-inactive capabilities where they are required for the new architecture.

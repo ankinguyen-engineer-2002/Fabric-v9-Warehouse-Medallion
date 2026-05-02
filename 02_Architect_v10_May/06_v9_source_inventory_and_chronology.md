@@ -147,3 +147,5 @@ Findings from this inventory must flow into:
 - `08_v10_gap_matrix.md`
 - `09_bob_standards_mapping_matrix.md`
 - `10_final_v10_amendment_plan.md`
+- `docs/decisions/ADR-002-edw-supplement-exit-strategy.md`
+- `16_v10_readiness_scorecard_and_v9_cleanup.md`

@@ -55,14 +55,23 @@ jobs:
 
           conn = pyodbc.connect(
               f"DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={server};"
-              f"DATABASE=SupplyChain_Warehouse;Encrypt=yes;TrustServerCertificate=no;",
+              f"DATABASE=SupplyChain_Processing_Warehouse;Encrypt=yes;TrustServerCertificate=no;",
               attrs_before={1256: token_struct})
           cursor = conn.cursor()
 
           data_dir = "01_Architect_v9_April/lineage_explorer/data"
 
-          # Export lineage
-          cursor.execute("SELECT lineage_id, source_schema, source_table, target_schema, target_table, relationship_type, sp_name FROM meta.sp_lineage")
+          # Export lineage (v10: Meta.LineageEdge)
+          cursor.execute("""
+              SELECT ROW_NUMBER() OVER (ORDER BY target_asset, source_asset) AS lineage_id,
+                  CASE WHEN CHARINDEX('.', source_asset) > 0 THEN LEFT(source_asset, CHARINDEX('.', source_asset)-1) ELSE 'unknown' END AS source_schema,
+                  CASE WHEN CHARINDEX('.', source_asset) > 0 THEN SUBSTRING(source_asset, CHARINDEX('.', source_asset)+1, LEN(source_asset)) ELSE source_asset END AS source_table,
+                  CASE WHEN CHARINDEX('.', target_asset) > 0 THEN LEFT(target_asset, CHARINDEX('.', target_asset)-1) ELSE 'unknown' END AS target_schema,
+                  CASE WHEN CHARINDEX('.', target_asset) > 0 THEN SUBSTRING(target_asset, CHARINDEX('.', target_asset)+1, LEN(target_asset)) ELSE target_asset END AS target_table,
+                  edge_type AS relationship_type,
+                  target_asset AS sp_name
+              FROM Meta.LineageEdge
+          """)
           cols = [d[0] for d in cursor.description]
           rows = cursor.fetchall()
           with open(f"{data_dir}/lineage.csv", "w", newline="") as f:
@@ -74,8 +83,8 @@ jobs:
                   cleaned[2] = str(cleaned[2]).replace('"', '').strip()
                   w.writerow(cleaned)
 
-          # Export registry
-          cursor.execute("SELECT sp_name, view_name, target_schema, target_table, layer, load_type, frequency, execution_order, depends_on, source_objects, is_active FROM meta.sp_registry")
+          # Export registry (v10: Meta.vw_sp_registry compatibility view)
+          cursor.execute("SELECT sp_name, view_name, target_schema, target_table, layer, load_type, frequency, execution_order, depends_on, source_objects, is_active FROM Meta.vw_sp_registry")
           cols = [d[0] for d in cursor.description]
           rows = cursor.fetchall()
           with open(f"{data_dir}/registry.csv", "w", newline="") as f:
@@ -83,8 +92,16 @@ jobs:
               w.writerow(cols)
               w.writerows(rows)
 
-          # Export views (from meta.view_definitions TABLE — SP can read this, unlike sys.sql_modules)
-          cursor.execute("SELECT [schema], view_name, definition FROM meta.view_definitions ORDER BY [schema], view_name")
+          # Export views (v10: from sys.sql_modules via cross-DB)
+          cursor.execute("""
+              SELECT s.name AS [schema], v.name AS view_name,
+                  LEFT(m.definition, 4000) AS definition
+              FROM sys.views v
+              JOIN sys.schemas s ON v.schema_id = s.schema_id
+              JOIN sys.sql_modules m ON v.object_id = m.object_id
+              WHERE s.name NOT IN ('sys','queryinsights')
+              ORDER BY s.name, v.name
+          """)
           cols = [d[0] for d in cursor.description]
           rows = cursor.fetchall()
           with open(f"{data_dir}/views.csv", "w", newline="") as f:
@@ -92,11 +109,13 @@ jobs:
               w.writerow(cols)
               w.writerows(rows)
 
-          # Export run history
+          # Export run history (v10: Meta.RunLog)
           cursor.execute("""
-              SELECT TOP 50 sp_name, status, rows_affected, duration_seconds, start_time, load_type
-              FROM meta.sp_run_history WHERE status = 'success'
-              ORDER BY start_time DESC
+              SELECT TOP 50 asset_id AS sp_name, status, rows_loaded AS rows_affected,
+                  DATEDIFF(SECOND, start_time_utc, COALESCE(end_time_utc, start_time_utc)) AS duration_seconds,
+                  start_time_utc AS start_time, load_type
+              FROM Meta.RunLog WHERE status = 'success'
+              ORDER BY start_time_utc DESC
           """)
           cols = [d[0] for d in cursor.description]
           rows = cursor.fetchall()

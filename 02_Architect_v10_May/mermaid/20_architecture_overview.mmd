@@ -1,0 +1,61 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1a73e8', 'primaryTextColor': '#fff', 'primaryBorderColor': '#1557b0', 'lineColor': '#666', 'secondaryColor': '#e8f0fe', 'tertiaryColor': '#f1f3f4'}}}%%
+flowchart TB
+    subgraph EXT["Enterprise_Data Workspace"]
+        SRC["Upstream Source Products<br/>EDW / Codis / MasterData / Customers"]
+    end
+
+    subgraph SC["SupplyChain Dev Workspace"]
+        subgraph BRONZE["BRONZE — Logical Access Layer"]
+            EL["Enterprise_Lakehouse<br/><i>OneLake Shortcuts</i><br/>Wholesale_Codis_AFI | MasterData_DW<br/>Customers | SupplyChain_DW"]
+            SL["SupplyChain_Lakehouse<br/><i>EDW Supplement Feeds</i><br/>4 Dataflows → _ver2 tables"]
+        end
+
+        subgraph SILVER["SILVER — SupplyChain_Processing_Warehouse"]
+            direction TB
+            STG["Staging<br/>4 EDW tables | 4 source views<br/>1 SP: usp_RefreshEdwTables"]
+            REF["ReferenceMaster<br/>10 tables | 11 views<br/>Calendar, ItemMaster, etc."]
+            SH["SalesHistory<br/>4 tables | 4 views<br/>InvoiceDetail 88M | InvoiceWeekly 37M<br/>ActualDemand Monthly/Weekly"]
+            FH["ForecastHistory<br/>2 tables | 2 views<br/>ForecastDemand 42M | NaiveForecast 2M"]
+            OH["OpenOrderHistory<br/>2 tables | 2 views<br/>LineLevel 193K | Monthly 80K"]
+            META["Meta Control Plane<br/>20 tables | 5 views | 13 SPs | 3 functions<br/>Registry, DQ, Lineage, DAG, RunLog"]
+        end
+
+        subgraph GOLD["GOLD — SupplyChain_Gold_Warehouse"]
+            FA["ForecastAccuracy<br/>FactForecastActual 47M<br/>FactForecastKpi 36M<br/>2 views | Direct Lake ready"]
+        end
+
+        subgraph PIPE["Pipeline Orchestration"]
+            PM["pl_sc_master<br/>Multi-mart ForEach"]
+            PMT["pl_sc_mart<br/>staging→silver→gold"]
+            PS["pl_sc_staging"]
+            PSV["pl_sc_silver<br/>DAG waves 0→1→2"]
+            PSW["pl_sc_silver_wave<br/>parallel batch=8"]
+            PG["pl_sc_gold<br/>cross-DB CTAS"]
+            PDQ["pl_dq_check<br/>54 rules ForEach"]
+        end
+    end
+
+    SRC --> EL
+    SRC --> SL
+    EL --> STG
+    SL --> STG
+    EL --> REF
+    STG --> SH
+    STG --> FH
+    REF --> SH
+    REF --> FH
+    REF --> OH
+    EL --> OH
+    SH --> FA
+    FH --> FA
+    OH --> FA
+    META -.->|orchestrates| STG
+    META -.->|orchestrates| SH
+    META -.->|orchestrates| FH
+    META -.->|orchestrates| OH
+    META -.->|orchestrates| FA
+    PM --> PMT
+    PMT --> PS
+    PMT --> PSV
+    PMT --> PG
+    PSV --> PSW

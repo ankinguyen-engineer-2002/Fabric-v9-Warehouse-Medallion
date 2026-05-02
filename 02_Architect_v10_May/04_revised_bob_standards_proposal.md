@@ -12,6 +12,7 @@ Recommended direction:
 - [Verified] Preserve v9 control-plane capabilities: metadata registry, generic load runner, mart routing, smart skip, DAG/waves, DQ, lineage, logging, finalizer, semantic refresh.
 - [Verified] Do not rebuild TableDictionary from scratch. v9 already has a concrete `vw_table_dictionary` / Enterprise Dictionary Adapter pattern.
 - [Verified] Do not apply Bob's "PowerBI should only access views" literally for the Fabric Direct Lake serving path. For strict Direct Lake, Power BI should consume Gold physical tables backed by Delta/OneLake, not non-materialized SQL views.
+- [Verified] Do not remove `_edw` fallback as part of the initial v10 build. `ADR-002` keeps all four fallback paths active, with two `ExitCandidate` objects and two `NotReady` objects.
 
 Short version:
 
@@ -106,6 +107,7 @@ These should become v10 standards:
 | CCIX/CIX/HEAP standards | Fabric Warehouse T-SQL/storage behavior differs from classic SQL Server / ADW | Use Fabric-supported statistics/performance monitoring and Gold table design gates |
 | HASH/REPLICATE distribution | Synapse dedicated SQL pool concept, not a direct Fabric Warehouse design knob | Replace with Fabric table/query/performance baseline validation |
 | PolyBase external tables | Fabric uses OneLake, shortcuts, Lakehouse SQL endpoint, Warehouse, and Delta | Use shortcuts/Delta/source contracts instead of PolyBase external-table pattern |
+| Temporary source fallback | Source-like data should not be maintained forever, but live v9 still needs `_edw` supplement paths | Keep `EDWSupplement` in Staging initially and retire object-by-object under `ADR-002` |
 | XBK backup schemas | Valid rollback intent, but implementation should not create unnecessary dead objects | Use non-destructive side-by-side versioning, CTAS/copy only when approved, and archive policy |
 | SQL Agent/job monitoring | Fabric pipelines and REST refresh model differ | Keep v9 pipeline logging, Fabric pipeline history, and alerting hooks |
 
@@ -135,7 +137,8 @@ SupplyChain Dev workspace
 │   │   └── sp_run_history / pipeline_run_log
 │   ├── Audit
 │   ├── Staging_WRK or BronzeMirror_WRK
-│   │   └── exception-only persisted source snapshots
+│   │   ├── exception-only persisted source snapshots
+│   │   └── EDWSupplement objects governed by ADR-002
 │   ├── ForecastHistory_ENH or ForecastHistory
 │   ├── InventoryHistory_ENH or InventoryHistory
 │   ├── SalesHistory_ENH or SalesHistory
@@ -256,6 +259,7 @@ Before development:
 - [ ] Confirm primary key metadata exists for every managed physical table.
 - [ ] Confirm security requirement: workspace/item/semantic security vs SQL endpoint RLS/CLS.
 - [ ] Confirm rollback/side-by-side strategy without destructive drops.
+- [ ] Confirm `_edw` exit criteria and fallback retention window per `ADR-002`.
 
 Before cutover:
 
@@ -266,6 +270,7 @@ Before cutover:
 - [ ] No unexpected DirectQuery fallback for Gold tables.
 - [ ] Lineage complete from Enterprise source to Gold.
 - [ ] TableDictionary adapter complete for all managed objects.
+- [ ] EDW supplement `ExitCandidate` objects pass dual-read validation or remain staged with documented reason.
 - [ ] Bob/Rakesh or assigned approver signs off technical design.
 
 ## 9. Sources

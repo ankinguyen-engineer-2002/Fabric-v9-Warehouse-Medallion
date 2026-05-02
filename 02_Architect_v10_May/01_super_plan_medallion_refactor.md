@@ -47,7 +47,7 @@ Current v9 co 28 active tables, 52 lineage edges, 7 pipelines, generic SQL frame
 |---|---|---|
 | `bronze` schema | Logical Bronze nam o shortcuts/source; persisted part thanh `Staging` hoac `BronzeMirror` | Rename concept truoc, migrate vat ly theo compatibility plan |
 | `bronze` objects co `TRIM`, `CAST`, `CASE`, filter, standardization | Silver / working transformation | Move logic ra khoi Bronze vi Bob dung: enhancement khong nen o Bronze |
-| 4 `_edw` supplement tables | Staging exception | Giu tam cho toi khi Enterprise source du SLA/coverage |
+| 4 `_edw` supplement tables | Staging exception | Giu tam trong initial build; 2 object la ExitCandidate, 2 object NotReady theo v9 note; formal lifecycle in `ADR-002` |
 | `silver` schema | PascalCase domain schemas | Vi du: `ForecastHistory`, `WholesaleSalesHistoryAFI`, `OpenOrderHistory`, `MasterDataReference` |
 | `gold` schema | Dedicated Gold Warehouse / Gold serving schemas | Vi du: `ForecastAccuracyWholesale`, `ForecastAccuracyRetail` |
 | `meta` schema | V9 control plane retained | Extend metadata de support direct/stage/cross-workspace |
@@ -64,7 +64,8 @@ Chi giu staging neu mot trong cac dieu kien dung:
 - Query direct qua cham hoac bi scan lap nhieu lan.
 - Can persisted `_load_dt`, batch id, audit columns.
 - Can xu ly bang Warehouse-native DML/CTAS/MERGE.
-- Source hien tai la workaround, vi du 4 `_edw` supplement.
+- Source hien tai la workaround, vi du 4 `_edw` supplement. Sau nay cutover tung object qua `Enterprise_Lakehouse` khi dual-read validation va approval pass.
+- `_edw` exit phai theo `docs/decisions/ADR-002-edw-supplement-exit-strategy.md`, khong bulk switch.
 
 Neu data sau nay on dinh: [Likely] co the bo lop mirror cho cac table du dieu kien. Nhung khong nen bo staging nhu mot capability cua framework. Nen giu **optional staging pattern** trong v9, khong giu **mandatory Bronze duplication**.
 
@@ -243,6 +244,8 @@ Required validation:
 | Current Bronze contains transformations | Architecture remains non-standard | Move transformations to Silver/domain schemas |
 | EDW supplement still temporary | Lineage/source confusion | Keep explicit `EDWSupplement` access mode |
 
+Current readiness score: `88/100` in `16_v10_readiness_scorecard_and_v9_cleanup.md`. Score nay du cho side-by-side planning, chua du cho production cutover hay v9 cleanup.
+
 ## 11. Recommendation
 
 Proceed with **Hybrid Medallion Refactor**:
@@ -262,6 +265,7 @@ Official docs:
 
 - Microsoft Fabric medallion architecture: https://learn.microsoft.com/en-us/fabric/onelake/onelake-medallion-lakehouse-architecture
 - Microsoft Fabric shortcuts: https://learn.microsoft.com/en-us/fabric/onelake/onelake-shortcuts
+- Lakehouse shortcuts: https://learn.microsoft.com/en-us/fabric/data-engineering/lakehouse-shortcuts
 - Lakehouse SQL analytics endpoint: https://learn.microsoft.com/en-us/fabric/data-engineering/lakehouse-sql-analytics-endpoint
 - Lakehouse + Warehouse SQL endpoint usage: https://learn.microsoft.com/en-us/fabric/data-warehouse/get-started-lakehouse-sql-analytics-endpoint
 - Lakehouse vs Warehouse guide: https://learn.microsoft.com/en-us/fabric/fundamentals/decision-guide-lakehouse-warehouse
@@ -274,3 +278,5 @@ Local project evidence:
 - [01_architecture.md](../01_Architect_v9_April/01_sc_forecast/docs/01_architecture.md)
 - [03_fabric_vs_enterprise.md](../01_Architect_v9_April/01_sc_forecast/enterprise/03_fabric_vs_enterprise.md)
 - [edw_source_swap.md](../01_Architect_v9_April/01_sc_forecast/docs/operations/edw_source_swap.md)
+- [ADR-002 EDW supplement exit](../docs/decisions/ADR-002-edw-supplement-exit-strategy.md)
+- [v10 readiness scorecard](16_v10_readiness_scorecard_and_v9_cleanup.md)

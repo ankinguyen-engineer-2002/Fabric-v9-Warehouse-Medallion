@@ -1,11 +1,15 @@
 flowchart TD
-    A["New Source Entity"] --> B["Check Source Contract"]
+    A["New Source Entity"] --> X{"Known EDW supplement?"}
+    X -->|"Yes"| ES["EDWSupplement<br/>keep fallback active<br/>apply ADR-002"]
+    X -->|"No"| B["Check Source Contract"]
     B --> C{"Stable schema and SLA?"}
     C -->|"Yes"| D{"Performance acceptable direct?"}
     C -->|"No"| S["Use Staging / BronzeMirror"]
 
     D -->|"Yes"| E["Direct to Silver"]
     D -->|"No"| S
+    ES --> S
+    ES -.->|"ExitCandidate only<br/>after dual-read validation + approval"| E
 
     S --> F["Persist snapshot with audit columns"]
     F --> G["Run staging DQ"]
@@ -18,9 +22,9 @@ flowchart TD
     J -->|"No"| L["Block / Warn / Quarantine"]
 
     class A,B neutral
-    class C,D,J decision
+    class C,D,J,X decision
     class E,H silver
-    class S,F,G staging
+    class S,F,G,ES staging
     class I,L quality
     class K gold
 

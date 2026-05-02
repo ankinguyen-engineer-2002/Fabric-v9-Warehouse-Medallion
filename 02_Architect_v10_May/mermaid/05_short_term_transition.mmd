@@ -1,6 +1,7 @@
 flowchart LR
     LH["Logical Bronze<br/>Shortcut Lakehouse"]
     OLD["Current v9 Warehouse<br/>Compatibility Layer"]
+    EDW["EDW Supplement<br/>4 fallback objects<br/>ADR-002 lifecycle"]
     STG["Staging Exceptions"]
     SIL["New Domain Silver"]
     GOLD["New Gold Serving"]
@@ -8,6 +9,9 @@ flowchart LR
 
     LH --> OLD
     OLD --> STG
+    OLD --> EDW
+    EDW --> STG
+    EDW -.->|"2 ExitCandidate<br/>2 NotReady"| LH
     OLD --> SIL
     STG --> SIL
     SIL --> GOLD
@@ -17,7 +21,7 @@ flowchart LR
 
     class LH bronze
     class OLD legacy
-    class STG staging
+    class EDW,STG staging
     class SIL silver
     class GOLD gold
     class CTRL control
