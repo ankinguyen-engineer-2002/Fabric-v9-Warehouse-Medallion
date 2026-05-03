@@ -1,4 +1,12 @@
 sp_name,status,rows_affected,duration_seconds,start_time,load_type
+silver.slv_naive_forecast_monthly,success,2047288,24,2026-05-03 14:19:53.763333,overwrite
+silver.slv_open_order_monthly,success,80148,5,2026-05-03 14:15:59.440000,overwrite
+silver.slv_actual_demand_weekly,success,7854952,79,2026-05-03 14:15:56.660000,overwrite
+silver.slv_actual_demand_monthly,success,2650298,65,2026-05-03 14:15:55.190000,overwrite
+silver.slv_invoice_weekly,success,37535209,171,2026-05-03 14:15:55.086667,overwrite
+silver.slv_open_order_line_level,success,191782,6,2026-05-03 14:10:34.153333,overwrite
+silver.slv_forecast_demand_monthly,success,42406201,161,2026-05-03 14:10:33.180000,overwrite
+silver.slv_invoice_detail_line_level,success,88327512,47,2026-05-03 14:10:33.156667,overwrite
 silver.slv_naive_forecast_monthly,success,2047306,24,2026-05-03 13:20:49.650000,overwrite
 silver.slv_open_order_monthly,success,80171,4,2026-05-03 13:14:54.183333,overwrite
 silver.slv_actual_demand_monthly,success,2650347,63,2026-05-03 13:14:53.990000,overwrite
@@ -41,11 +49,3 @@ silver.slv_invoice_detail_line_level,success,88277089,45,2026-05-02 04:04:06.913
 silver.slv_open_order_line_level,success,193668,7,2026-05-02 04:04:06.493333,overwrite
 silver.slv_forecast_demand_monthly,success,42406201,161,2026-05-02 04:04:06.480000,overwrite
 silver.slv_naive_forecast_monthly,success,2045078,22,2026-05-02 03:08:40.463333,overwrite
-silver.slv_invoice_weekly,success,37495648,166,2026-05-02 03:05:51.690000,overwrite
-silver.slv_actual_demand_weekly,success,7848755,34,2026-05-02 03:05:15.096667,overwrite
-silver.slv_actual_demand_monthly,success,2646901,53,2026-05-02 03:04:20.243333,overwrite
-silver.slv_open_order_monthly,success,80648,7,2026-05-02 02:58:46.106667,overwrite
-silver.slv_forecast_demand_monthly,success,42406201,170,2026-05-02 02:55:49.266667,overwrite
-silver.slv_invoice_detail_line_level,success,88235221,46,2026-05-02 02:55:01.366667,overwrite
-silver.slv_open_order_line_level,success,192693,6,2026-05-02 02:20:38.630000,overwrite
-bronze.ref_warehouse,success,55,1,2026-05-02 02:14:59.530000,overwrite
