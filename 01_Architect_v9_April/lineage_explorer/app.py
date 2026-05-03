@@ -1,6 +1,6 @@
 """
-Supply Chain Warehouse v9 — Lineage Explorer
-=============================================
+Supply Chain Warehouse — Lineage Explorer
+==========================================
 Tab 1: Interactive DAG (React SVG)
 Tab 2: ETL Flow by Table
 Tab 3: View Definitions
@@ -26,7 +26,7 @@ def check_login():
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
         st.markdown("<h2 style='text-align:center; margin-top:20vh; color:#e2e8f0;'>🔗 Lineage Explorer</h2>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align:center; color:#64748b; margin-bottom:2rem;'>Supply Chain Warehouse v9</p>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align:center; color:#64748b; margin-bottom:2rem;'>Supply Chain Warehouse — Hybrid Medallion</p>", unsafe_allow_html=True)
         with st.form("login_form"):
             username = st.text_input("Username")
             password = st.text_input("Password", type="password")
@@ -155,15 +155,29 @@ def build_dag_data():
     registry = {r.get("target_table", ""): r for r in load_csv("registry.csv")}
     nodes, edges, seen = [], [], set()
 
-    # Compute silver waves from depends_on (correct: collect-then-assign per wave)
+    # Build layer lookup from registry (v10 uses DomainSilver, ReferenceMaster, etc.)
+    layer_map = {}  # target_table -> layer
+    for tbl, reg in registry.items():
+        layer_map[tbl] = (reg.get("layer", "") or "").strip()
+
+    # Compute silver waves from depends_on
     slv_waves = {}
-    slv_regs = [r for r in registry.values() if r.get("layer", "").upper() == "SLV"]
+    slv_regs = [r for r in registry.values() if r.get("layer", "").strip() == "DomainSilver"]
     # Wave 0: no silver dependencies
     for r in slv_regs:
         deps = r.get("depends_on", "") or ""
         if not deps or deps in ("nan", "None") or "silver" not in deps:
             slv_waves[r.get("target_table", "")] = 0
-    # Wave 1..N: collect all candidates per wave THEN assign (not during iteration)
+    # Build snake_case → PascalCase lookup for dependency resolution
+    snake_to_pascal = {}
+    for tbl, reg in registry.items():
+        # slv_invoice_detail_line_level → InvoiceDetailLineLevel
+        snake_name = tbl[0].lower() + "".join(f"_{c.lower()}" if c.isupper() else c for c in tbl[1:])
+        snake_to_pascal[f"slv_{snake_name}"] = tbl
+        snake_to_pascal[tbl.lower()] = tbl
+        snake_to_pascal[tbl] = tbl
+
+    # Wave 1..N: collect all candidates per wave THEN assign
     for wave in range(1, 30):
         newly_assigned = {}
         for r in slv_regs:
@@ -175,25 +189,56 @@ def build_dag_data():
                 dep_tables = []
                 for d in dep_list:
                     if "silver" in d or "slv" in d:
-                        name = d.split(".")[-1].replace("usp_load_", "")
-                        dep_tables.append(name)
+                        raw_name = d.split(".")[-1]
+                        resolved = snake_to_pascal.get(raw_name, raw_name)
+                        dep_tables.append(resolved)
                 if dep_tables and all(dt in slv_waves for dt in dep_tables):
                     newly_assigned[tbl] = wave
             except: pass
-        if not newly_assigned: break  # no more tables to assign → done
+        if not newly_assigned: break
         slv_waves.update(newly_assigned)
 
+    # Build reverse lookup: snake_case node ID → PascalCase registry key
+    # e.g. slv_actual_demand_monthly → ActualDemandMonthly
+    node_to_registry = {}
+    for tbl in registry:
+        node_to_registry[tbl] = tbl
+        node_to_registry[tbl.lower()] = tbl
+        # PascalCase → snake_case: InvoiceDetailLineLevel → invoice_detail_line_level
+        snake = "".join(f"_{c.lower()}" if c.isupper() else c for c in tbl).lstrip("_")
+        node_to_registry[f"slv_{snake}"] = tbl
+        node_to_registry[f"gld_{snake}"] = tbl
+        node_to_registry[snake] = tbl
+
     def get_tier(name):
-        """Strict tier assignment by name prefix — never misplace a node."""
+        """Tier assignment using registry layer + wave computation."""
         n = name.lower()
         if "enterprise_lakehouse" in n or "supplychain_lakehouse" in n:
             return "other"
-        if n.startswith("brz_"):
+
+        # Resolve snake_case node name to PascalCase registry key
+        reg_key = node_to_registry.get(name) or node_to_registry.get(n, name)
+
+        # Check registry layer (v10 format)
+        layer = layer_map.get(reg_key, "")
+        if layer == "DomainSilver":
+            return f"slv{slv_waves.get(reg_key, 0)}"
+        if layer == "Staging":
+            return "stg"
+        if layer in ("ReferenceMaster", "LogicalBronze"):
             return "brz"
-        if n.startswith("ref_"):
-            return "brz"  # ref_ in same column as brz
+        if layer == "Gold":
+            return "gld"
+
+        # EDW supplement staging tables — separate tier between Source and Bronze
+        if n.endswith("_edw"):
+            return "stg"
+
+        # Fallback: prefix-based (lineage source nodes not in registry)
+        if n.startswith("brz_") or n.startswith("ref_"):
+            return "brz"
         if n.startswith("slv_"):
-            return f"slv{slv_waves.get(name, 0)}"
+            return f"slv{slv_waves.get(reg_key, 0)}"
         if n.startswith("gld_"):
             return "gld"
         return "other"
@@ -309,4 +354,4 @@ with tab3:
         st.info(f"Total: {len(filtered)} views")
 
 st.markdown("---")
-st.caption("Supply Chain Warehouse v9 — Lineage Explorer | Data auto-refreshed via GitHub Actions")
+st.caption("Supply Chain Warehouse — Lineage Explorer | Data auto-refreshed via GitHub Actions")

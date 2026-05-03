@@ -56,3 +56,4 @@ docs/archive/
 # === Work folder info ===
 02_Architect_v10_May/.work-folder-info
 CLAUDE.md
+01_Architect_v9_April/lineage_explorer/.streamlit/secrets.toml

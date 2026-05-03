@@ -68,6 +68,7 @@ function getNodeType(name) {
 }
 
 const TYPE_CONFIG = {
+  stg:   { color: "#a78bfa", label: "STG",   icon: "◈" },
   brz:   { color: "#22c55e", label: "BRZ",   icon: "◇" },
   ref:   { color: "#14b8a6", label: "REF",   icon: "◎" },
   slv:   { color: "#3b82f6", label: "SLV",   icon: "◆" },
@@ -105,7 +106,7 @@ function apiJsonToGraph(data) {
   };
   for (const n of data.nodes) {
     const id = n.id.replace(/^dbo\./, '');
-    const validLayers = ['brz','ref','slv','slv0','slv1','slv2','slv3','slv4','gld','dq','other'];
+    const validLayers = ['stg','brz','ref','slv','slv0','slv1','slv2','slv3','slv4','gld','dq','other'];
     const type = n.layer && validLayers.includes(n.layer) ? n.layer : (n.layer === 'external' ? 'other' : getNodeType(id));
     nodes.set(id, { id, name: id, type, status: n.status, load_type: n.load_type, last_load_date: n.last_load_date, rows_loaded: n.rows_loaded });
   }
@@ -120,8 +121,8 @@ function apiJsonToGraph(data) {
 }
 
 /* ─── DAG Layout ─── */
-const LAYER_LABELS = {0:'Source',1:'Bronze / REF',2:'Silver W0',3:'Silver W1',4:'Silver W2',5:'Silver W3',6:'Silver W4',7:'Gold'};
-const LAYER_COLORS = {0:'#94a3b8',1:'#22c55e',2:'#60a5fa',3:'#3b82f6',4:'#2563eb',5:'#1d4ed8',6:'#1e40af',7:'#f59e0b'};
+const LAYER_LABELS = {0:'Source',1:'EDW Staging',2:'Bronze / REF',3:'Silver W0',4:'Silver W1',5:'Silver W2',6:'Silver W3',7:'Silver W4',8:'Gold'};
+const LAYER_COLORS = {0:'#94a3b8',1:'#a78bfa',2:'#22c55e',3:'#60a5fa',4:'#3b82f6',5:'#2563eb',6:'#1d4ed8',7:'#1e40af',8:'#f59e0b'};
 
 function layoutDAG(nodes, edges, collapsed) {
   const vis = nodes.filter(n => !collapsed.has(n.type));
@@ -136,7 +137,7 @@ function layoutDAG(nodes, edges, collapsed) {
 
   const layers = new Map(), done = new Set();
   const nodeById = new Map(); vis.forEach(n => nodeById.set(n.id, n));
-  const FIXED_LAYERS = {other: 0, orphan: 0, brz: 1, ref: 1, slv: 2, slv0: 2, slv1: 3, slv2: 4, slv3: 5, slv4: 6, gld: 7};
+  const FIXED_LAYERS = {other: 0, orphan: 0, stg: 1, brz: 2, ref: 2, slv: 3, slv0: 3, slv1: 4, slv2: 5, slv3: 6, slv4: 7, gld: 8};
   function assign(id) {
     if (done.has(id)) return layers.get(id) || 0;
     done.add(id);
