@@ -110,7 +110,7 @@ Pure T-SQL stored procedures. No Notebooks. No PySpark. No Lakehouse ETL.<br/>
 │  ├── Source_Schema_N/       ...                                              │
 │  └── Role: READ-ONLY. Silver views read directly from here.                  │
 │                                                                              │
-│  Supplement_Lakehouse                                                        │
+│  SupplyChain_Lakehouse                                                       │
 │  ├── N Dataflow feeds → _ver2 staging tables                                 │
 │  ├── Reference tables (manual / dataflow seeded)                             │
 │  └── Role: EDW supplement when Enterprise_LH is incomplete                   │
@@ -121,8 +121,8 @@ Pure T-SQL stored procedures. No Notebooks. No PySpark. No Lakehouse ETL.<br/>
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │  Staging (N tables, N views, 1 SP)                                           │
-│  ├── {EdwTable_1}            ← CTAS from Supplement Lakehouse                │
-│  ├── {EdwTable_N}            ← CTAS from Supplement Lakehouse                │
+│  ├── {EdwTable_1}            ← CTAS from SupplyChain Lakehouse               │
+│  ├── {EdwTable_N}            ← CTAS from SupplyChain Lakehouse               │
 │  ├── vw_{Source_1}...N       → column mapping from raw sources               │
 │  └── usp_RefreshEdwTables    → CTAS all EDW supplement tables                │
 │                                                                              │
@@ -141,7 +141,7 @@ Pure T-SQL stored procedures. No Notebooks. No PySpark. No Lakehouse ETL.<br/>
 │  └── ...                                                                     │
 │                                                                              │
 │  Meta (20 tables, 5 views, 16 SPs, 3 functions)                              │
-│  ├── AssetRegistry          Registry: asset, layer, schedule              │
+│  ├── AssetRegistry             Registry: asset, layer, schedule              │
 │  ├── DQRule                    7 check types, severity gating                │
 │  ├── LineageEdge               Auto-built from source_objects                │
 │  ├── SilverDagWaveRuntime      Computed wave assignments                     │
@@ -183,7 +183,7 @@ Enterprise_Lakehouse (OneLake shortcuts)
   ├── Source_Schema_2/     Master data / dimensions
   └── Source_Schema_N/     ...
 
-Supplement_Lakehouse (EDW supplement dataflows)
+SupplyChain_Lakehouse (EDW supplement dataflows)
   └── dbo/                 _ver2 tables (exception sources)
 ```
 
