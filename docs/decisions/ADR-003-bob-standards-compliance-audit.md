@@ -72,7 +72,7 @@ Source evidence:
 
 **Bob rule**: "All tables should have a Primary Key that can be used to uniquely identify each row. All tables will be periodically tested for duplicates based on that key."
 
-**Current**: `Meta.AssetRegistryV10.primary_key` column exists but is NULL for all 28 assets.
+**Current**: `Meta.AssetRegistry.primary_key` column exists but is NULL for all 28 assets.
 
 **Fix**: Populate PK values. Example mappings:
 

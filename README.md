@@ -124,7 +124,7 @@ Pure T-SQL stored procedures. No Notebooks. No PySpark. No Lakehouse ETL.<br/>
 │  └── ...                                                                     │
 │                                                                              │
 │  Meta (20 tables, 5 views, 16 SPs, 3 functions)                              │
-│  ├── AssetRegistryV10          Registry: asset, layer, schedule              │
+│  ├── AssetRegistry          Registry: asset, layer, schedule              │
 │  ├── DQRule                    7 check types, severity gating                │
 │  ├── LineageEdge               Auto-built from source_objects                │
 │  ├── SilverDagWaveRuntime      Computed wave assignments                     │
@@ -233,7 +233,7 @@ Processing_Warehouse/
 │   └── Views/    (N transform views)  VIEW = transformation logic
 │
 └── Meta/                              ── Control Plane ──
-    ├── Tables/   (20)                 AssetRegistryV10, DQRule, LineageEdge, RunLog, ...
+    ├── Tables/   (20)                 AssetRegistry, DQRule, LineageEdge, RunLog, ...
     ├── Views/    (5)                  vw_sp_registry, vw_TableDictionary, vw_SilverWaveRuntime, ...
     ├── SPs/      (16)                 usp_GenericLoad, usp_LogRun, usp_CheckDqSingle, ...
     └── Functions (3)                  ufn_utc_to_cst, ufn_should_run, ufn_cron_is_due
@@ -291,7 +291,7 @@ Source (Lakehouse/Shortcuts)
 
 ```
 pl_master
-  └─ Lookup DISTINCT project FROM Meta.AssetRegistryV10
+  └─ Lookup DISTINCT project FROM Meta.AssetRegistry
      └─ ForEach project (parallel batch=10)
         └─ pl_mart(project_name = @item().project)
            ├─ pl_staging  ── only loads WHERE project = @project_name
@@ -430,7 +430,7 @@ When `load_type = 'scd2'`, the framework automatically adds:
 
 | Table | Rows | Purpose |
 |---|---|---|
-| `AssetRegistryV10` | 28+ | Canonical registry: asset, layer, access mode, load type, frequency, cron, project |
+| `AssetRegistry` | 28+ | Canonical registry: asset, layer, access mode, load type, frequency, cron, project |
 | `AssetAccessPolicy` | 28+ | Access decisions per asset |
 | `ObjectClassification` | 28+ | Physical classification |
 | `SourceFeed` | 52+ | Source feed metadata |
@@ -503,8 +503,8 @@ Lineage is automatically rebuilt by `usp_FinalizePipeline` at the end of each pi
 ### 3 Steps
 
 ```sql
--- 1. Register in Meta.AssetRegistryV10
-INSERT INTO Meta.AssetRegistryV10 (
+-- 1. Register in Meta.AssetRegistry
+INSERT INTO Meta.AssetRegistry (
     asset_id, canonical_layer, access_mode,
     physical_schema, physical_object, load_type, frequency, cron_expression,
     project, is_active, source_objects, legacy_view_name
@@ -569,7 +569,7 @@ main                    ← Architecture template (this README)
 |---|---|---|
 | 1 | Get Workspace Viewer access | Fabric Portal → workspace settings |
 | 2 | Connect to SQL endpoint | SSMS / Azure Data Studio / DBeaver |
-| 3 | Explore registry | `SELECT * FROM Meta.AssetRegistryV10` |
+| 3 | Explore registry | `SELECT * FROM Meta.AssetRegistry` |
 | 4 | Check DAG waves | `SELECT * FROM Meta.SilverDagWaveRuntime ORDER BY wave_number` |
 | 5 | Check recent runs | `SELECT TOP 20 * FROM Meta.RunLog ORDER BY start_time_utc DESC` |
 | 6 | Check lineage | `SELECT * FROM Meta.LineageEdge ORDER BY target_asset` |
@@ -581,7 +581,7 @@ main                    ← Architecture template (this README)
 -- All registered assets with status
 SELECT asset_id, canonical_layer, access_mode, physical_schema, physical_object,
     load_type, frequency, is_active, rows_loaded, last_load_date
-FROM Meta.AssetRegistryV10 ORDER BY canonical_layer, asset_id;
+FROM Meta.AssetRegistry ORDER BY canonical_layer, asset_id;
 
 -- Pipeline run history
 SELECT pipeline_run_id, pipeline_name, status, start_time_utc, end_time_utc
