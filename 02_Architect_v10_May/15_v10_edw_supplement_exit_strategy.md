@@ -51,7 +51,7 @@ No object should jump directly from `EDWSupplement` to `DirectShortcut_Active`.
 
 ## 4. Required Metadata
 
-Add or represent these attributes in `Meta.AssetRegistryV10` or a child table such as `Meta.SourceContract` / `Meta.ReconciliationRule`:
+Add or represent these attributes in `Meta.AssetRegistry` or a child table such as `Meta.SourceContract` / `Meta.ReconciliationRule`:
 
 | Attribute | Purpose |
 |---|---|

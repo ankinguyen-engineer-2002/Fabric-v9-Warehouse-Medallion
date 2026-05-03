@@ -246,7 +246,7 @@ SupplyChain Dev / approved Enterprise_SupplyChain workspace
 
 **Tables / views to create:**
 
-- `Meta.AssetRegistryV10`
+- `Meta.AssetRegistry`
 - `Meta.AssetAccessPolicy`
 - `Meta.ObjectClassification`
 - `Meta.SourceContractRun`
@@ -320,7 +320,7 @@ GoldPublish
 - [ ] Step 1: Create `Meta` schema in the v10 processing Warehouse.
 - [ ] Step 2: Create the metadata tables listed above.
 - [ ] Step 3: Load `Meta.ObjectClassification` from `12_v10_object_classification_mapping.md`.
-- [ ] Step 4: Load `Meta.AssetRegistryV10` from the v9 readiness export, not by querying mutable live objects during initial design.
+- [ ] Step 4: Load `Meta.AssetRegistry` from the v9 readiness export, not by querying mutable live objects during initial design.
 - [ ] Step 5: Set direct-read Bronze candidates to `canonical_layer = LogicalBronze` and `access_mode = DirectShortcut`.
 - [ ] Step 6: Set all four EDW supplement objects to `canonical_layer = Staging` and `access_mode = EDWSupplement`.
 - [ ] Step 6a: Mark `brz_saleshistory_afi__invoicedetail` and `ref_product` as `edw_exit_status = ExitCandidate`.
@@ -372,7 +372,7 @@ Else if canonical_layer in DomainSilver, Gold
 
 **Steps:**
 
-- [ ] Step 1: Create the access decision view from `Meta.AssetRegistryV10`.
+- [ ] Step 1: Create the access decision view from `Meta.AssetRegistry`.
 - [ ] Step 2: Add a `decision_reason` output column.
 - [ ] Step 3: Add `resolved_source_reference` output column.
 - [ ] Step 4: Add `resolved_target_reference` output column.
@@ -413,7 +413,7 @@ Else if canonical_layer in DomainSilver, Gold
 - [ ] Step 4: Add source contract checks before loading each staged table.
 - [ ] Step 5: Add source-target reconciliation after loading each staged table.
 - [ ] Step 6: Add lineage edge type `PhysicalStaging`.
-- [ ] Step 7: Record staging reason for each object in `Meta.AssetRegistryV10`.
+- [ ] Step 7: Record staging reason for each object in `Meta.AssetRegistry`.
 - [ ] Step 8: Keep rollback path back to v9 source for each staged object.
 
 **Exit gate:**
@@ -775,7 +775,7 @@ security_classification
 
 **Steps:**
 
-- [ ] Step 1: Keep core metadata in normalized tables such as `Meta.AssetRegistryV10`, `Meta.AssetGovernance`, source contracts, DQ, reconciliation, and run logs.
+- [ ] Step 1: Keep core metadata in normalized tables such as `Meta.AssetRegistry`, `Meta.AssetGovernance`, source contracts, DQ, reconciliation, and run logs.
 - [ ] Step 2: Map v10 registry/governance fields to the 63 Enterprise-compatible TableDictionary columns.
 - [ ] Step 3: Preserve the 6 existing v9 extension columns or replace them with approved v10 extension columns only after sign-off.
 - [ ] Step 4: Preserve CST output fields from v9.

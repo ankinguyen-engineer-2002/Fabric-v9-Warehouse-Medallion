@@ -98,7 +98,7 @@ SupplyChain_Processing_Warehouse/
 │   └── Views/     vw_OpenOrderLineLevel, vw_OpenOrderMonthly      (2)
 │
 └── Meta/                       Control plane
-    ├── Tables/    AssetRegistryV10, DQRule, LineageEdge, ...      (20)
+    ├── Tables/    AssetRegistry, DQRule, LineageEdge, ...      (20)
     ├── Views/     vw_sp_registry, vw_TableDictionary, ...          (5)
     ├── SPs/       usp_GenericLoad, usp_LogRun, ...                (12)
     └── Functions/ ufn_utc_to_cst, ufn_should_run, ufn_cron_is_due (3)
@@ -175,7 +175,7 @@ SupplyChain_Gold_Warehouse/
 │  └── OpenOrderMonthly       80K rows ← OpenOrderLineLevel                    │
 │                                                                              │
 │  Meta (20 tables, 5 views, 16 SPs, 3 functions)                              │
-│  ├── AssetRegistryV10 28    │ DQRule 54 rules                                │
+│  ├── AssetRegistry 28    │ DQRule 54 rules                                │
 │  ├── LineageEdge 52 edges   │ SourceContract 674 cols                        │
 │  ├── SilverDagWaveRuntime 8 │ RunLog 37+ entries                             │
 │  ├── usp_GenericLoad 8 pat  │ usp_ComputeSilverWaves                         │
@@ -273,7 +273,7 @@ Gold is a **separate Fabric Warehouse** (`SupplyChain_Gold_Warehouse`). Direct L
 ```
 pl_sc_master
   ├─ log_start (Meta.usp_LogPipelineRun)
-  ├─ Lookup DISTINCT project FROM Meta.AssetRegistryV10
+  ├─ Lookup DISTINCT project FROM Meta.AssetRegistry
   ├─ ForEach project (batch=10, parallel)
   │    └─ pl_sc_mart (project_name = @item().project)
   │         ├─ pl_sc_staging (EDW refresh + REF load)
@@ -298,7 +298,7 @@ pl_sc_master
 
 ## Generic SP Architecture
 
-`Meta.usp_GenericLoad` handles all table loads with a single generic SP. The load pattern is determined by the `load_type` column in `Meta.AssetRegistryV10`.
+`Meta.usp_GenericLoad` handles all table loads with a single generic SP. The load pattern is determined by the `load_type` column in `Meta.AssetRegistry`.
 
 | Load Pattern | When To Use | How It Works |
 |---|---|---|
@@ -320,7 +320,7 @@ pl_sc_master
 | Category | Feature | Status | Evidence |
 |---|---|---|---|
 | **Core** | Generic load framework (8 patterns) | Active | `Meta.usp_GenericLoad` |
-| | Metadata-driven registry | Active | `Meta.AssetRegistryV10` (28 assets) |
+| | Metadata-driven registry | Active | `Meta.AssetRegistry` (28 assets) |
 | | Run logging (UTC + CST) | Active | `Meta.usp_LogRun` with retry 3x |
 | | Pipeline logging | Active | `Meta.usp_LogPipelineRun` |
 | | Lineage auto-rebuild | Active | `Meta.usp_BuildLineage` → 52 edges |
@@ -353,7 +353,7 @@ pl_sc_master
 
 | Component | Table / SP | Rows | Purpose |
 |---|---|---:|---|
-| **Asset Registry** | `Meta.AssetRegistryV10` | 28 | Canonical registry: asset, layer, access mode, physical location |
+| **Asset Registry** | `Meta.AssetRegistry` | 28 | Canonical registry: asset, layer, access mode, physical location |
 | | `Meta.AssetAccessPolicy` | 28 | Access decision: DirectShortcut, EDWSupplement, WarehouseTransform |
 | | `Meta.ObjectClassification` | 28 | Physical classification for each asset |
 | | `Meta.SourceFeed` | 52 | Source feed metadata |
@@ -376,7 +376,7 @@ pl_sc_master
 ### Step 1: Register the asset
 
 ```sql
-INSERT INTO Meta.AssetRegistryV10 (
+INSERT INTO Meta.AssetRegistry (
     asset_id, canonical_layer, access_mode, physical_schema, physical_object,
     load_type, frequency, cron_expression, project, is_active,
     source_objects, legacy_view_name
@@ -520,7 +520,7 @@ Currently: 1 project (`supplychain`). Adding a new project requires only registr
 ```sql
 -- All registered assets
 SELECT asset_id, canonical_layer, access_mode, physical_schema, physical_object, load_type, frequency
-FROM Meta.AssetRegistryV10 ORDER BY canonical_layer, asset_id;
+FROM Meta.AssetRegistry ORDER BY canonical_layer, asset_id;
 
 -- Recent run history
 SELECT asset_id, status, rows_loaded, start_time_utc, end_time_utc
