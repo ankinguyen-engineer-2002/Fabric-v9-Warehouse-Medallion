@@ -1,4 +1,12 @@
 sp_name,status,rows_affected,duration_seconds,start_time,load_type
+silver.slv_naive_forecast_monthly,success,2047387,24,2026-05-03 21:20:46.653333,overwrite
+silver.slv_actual_demand_weekly,success,7854497,108,2026-05-03 21:14:53.663333,overwrite
+silver.slv_open_order_monthly,success,79908,5,2026-05-03 21:14:53.426667,overwrite
+silver.slv_actual_demand_monthly,success,2650045,62,2026-05-03 21:14:53.126667,overwrite
+silver.slv_invoice_weekly,success,37535209,203,2026-05-03 21:14:53.110000,overwrite
+silver.slv_forecast_demand_monthly,success,42406201,166,2026-05-03 21:09:17.110000,overwrite
+silver.slv_open_order_line_level,success,190655,8,2026-05-03 21:09:16.893333,overwrite
+silver.slv_invoice_detail_line_level,success,88327512,45,2026-05-03 21:09:16.810000,overwrite
 silver.slv_naive_forecast_monthly,success,2047404,23,2026-05-03 20:26:52.493333,overwrite
 silver.slv_actual_demand_weekly,success,7854569,83,2026-05-03 20:20:59.380000,overwrite
 silver.slv_actual_demand_monthly,success,2650075,52,2026-05-03 20:20:58.050000,overwrite
@@ -40,12 +48,4 @@ silver.slv_open_order_line_level,success,191654,6,2026-05-03 16:09:17.573333,ove
 silver.slv_forecast_demand_monthly,success,42406201,170,2026-05-03 16:09:15.983333,overwrite
 silver.slv_invoice_detail_line_level,success,88327512,46,2026-05-03 16:09:15.713333,overwrite
 silver.slv_naive_forecast_monthly,success,2047310,24,2026-05-03 15:20:55.013333,overwrite
-silver.slv_actual_demand_weekly,success,7854902,81,2026-05-03 15:14:59.280000,overwrite
 silver.slv_open_order_monthly,success,80116,4,2026-05-03 15:14:59.280000,overwrite
-silver.slv_actual_demand_monthly,success,2650260,62,2026-05-03 15:14:59.066667,overwrite
-silver.slv_invoice_weekly,success,37535209,181,2026-05-03 15:14:58.980000,overwrite
-silver.slv_open_order_line_level,success,191634,6,2026-05-03 15:09:21.753333,overwrite
-silver.slv_invoice_detail_line_level,success,88327512,46,2026-05-03 15:09:18.396667,overwrite
-silver.slv_forecast_demand_monthly,success,42406201,162,2026-05-03 15:09:18.236667,overwrite
-silver.slv_naive_forecast_monthly,success,2047288,24,2026-05-03 14:19:53.763333,overwrite
-silver.slv_open_order_monthly,success,80148,5,2026-05-03 14:15:59.440000,overwrite
