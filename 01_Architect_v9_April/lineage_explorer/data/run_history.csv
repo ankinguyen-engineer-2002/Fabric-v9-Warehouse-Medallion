@@ -1,4 +1,20 @@
 sp_name,status,rows_affected,duration_seconds,start_time,load_type
+silver.slv_naive_forecast_monthly,success,2047306,24,2026-05-03 13:20:49.650000,overwrite
+silver.slv_open_order_monthly,success,80171,4,2026-05-03 13:14:54.183333,overwrite
+silver.slv_actual_demand_monthly,success,2650347,63,2026-05-03 13:14:53.990000,overwrite
+silver.slv_invoice_weekly,success,37535209,206,2026-05-03 13:14:53.923333,overwrite
+silver.slv_actual_demand_weekly,success,7855019,108,2026-05-03 13:14:53.890000,overwrite
+silver.slv_open_order_line_level,success,191839,6,2026-05-03 13:09:14.426667,overwrite
+silver.slv_invoice_detail_line_level,success,88327512,45,2026-05-03 13:09:14.030000,overwrite
+silver.slv_forecast_demand_monthly,success,42406201,169,2026-05-03 13:09:13.423333,overwrite
+silver.slv_naive_forecast_monthly,success,2047262,22,2026-05-03 12:20:53.036667,overwrite
+silver.slv_open_order_monthly,success,80154,16,2026-05-03 12:14:57.533333,overwrite
+silver.slv_actual_demand_monthly,success,2650321,53,2026-05-03 12:14:57,overwrite
+silver.slv_actual_demand_weekly,success,7855002,60,2026-05-03 12:14:56.376667,overwrite
+silver.slv_invoice_weekly,success,37535209,185,2026-05-03 12:14:56.343333,overwrite
+silver.slv_open_order_line_level,success,191831,8,2026-05-03 12:09:37.346667,overwrite
+silver.slv_forecast_demand_monthly,success,42406201,170,2026-05-03 12:09:37.283333,overwrite
+silver.slv_invoice_detail_line_level,success,88327512,49,2026-05-03 12:09:36.076667,overwrite
 silver.slv_naive_forecast_monthly,success,2047259,23,2026-05-03 05:49:57.800000,overwrite
 silver.slv_actual_demand_weekly,success,7855133,75,2026-05-03 05:44:55.063333,overwrite
 silver.slv_open_order_monthly,success,80194,5,2026-05-03 05:44:53.300000,overwrite
@@ -33,12 +49,3 @@ silver.slv_forecast_demand_monthly,success,42406201,170,2026-05-02 02:55:49.2666
 silver.slv_invoice_detail_line_level,success,88235221,46,2026-05-02 02:55:01.366667,overwrite
 silver.slv_open_order_line_level,success,192693,6,2026-05-02 02:20:38.630000,overwrite
 bronze.ref_warehouse,success,55,1,2026-05-02 02:14:59.530000,overwrite
-bronze.ref_order_type,success,29,1,2026-05-02 02:14:56.060000,overwrite
-bronze.ref_item_master,success,381163,20,2026-05-02 02:14:34.350000,overwrite
-bronze.ref_forecast_horizon,success,8,1,2026-05-02 02:14:31.346667,overwrite
-bronze.ref_forecast_cycle,success,43,1,2026-05-02 02:14:28.606667,overwrite
-bronze.ref_customer_shipping_location,success,127660,12,2026-05-02 02:14:14.763333,overwrite
-bronze.ref_customer_grouping,success,35617,1,2026-05-02 02:14:10.300000,overwrite
-bronze.ref_customer_account_group,success,35617,1,2026-05-02 02:14:07.126667,overwrite
-bronze.ref_customer_account,success,35617,2,2026-05-02 02:14:03.560000,overwrite
-bronze.ref_calendar,success,21551,4,2026-05-02 02:13:57.940000,overwrite
