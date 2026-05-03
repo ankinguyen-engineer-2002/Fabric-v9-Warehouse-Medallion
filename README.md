@@ -29,7 +29,24 @@ Pure T-SQL stored procedures. No Notebooks. No PySpark. No Lakehouse ETL.<br/>
 
 </div>
 
+## Architecture Decision Records
+
+> Key decisions driving this architecture. Read these first for full context.
+
+| ADR | Focus | Status |
+|---|---|---|
+| [ADR-001](docs/decisions/ADR-001-v10-hybrid-medallion.md) | **Hybrid Medallion adoption** — 3-layer design: Lakehouse shortcuts (Bronze), Processing Warehouse (Silver+Meta), Gold Warehouse (serving) | Accepted |
+| [ADR-002](docs/decisions/ADR-002-edw-supplement-exit-strategy.md) | **EDW Supplement exit** — 4 legacy `_edw` fallback paths, per-object exit criteria, dual-read validation before cutover | Accepted |
+| [ADR-003](docs/decisions/ADR-003-bob-standards-compliance-audit.md) | **Enterprise standards audit** — 13 PASS, 7 adapted for Fabric, 2 pending Bob decision (schema suffix + column naming) | Open — pending Bob |
+| [ADR-004](docs/decisions/ADR-004-architecture-maturity-assessment.md) | **Maturity assessment** — 86.7% (Staff/Principal level), scored against 15 Microsoft best-practice criteria | Accepted |
+| [ADR-005](docs/decisions/ADR-005-enterprise-promote-pathway.md) | **Enterprise promote pathway** — US/VN collaboration model, phased dev→promote, portability assessment, 7 open questions for Bob | Proposed — pending Bob |
+
+---
+
 ## Table of Contents
+
+### Decision Records
+0. [Architecture Decision Records](#architecture-decision-records) — 5 ADRs: medallion design, EDW exit, standards audit, maturity, US/VN promote pathway
 
 ### Architecture & Design
 1. [Architecture Overview](#architecture-overview) — 3-layer medallion, Fabric items, data flow
@@ -731,6 +748,8 @@ Architecture audited against enterprise DW standards (Bob/Rakesh). Full audit in
 | ADR-001 | Adopt Hybrid Medallion architecture | Accepted |
 | ADR-002 | EDW Supplement Exit Strategy | Accepted |
 | ADR-003 | Bob Standards Compliance Audit | Open — pending Bob confirmation on 2 items |
+| ADR-004 | Architecture Maturity Assessment (86.7%) | Accepted |
+| ADR-005 | Enterprise Promote Pathway — US/VN Model | Proposed — pending Bob |
 
 ---
 
