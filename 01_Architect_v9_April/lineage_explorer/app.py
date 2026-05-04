@@ -239,7 +239,7 @@ def build_dag_data():
             return "brz"
         if n.startswith("slv_"):
             return f"slv{slv_waves.get(reg_key, 0)}"
-        if n.startswith("gld_"):
+        if n.startswith("gld_") or n.startswith("dim_"):
             return "gld"
         return "other"
 
