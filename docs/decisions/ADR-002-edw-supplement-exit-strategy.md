@@ -114,6 +114,54 @@ Each object must pass these gates before cutover:
 | Lineage | Direct logical source and fallback source remain traceable |
 | Approval | Bob/Rakesh or assigned approver signs off object-by-object |
 
+## Live Audit (2026-05-04)
+
+### Enterprise Lakehouse Equivalents — Verified
+
+All 4 Enterprise Lakehouse tables **exist** with **exact column count match**:
+
+| EDW Supplement (Staging_WRK) | Enterprise Lakehouse Direct | Cols | Status |
+|---|---|---|---|
+| `InvoiceDetailEdw` | `Enterprise_Lakehouse.SalesHistory_AFI.InvoiceDetail` | 80 = 80 | **EXISTS** — pending data completeness |
+| `InvoiceHeaderEdw` | `Enterprise_Lakehouse.SalesHistory_AFI.InvoiceHeader` | 40 = 40 | **EXISTS** — pending data completeness |
+| `ProductEdw` | `Enterprise_Lakehouse.SupplyChain_DW.DimCurrentProductDetails` | 89 = 89 | **EXISTS** — pending data completeness |
+| `DemandForecastSnapshotDailyEdw` | `Enterprise_Lakehouse.SupplyChain_Enh_1.DemandForecastSnapshotDaily` | 23 = 23 | **EXISTS** — pending data completeness |
+
+### Current Path (đường vòng — temporary)
+
+```
+Enterprise EDW → Bob team Dataflow → SupplyChain_Lakehouse._ver2 → usp_RefreshEdwTables → Staging_WRK tables
+```
+
+### Target Path (khi Enterprise Lakehouse đủ data)
+
+```
+Enterprise_Lakehouse.{schema}.{table} → view trực tiếp → usp_GenericLoad → Silver tables
+```
+
+### Exit Action Plan
+
+Khi Bob team confirm data completeness cho từng bảng:
+
+1. Tạo view mới đọc trực tiếp từ Enterprise_Lakehouse (giống 12 views hiện tại đã làm)
+2. Update `AssetRegistry`: `access_mode` từ `EDWSupplement` → `DirectShortcut`
+3. **Chuyển load pattern** cho bảng lớn:
+
+| Table | Rows | Current Pattern | Target Pattern | Watermark | Rationale |
+|---|---|---|---|---|---|
+| `InvoiceDetail` | 88M | overwrite | **`incremental`** | `InvoiceDate` | Invoice cũ không đổi, daily delta ~50K << 88M full |
+| `InvoiceHeader` | 24M | overwrite | **`incremental`** | `InvoiceDate` | Tương tự invoice detail |
+| `Product` | 379K | overwrite | **`overwrite`** (giữ) | — | Nhỏ, full refresh OK |
+| `DemandForecastSnapshot` | 42M | overwrite | **`incremental`** | `SnapshotTS` | Append-only daily snapshots, delta ~50K << 42M full |
+
+4. Xóa `usp_RefreshEdwTables` (không cần nữa — `usp_GenericLoad` xử lý tất cả)
+5. Bỏ 4 Dataflow feeds trong SupplyChain_Lakehouse
+6. Xóa 4 bảng `_ver2` trong SupplyChain_Lakehouse
+
+**Khi exit hoàn thành**: `usp_GenericLoad` thực sự xử lý 100% tables ở tất cả layers (Bronze → Silver). Load patterns `incremental` sẽ được prove live lần đầu.
+
+---
+
 ## Implementation Linkage
 
 Detailed implementation rules are maintained in:

@@ -111,10 +111,15 @@ These features are implemented in v10 but NOT explicitly prescribed or demonstra
 | `cdc` | ✓ | 0 | 0 | **CAPABILITY** |
 | `scd2` | ✓ | 0 | 0 | **CAPABILITY** |
 
-**Why only overwrite?** All current sources are full-refresh from Enterprise Lakehouse or SupplyChain Lakehouse. No incremental/CDC use case exists **yet**. 4 EDW supplement tables (`Staging_WRK`) pull full snapshots from SupplyChain_Lakehouse Dataflows — they exist because Enterprise Lakehouse doesn't have equivalent data for: InvoiceDetail (aggregate), InvoiceHeader (aggregate), Product (curated), DemandForecastSnapshot (SC-specific). When Enterprise Lakehouse provides these sources directly, the 4 EDW tables retire (per ADR-002) and views switch to direct read — still overwrite pattern.
+**Why only overwrite?** All current sources are full-refresh. 4 EDW supplement tables pull full snapshots via Dataflow đường vòng (vì Enterprise Lakehouse chưa đủ data). Verified 2026-05-04: Enterprise Lakehouse equivalents **đã tồn tại** (exact column match) nhưng pending data completeness từ Bob team.
+
+**When `incremental` becomes real** (per ADR-002 exit plan): Khi Enterprise Lakehouse đủ data, 3/4 bảng lớn chuyển sang `incremental` load — đây là lúc pattern prove value lần đầu:
+- `DemandForecastSnapshot` (42M): watermark `SnapshotTS`, append-only daily ~50K rows
+- `InvoiceDetail` (88M): watermark `InvoiceDate`, daily delta << full
+- `InvoiceHeader` (24M): watermark `InvoiceDate`
 
 Other patterns become relevant when:
-- `incremental`: Large tables (88M+ rows) where daily delta << full refresh
+- `incremental`: **Confirmed first use case** — 3 tables above (per ADR-002 exit plan)
 - `upsert`/`cdc`: Master data with change feeds (customer updates)
 - `scd2`: Track history (product price, warehouse status changes)
 - `datekey`/`daterange`: Partition-level refresh for date-partitioned sources
