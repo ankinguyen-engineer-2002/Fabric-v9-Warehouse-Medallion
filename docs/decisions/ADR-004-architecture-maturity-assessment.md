@@ -82,6 +82,58 @@ These features are implemented in v10 but NOT explicitly prescribed or demonstra
 
 ---
 
+## Control Plane Live Audit (2026-05-04)
+
+### Feature Classification: Active vs Capability vs Phantom
+
+| Feature | Classification | Evidence |
+|---|---|---|
+| **usp_GenericLoad** (overwrite pattern) | **ACTIVE** | 239 RunLog entries, 22 tables loaded daily |
+| **pl_sc_gold** (registry-driven) | **ACTIVE** | Lookup+ForEach, 7 tables loaded, tested 2x (refactored 2026-05-04) |
+| **Silver DAG waves** | **ACTIVE** | 8 entries, 3 waves (0→1→2), execution order verified in RunLog |
+| **Lineage engine** | **ACTIVE** | 52 edges, auto-rebuilt by usp_BuildLineage/usp_FinalizePipeline |
+| **RunLog + PipelineRunLog** | **ACTIVE** | 239 + 25 entries, UTC + CST dual timestamps |
+| **UTC → CST timezone** | **ACTIVE** | ufn_utc_to_cst returns correct CDT 5h offset |
+| **Smart skip** | **ACTIVE** | monthly tables (10) correctly skipped on daily runs, daily (12) loaded |
+| **Cron parser** | **ACTIVE** | ufn_cron_is_due works (5-field cron), drives next_run_time |
+| **Multi-mart routing** | **PARTIALLY PROVEN** | 2 projects in registry (`supplychain` 28 assets, `SC_ForecastAccuracy` 5 assets). ForEach loops both, but second project is Gold dims only — not a full independent domain yet |
+
+### Load Pattern Honest Assessment
+
+| Pattern | Code in SP | Tables Using It | Live Executions | Classification |
+|---|---|---|---|---|
+| `overwrite` | ✓ | **33/33 tables** | **239 runs** | **ACTIVE — proven** |
+| `incremental` | ✓ | 0 | 0 | **CAPABILITY** — code tested in unit, never in production |
+| `upsert` | ✓ | 0 | 0 | **CAPABILITY** |
+| `datekey` | ✓ | 0 | 0 | **CAPABILITY** |
+| `daterange` | ✓ | 0 | 0 | **CAPABILITY** |
+| `identity` | ✓ | 0 | 0 | **CAPABILITY** |
+| `cdc` | ✓ | 0 | 0 | **CAPABILITY** |
+| `scd2` | ✓ | 0 | 0 | **CAPABILITY** |
+
+**Why only overwrite?** All current sources are full-refresh from Enterprise Lakehouse or SupplyChain Lakehouse. No incremental/CDC use case exists **yet**. 4 EDW supplement tables (`Staging_WRK`) pull full snapshots from SupplyChain_Lakehouse Dataflows — they exist because Enterprise Lakehouse doesn't have equivalent data for: InvoiceDetail (aggregate), InvoiceHeader (aggregate), Product (curated), DemandForecastSnapshot (SC-specific). When Enterprise Lakehouse provides these sources directly, the 4 EDW tables retire (per ADR-002) and views switch to direct read — still overwrite pattern.
+
+Other patterns become relevant when:
+- `incremental`: Large tables (88M+ rows) where daily delta << full refresh
+- `upsert`/`cdc`: Master data with change feeds (customer updates)
+- `scd2`: Track history (product price, warehouse status changes)
+- `datekey`/`daterange`: Partition-level refresh for date-partitioned sources
+
+### Phantom Features (seeded but never executed)
+
+| Feature | Data Seeded | Executions | Status |
+|---|---|---|---|
+| **DQ Engine** | 54 rules (30 active) | 0 DQGateRun entries | `pl_dq_check` exists but not wired into `pl_sc_master` |
+| **Source Contracts** | 674 column definitions | 0 validation runs | `usp_ValidateSourceContract` exists but never called |
+| **Reconciliation** | 6 rules | 0 results | `usp_RunReconciliation` exists but never called |
+| **Performance Baseline** | 0 entries | 0 | Table exists, no data |
+| **Pipeline Cost Log** | 0 entries | 0 | Table exists, no data |
+| **Approval Log** | 0 entries | 0 | Table exists, no data |
+| **Security Policy** | 0 entries | 0 | Table exists, no data |
+| **Deployment Checklist** | 0 entries | 0 | Table exists, no data |
+
+---
+
 ## Known Gaps and Upgrade Paths
 
 ### Critical (must fix before production cutover)
@@ -89,8 +141,8 @@ These features are implemented in v10 but NOT explicitly prescribed or demonstra
 | Gap | Current Score | Target | Fix Description | Effort |
 |---|---|---|---|---|
 | Security model | 4/10 | 8/10 | Design workspace roles, SQL endpoint grants, semantic RLS/OLS, Meta.SecurityPolicy | 1 session |
-| Semantic model | 9/10 → 7/10 (effective) | 10/10 | Deploy sc_forecast_control_tower with TMDL (captured), create dim tables in Gold WH | 1 session |
-| Star schema | 7/10 | 10/10 | CTAS dim tables (Calendar, Product, Warehouse, CustomerGrouping, ForecastHorizon) into Gold WH | 30 min |
+| Semantic model | 9/10 | 10/10 | Deploy sc_forecast_control_tower with TMDL (captured, PascalCase columns ready) | 1 session |
+| ~~Star schema~~ | ~~7/10~~ | ~~10/10~~ | **DONE** (2026-05-04) — 5 Dim tables added to ForecastAccuracy_DW | ~~30 min~~ |
 
 ### High (important for enterprise maturity)
 
@@ -116,14 +168,14 @@ These features are implemented in v10 but NOT explicitly prescribed or demonstra
 
 | Action | Score Impact | New Total |
 |---|---|---|
-| Current baseline | — | 130/150 (86.7%) |
-| + Security matrix design | +4 | 134/150 (89.3%) |
-| + Semantic model deploy | +1 | 135/150 (90.0%) |
-| + Dim tables in Gold WH | +3 | 138/150 (92.0%) |
-| + DQ activation in pipeline | +1 | 139/150 (92.7%) |
-| + CI/CD (unblock IT) | +3 | 142/150 (94.7%) |
-| + Alerting (unblock IT) | +2 | 144/150 (96.0%) |
-| **Maximum achievable** | — | **144/150 (96.0%)** |
+| Current baseline (post Bob Standards rebuild) | — | **134/150 (89.3%)** |
+| + Security matrix design | +4 | 138/150 (92.0%) |
+| + Semantic model deploy | +1 | 139/150 (92.7%) |
+| ~~+ Dim tables in Gold WH~~ | ~~+3~~ | ~~DONE (included in 89.3%)~~ |
+| + DQ activation in pipeline | +1 | 140/150 (93.3%) |
+| + CI/CD (unblock IT) | +3 | 143/150 (95.3%) |
+| + Alerting (unblock IT) | +2 | 145/150 (96.7%) |
+| **Maximum achievable** | — | **145/150 (96.7%)** |
 
 ---
 
