@@ -2,7 +2,7 @@
 
 Date: 2026-05-03
 
-Status: Proposed — pending Bob confirmation on ownership + naming
+Status: Proposed — naming resolved (2026-05-04), ownership questions 3-7 still pending Bob
 
 ## Context
 
@@ -72,15 +72,15 @@ Promote mechanism — export bundle per data product:
 
 ### Open Questions for Bob
 
-| # | Question | Impact | Urgency |
-|---|---|---|---|
-| 1 | Naming convention: PascalCase columns or snake_case? | Full schema rename if PascalCase required | Immediate |
-| 2 | Schema suffix: `_DW`/`_ENH` or clean PascalCase? | Schema rename if suffix required | Immediate |
-| 3 | Promote ownership: VN team deploys on Enterprise WH, or Bob team deploys? | Affects tooling + access requirements | High |
-| 4 | Post-promote maintenance: VN team maintains, or handoff to US? | Affects DQ monitoring + change request process | High |
-| 5 | Enterprise WH target name? | Affects cross-DB references | Medium |
-| 6 | Dictionary API: Can VN team add column metadata to Enterprise Dictionary? | Enables column-level lineage | Medium |
-| 7 | EnterpriseData workspace access for VN team? | Enables source discovery + shortcut management | Medium |
+| # | Question | Impact | Urgency | Status |
+|---|---|---|---|---|
+| 1 | ~~Naming convention: PascalCase columns or snake_case?~~ | ~~Full schema rename~~ | ~~Immediate~~ | **RESOLVED** — PascalCase adopted, ~1,800 columns renamed (2026-05-04) |
+| 2 | ~~Schema suffix: `_DW`/`_ENH` or clean PascalCase?~~ | ~~Schema rename~~ | ~~Immediate~~ | **RESOLVED** — `_DW`/`_ENH`/`_WRK` suffix adopted, 6 schemas renamed (2026-05-04) |
+| 3 | Promote ownership: VN team deploys on Enterprise WH, or Bob team deploys? | Affects tooling + access requirements | High | **PENDING Bob** |
+| 4 | Post-promote maintenance: VN team maintains, or handoff to US? | Affects DQ monitoring + change request process | High | **PENDING Bob** |
+| 5 | Enterprise WH target name? | Affects cross-DB references | Medium | **PENDING Bob** |
+| 6 | Dictionary API: Can VN team add column metadata to Enterprise Dictionary? | Enables column-level lineage | Medium | **PENDING Bob** |
+| 7 | EnterpriseData workspace access for VN team? | Enables source discovery + shortcut management | Medium | **PENDING Bob** |
 
 ## Consequences
 
@@ -95,7 +95,7 @@ Promote mechanism — export bundle per data product:
 ### Costs and Risks
 
 - Pipeline reconfiguration at promote time is manual (~1-2 day effort per data product).
-- If naming convention differs from current (snake_case → PascalCase), migration is significant — every Silver/Gold column + every View + every SP.
+- ~~If naming convention differs from current (snake_case → PascalCase), migration is significant.~~ **DONE** — full rebuild executed 2026-05-04 (22 tables, 23 views, ~1,800 columns, 7 Gold tables).
 - Post-promote ownership must be clearly defined before first promote — ambiguity leads to orphaned data products.
 - Cross-DB 3-part naming creates coupling to warehouse names — consider parameterizing.
 
@@ -103,5 +103,5 @@ Promote mechanism — export bundle per data product:
 
 1. **Parameterize pipeline GUIDs** — move workspaceId/artifactId to pipeline parameters for promote portability.
 2. **Build export script** — `export_data_product.py` to dump all SQL + config for a given project.
-3. **Hold on new data products** until naming convention is confirmed with Bob — rename cost >> delay cost.
+3. ~~**Hold on new data products** until naming convention is confirmed with Bob~~ — **RESOLVED**: naming convention confirmed and implemented (2026-05-04).
 4. **Request EnterpriseData access** — Cherry's message to Bob is the right first step.

@@ -2,7 +2,7 @@
 
 Date: 2026-05-01
 
-Status: Proposed
+Status: Proposed — Active (4 EDW supplement tables still in `Staging_WRK`, pending Enterprise Lakehouse data completeness)
 
 ## Context
 
