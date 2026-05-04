@@ -354,4 +354,4 @@ with tab3:
         st.info(f"Total: {len(filtered)} views")
 
 st.markdown("---")
-st.caption("Supply Chain Warehouse — Lineage Explorer | Data auto-refreshed via GitHub Actions")
+st.caption("Fabric Lineage Flow — Supply Chain | Data auto-refreshed via GitHub Actions")

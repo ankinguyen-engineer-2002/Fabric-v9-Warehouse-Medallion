@@ -25,6 +25,8 @@ Pure T-SQL stored procedures. No Notebooks. No PySpark. No Lakehouse ETL.<br/>
 
 [Architecture](#architecture-overview) · [Pipeline Topology](#pipeline-topology) · [Control Plane](#control-plane-detail) · [Load Patterns](#generic-sp--8-load-patterns) · [DQ Engine](#data-quality-engine) · [Onboarding](#onboarding-guide)
 
+[![Lineage Explorer](https://img.shields.io/badge/LIVE-Fabric_Lineage_Flow-0ea5e9?style=for-the-badge&logo=streamlit&logoColor=white)](https://supplychain-lineage-vn.streamlit.app/)
+
 ---
 
 </div>
