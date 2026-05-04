@@ -12,7 +12,7 @@
 ![BI](https://img.shields.io/badge/BI-Direct_Lake-F2C811?style=for-the-badge&logo=powerbi&logoColor=black)
 
 ![PIPELINES](https://img.shields.io/badge/PIPELINES-7-2196F3?style=flat-square)
-![OBJECTS](https://img.shields.io/badge/OBJECTS-90+-4CAF50?style=flat-square)
+![OBJECTS](https://img.shields.io/badge/OBJECTS-100+-4CAF50?style=flat-square)
 ![LOAD PATTERNS](https://img.shields.io/badge/LOAD_PATTERNS-8-FF9800?style=flat-square)
 ![DQ CHECK TYPES](https://img.shields.io/badge/DQ_CHECK_TYPES-7-E91E63?style=flat-square)
 ![RUNTIME](https://img.shields.io/badge/RUNTIME-~31_min-00BCD4?style=flat-square)
