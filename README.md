@@ -135,7 +135,7 @@ Add any table = INSERT registry + CREATE VIEW. Zero code change.
 │  └── Role: Domain reference data, loaded via usp_GenericLoad                 │
 │                                                                              │
 │  {DomainSchema}_ENH (N tables, N views)     — DAG Wave 0,1,N —               │
-│  ├── {DomainTable_A}         ← {Domain}_WRK + ReferenceMaster_ENH             │
+│  ├── {DomainTable_A}         ← {Domain}_WRK + ReferenceMaster_ENH            │
 │  ├── {DomainTable_B}         ← DomainTable_A + REF                           │
 │  └── ...repeat per domain schema                                             │
 │                                                                              │
@@ -156,8 +156,8 @@ Add any table = INSERT registry + CREATE VIEW. Zero code change.
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │  {ServingSchema}_DW (N tables, N views)  — Star Schema —                     │
-│  ├── Fact{Subject_1}         ← registry-driven pipeline from Silver           │
-│  ├── Fact{Subject_N}         ← registry-driven pipeline from Silver           │
+│  ├── Fact{Subject_1}         ← registry-driven pipeline from Silver          │
+│  ├── Fact{Subject_N}         ← registry-driven pipeline from Silver          │
 │  ├── Dim{Dimension_1}...N    ← registry-driven pipeline from REF             │
 │  └── Role: Direct Lake semantic model reads from here                        │
 │                                                                              │
