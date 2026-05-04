@@ -71,6 +71,19 @@ jobs:
               name_map[r[0]] = r[2]
               if r[1]: name_map[r[1]] = r[2]
 
+          # Extra mappings for nodes not in registry (intermediate feeds + logical bronze)
+          name_map.update({
+              'bronze.brz_saleshistory_afi__invoicedetail_edw': 'SupplyChain_Lakehouse.InvoiceDetail_ver2',
+              'bronze.brz_saleshistory_afi__invoiceheader_edw': 'SupplyChain_Lakehouse.InvoiceHeader_ver2',
+              'bronze.brz_supplychain_enh_1__demandforecastsnapshotdaily_edw': 'SupplyChain_Lakehouse.DemandForecast_ver2',
+              'bronze.ref_product_edw': 'SupplyChain_Lakehouse.Product_ver2',
+              'bronze.brz_wholesale_codis_afi__codatan': 'Wholesale_Codis.Codatan',
+              'bronze.brz_wholesale_codis_afi__comast': 'Wholesale_Codis.Comast',
+              'bronze.brz_wholesale_codis_afi__extord': 'Wholesale_Codis.Extord',
+              'bronze.brz_wholesale_codis_afi__extorit': 'Wholesale_Codis.Extorit',
+              'manual': 'Manual.ForecastHorizon',
+          })
+
           def to_physical(canonical):
               return name_map.get(canonical, canonical)
 
