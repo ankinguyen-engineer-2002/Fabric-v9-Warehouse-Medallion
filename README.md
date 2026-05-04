@@ -123,27 +123,21 @@ Add any table = INSERT registry + CREATE VIEW. Zero code change.
 │                             Processing_Warehouse                             │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│  Staging_WRK (4 tables, 4 views, 1 SP)                                       │
-│  ├── InvoiceDetailEdw        ← CTAS from SupplyChain Lakehouse               │
-│  ├── InvoiceHeaderEdw        ← CTAS from SupplyChain Lakehouse               │
-│  ├── ProductEdw, DemandForecastSnapshotDailyEdw                              │
-│  ├── vw_Codatan, vw_Comast, vw_Extord, vw_Extorit                           │
+│  {Domain}_WRK (N tables, N views, 1 SP)                                      │
+│  ├── {EdwTable_1}            ← CTAS from SupplyChain Lakehouse               │
+│  ├── {EdwTable_N}            ← CTAS from SupplyChain Lakehouse               │
+│  ├── vw_{Source_1}...N       → column mapping from raw sources               │
 │  └── usp_RefreshEdwTables    → CTAS all EDW supplement tables                │
 │                                                                              │
-│  ReferenceMaster_ENH (10 tables, 11 views)                                   │
-│  ├── Calendar, ItemMaster, Warehouse, CustomerGrouping, ...                  │
+│  ReferenceMaster_ENH (N tables, N views)                                     │
+│  ├── {RefTable_1}            ← Enterprise_Lakehouse source                   │
+│  ├── {RefTable_N}            ← Enterprise_Lakehouse source                   │
 │  └── Role: Domain reference data, loaded via usp_GenericLoad                 │
 │                                                                              │
-│  SalesHistory_ENH (4 tables, 4 views)       — DAG Wave 0,1 —                 │
-│  ├── InvoiceDetailLineLevel  ← Staging_WRK + ReferenceMaster_ENH             │
-│  ├── InvoiceWeekly, ActualDemandMonthly, ActualDemandWeekly                  │
-│  └── ...                                                                     │
-│                                                                              │
-│  ForecastHistory_ENH (2 tables, 2 views)    — DAG Wave 0,1 —                 │
-│  ├── ForecastDemandMonthly, NaiveForecastMonthly                             │
-│                                                                              │
-│  OpenOrderHistory_ENH (2 tables, 2 views)   — DAG Wave 0,1 —                 │
-│  ├── OpenOrderLineLevel, OpenOrderMonthly                                    │
+│  {DomainSchema}_ENH (N tables, N views)     — DAG Wave 0,1,N —               │
+│  ├── {DomainTable_A}         ← {Domain}_WRK + ReferenceMaster_ENH             │
+│  ├── {DomainTable_B}         ← DomainTable_A + REF                           │
+│  └── ...repeat per domain schema                                             │
 │                                                                              │
 │  Meta (20 tables, 5 views, 16 SPs, 3 functions)                              │
 │  ├── AssetRegistry             Registry: asset, layer, schedule              │
@@ -161,11 +155,10 @@ Add any table = INSERT registry + CREATE VIEW. Zero code change.
 │                                Gold_Warehouse                                │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│  ForecastAccuracy_DW (7 tables, 7 views)  — Complete Star Schema —           │
-│  ├── FactForecastActual      ← registry-driven pipeline from Silver           │
-│  ├── FactForecastKpi         ← registry-driven pipeline from Silver           │
-│  ├── DimCalendar, DimCustomerGrouping, DimWarehouse                          │
-│  ├── DimProduct, DimForecastHorizon                                          │
+│  {ServingSchema}_DW (N tables, N views)  — Star Schema —                     │
+│  ├── Fact{Subject_1}         ← registry-driven pipeline from Silver           │
+│  ├── Fact{Subject_N}         ← registry-driven pipeline from Silver           │
+│  ├── Dim{Dimension_1}...N    ← registry-driven pipeline from REF             │
 │  └── Role: Direct Lake semantic model reads from here                        │
 │                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
@@ -196,18 +189,17 @@ SupplyChain_Lakehouse (EDW supplement dataflows)
 
 **Rules:**
 - Default: direct read via 3-part naming (no local copy)
-- Exception: CTAS into `Staging_WRK` schema only when EDW supplement, unstable source, snapshot consistency, or replay/debug needed
-- Source access views (`Staging_WRK.vw_{Source}`, etc.) handle column mapping from raw formats
+- Exception: CTAS into `{Domain}_WRK` schema only when EDW supplement, unstable source, snapshot consistency, or replay/debug needed
+- Source access views (`{Domain}_WRK.vw_{Source}`, etc.) handle column mapping from raw formats
 
 ### Silver — Domain Process Schemas
 
 ```
 Processing_Warehouse/
-  ├── Staging_WRK/          Exception-only persistence (EDW supplement)
+  ├── {Domain}_WRK/         Exception-only persistence (EDW supplement)
   ├── ReferenceMaster_ENH/  Domain reference data (Calendar, ItemMaster, etc.)
-  ├── SalesHistory_ENH/     Invoice + demand transformations
-  ├── ForecastHistory_ENH/  Forecast demand + naive forecast
-  ├── OpenOrderHistory_ENH/ Open order transformations
+  ├── {DomainSchema_1}_ENH/ Business transformations for domain 1
+  ├── {DomainSchema_N}_ENH/ ...repeat per domain
   └── Meta/                 Control plane (registry, DQ, lineage, logging)
 ```
 
@@ -244,26 +236,18 @@ Gold_Warehouse/
 
 ```
 Processing_Warehouse/
-├── Staging_WRK/                       ── Exception-only persistence ──
-│   ├── Tables/   (4 EDW supplement)   CTAS from Lakehouse _ver2 (PascalCase)
-│   ├── Views/    (4 source access)    Column mapping from raw sources
+├── {Domain}_WRK/                      ── Exception-only persistence ──
+│   ├── Tables/   (N EDW supplement)   CTAS from Lakehouse (PascalCase columns)
+│   ├── Views/    (N source access)    Column mapping from raw sources
 │   └── SPs/      (1)                  usp_RefreshEdwTables
 │
 ├── ReferenceMaster_ENH/               ── Domain reference data ──
-│   ├── Tables/   (10 ref tables)      Calendar, ItemMaster, OrderType, etc.
-│   └── Views/    (11 source views)    vw_Calendar → Enterprise_Lakehouse.MasterData_DW.DimDate
+│   ├── Tables/   (N ref tables)       Calendar, ItemMaster, Warehouse, etc.
+│   └── Views/    (N source views)     vw_{RefTable} → Enterprise_Lakehouse.{Schema}.{Table}
 │
-├── SalesHistory_ENH/                  ── Invoice + demand ──
-│   ├── Tables/   (4)                  InvoiceDetailLineLevel, InvoiceWeekly, ActualDemand*
-│   └── Views/    (4)                  Business transformation logic
-│
-├── ForecastHistory_ENH/               ── Forecast demand ──
-│   ├── Tables/   (2)                  ForecastDemandMonthly, NaiveForecastMonthly
-│   └── Views/    (2)                  Forecast transformation logic
-│
-├── OpenOrderHistory_ENH/              ── Open orders ──
-│   ├── Tables/   (2)                  OpenOrderLineLevel, OpenOrderMonthly
-│   └── Views/    (2)                  Open order transformation logic
+├── {DomainSchema}_ENH/                ── Domain Silver (repeat per domain) ──
+│   ├── Tables/   (N domain tables)    Business-transformed data
+│   └── Views/    (N transform views)  VIEW = transformation logic
 │
 └── Meta/                              ── Control Plane ──
     ├── Tables/   (20)                 AssetRegistry, DQRule, LineageEdge, RunLog, ...
@@ -272,11 +256,10 @@ Processing_Warehouse/
     └── Functions (3)                  ufn_utc_to_cst, ufn_should_run, ufn_cron_is_due
 
 Gold_Warehouse/
-└── ForecastAccuracy_DW/               ── Gold star schema ──
-    ├── Facts/    (2)                  FactForecastActual, FactForecastKpi
-    ├── Dims/     (5)                  DimCalendar, DimCustomerGrouping, DimWarehouse,
-    │                                  DimProduct, DimForecastHorizon
-    └── Views/    (7)                  Cross-DB read from Processing WH
+└── {ServingSchema}_DW/                ── Gold star schema ──
+    ├── Facts/    (N)                  Fact{Subject} tables
+    ├── Dims/     (N)                  Dim{Dimension} tables
+    └── Views/    (N)                  Cross-DB read from Processing WH
 ```
 
 ---
@@ -288,8 +271,8 @@ Gold_Warehouse/
 ```
 Source (Lakehouse/Shortcuts)
   │
-  ├─ Staging_WRK.usp_RefreshEdwTables ──→ Staging_WRK tables (EDW supplement CTAS)
-  ├─ ReferenceMaster_ENH views ──→ ReferenceMaster_ENH tables (via usp_GenericLoad)
+  ├─ {Domain}_WRK.usp_RefreshEdwTables ──→ Staging tables (EDW supplement CTAS)
+  ├─ ReferenceMaster_ENH views ──→ ReferenceMaster tables (via usp_GenericLoad)
   │
   ├─ Silver Wave 0 (no Silver deps, parallel)
   │   └─ Tables that read from Staging_WRK + ReferenceMaster_ENH + Enterprise_Lakehouse
@@ -754,10 +737,10 @@ Architecture audited and fully compliant with enterprise DW standards (Bob/Rakes
 | Pending Bob decision | 2 | Schema suffix convention (_DW/_ENH/_WRK vs PascalCase), Column naming (snake_case vs PascalCase) |
 | Not applicable | 7 | HASH/REPLICATE, CCIX/CIX, partitioning, statistics, SQL Agent, PolyBase, SSIS |
 
-### Pending Decisions (ask Bob)
+### Resolved (2026-05-04)
 
-1. **Schema suffix**: DOCX says `ForecastHistory_ENH`, `ForecastAccuracy_DW`. Email says PascalCase only. Current v10 uses PascalCase without suffix. Rebuild ~1 session if suffix required.
-2. **Column naming**: DOCX says PascalCase. v10 + v9 + existing semantic models all use snake_case. Rebuild ~1 session if PascalCase required.
+1. **Schema suffix**: `_DW` (Gold), `_ENH` (Silver), `_WRK` (Staging) adopted per DOCX. Full rebuild completed.
+2. **Column naming**: PascalCase adopted. ~1,800 columns renamed.
 
 ---
 
