@@ -322,6 +322,47 @@ function DiagramCanvas({graph,collapsed,searchTerm,activeFilter}) {
 
     <svg style={{position:"absolute",left:0,top:0,width:"100%",height:"100%"}}>
       <g transform={`translate(${pan.x},${pan.y}) scale(${zoom})`}>
+        {/* Medallion layer outer borders */}
+        {(() => {
+          if (!layerMeta || !sorted || !sorted.length) return null;
+          const MEDALLION = [
+            { label: "BRONZE", color: "#94a3b8", origLayers: [0], desc: "Enterprise_Lakehouse + SupplyChain_Lakehouse" },
+            { label: "SILVER", color: "#3b82f6", origLayers: [1,2,3,4,5,6,7], desc: "Processing Warehouse" },
+            { label: "GOLD",   color: "#f59e0b", origLayers: [8], desc: "Gold Warehouse" },
+          ];
+          const borders = [];
+          MEDALLION.forEach(m => {
+            const cols = sorted.filter((l,ci) => {
+              const meta = layerMeta.get(l);
+              return meta && m.origLayers.includes(meta.origLayer);
+            });
+            if (!cols.length) return;
+            let gMinX=Infinity,gMinY=Infinity,gMaxX=-Infinity,gMaxY=-Infinity;
+            cols.forEach(l => {
+              const ci = sorted.indexOf(l);
+              const g = groups.get(l);
+              if (!g) return;
+              const colX = ci * ((NW||320) + (HG||100));
+              g.forEach(n => {
+                const p = np.get(n.id);
+                if (p) { gMinX=Math.min(gMinX,colX); gMinY=Math.min(gMinY,p.y); gMaxX=Math.max(gMaxX,colX+(NW||320)); gMaxY=Math.max(gMaxY,p.y+p.h); }
+              });
+            });
+            if (gMinX === Infinity) return;
+            const op = 30;
+            borders.push(
+              <g key={`medal-${m.label}`}>
+                <rect x={gMinX-op} y={gMinY-66} width={gMaxX-gMinX+op*2} height={gMaxY-gMinY+66+op}
+                  rx={16} fill="none" stroke={m.color} strokeOpacity={0.25} strokeWidth={2} strokeDasharray="8 4" />
+                <text x={(gMinX+gMaxX)/2} y={gMinY-50} textAnchor="middle" fill={m.color} fontSize={13}
+                  fontWeight={800} fontFamily="'JetBrains Mono',monospace" opacity={0.4} letterSpacing={3}>{m.label}</text>
+                <text x={(gMinX+gMaxX)/2} y={gMinY-36} textAnchor="middle" fill={m.color} fontSize={9}
+                  fontFamily="'JetBrains Mono',monospace" opacity={0.25}>{m.desc}</text>
+              </g>
+            );
+          });
+          return borders;
+        })()}
         {/* Column backgrounds + headers */}
         {layerMeta && sorted && sorted.map((l, ci) => {
           const meta = layerMeta.get(l);
