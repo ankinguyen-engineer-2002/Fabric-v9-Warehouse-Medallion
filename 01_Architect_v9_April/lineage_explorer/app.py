@@ -231,15 +231,26 @@ def build_dag_data():
             return "gld"
 
         # EDW supplement staging tables — separate tier between Source and Bronze
-        if n.endswith("_edw"):
+        if n.endswith("_edw") or n.endswith("Edw"):
             return "stg"
 
-        # Fallback: prefix-based (lineage source nodes not in registry)
+        # Fallback: schema-based (physical names from v10 Bob Standards)
+        schema = name.split(".")[0] if "." in name else ""
+        if schema.endswith("_ENH"):
+            return f"slv{slv_waves.get(reg_key, 0)}"
+        if schema.endswith("_WRK") or schema == "Staging_WRK":
+            return "stg"
+        if schema.endswith("_DW") or schema == "ForecastAccuracy_DW":
+            return "gld"
+        if schema == "ReferenceMaster_ENH":
+            return "brz"
+
+        # Legacy fallback: prefix-based (canonical names)
         if n.startswith("brz_") or n.startswith("ref_"):
             return "brz"
         if n.startswith("slv_"):
             return f"slv{slv_waves.get(reg_key, 0)}"
-        if n.startswith("gld_") or n.startswith("dim_"):
+        if n.startswith("gld_") or n.startswith("dim_") or n.startswith("Dim") or n.startswith("Fact"):
             return "gld"
         return "other"
 
