@@ -68,9 +68,9 @@ function getNodeType(name) {
 }
 
 const TYPE_CONFIG = {
-  stg:   { color: "#a78bfa", label: "STG",   icon: "◈" },
-  brz:   { color: "#22c55e", label: "BRZ",   icon: "◇" },
-  ref:   { color: "#14b8a6", label: "REF",   icon: "◎" },
+  stg:   { color: "#a78bfa", label: "Staging_WRK",   icon: "◈" },
+  brz:   { color: "#22c55e", label: "RefMaster_ENH",  icon: "◇" },
+  ref:   { color: "#14b8a6", label: "RefMaster_ENH",  icon: "◎" },
   slv:   { color: "#3b82f6", label: "SLV",   icon: "◆" },
   slv0:  { color: "#60a5fa", label: "SLV-W0", icon: "◆" },
   slv1:  { color: "#3b82f6", label: "SLV-W1", icon: "◆" },
@@ -79,7 +79,7 @@ const TYPE_CONFIG = {
   slv4:  { color: "#1e40af", label: "SLV-W4", icon: "◆" },
   gld:   { color: "#f59e0b", label: "GLD",   icon: "★" },
   dq:    { color: "#ef4444", label: "DQ",    icon: "●" },
-  other: { color: "#94a3b8", label: "Raw",   icon: "○" },
+  other: { color: "#94a3b8", label: "Bronze (Source)", icon: "○" },
 };
 
 function lineageToGraph(nbMap) {
@@ -121,7 +121,7 @@ function apiJsonToGraph(data) {
 }
 
 /* ─── DAG Layout ─── */
-const LAYER_LABELS = {0:'Source',1:'EDW Staging',2:'Bronze / REF',3:'Silver W0',4:'Silver W1',5:'Silver W2',6:'Silver W3',7:'Silver W4',8:'Gold'};
+const LAYER_LABELS = {0:'Bronze (Sources)',1:'Silver (Staging_WRK)',2:'Silver (ReferenceMaster_ENH)',3:'Silver W0 (Domain_ENH)',4:'Silver W1',5:'Silver W2',6:'Silver W3',7:'Silver W4',8:'Gold (ForecastAccuracy_DW)'};
 const LAYER_COLORS = {0:'#94a3b8',1:'#a78bfa',2:'#22c55e',3:'#60a5fa',4:'#3b82f6',5:'#2563eb',6:'#1d4ed8',7:'#1e40af',8:'#f59e0b'};
 
 function layoutDAG(nodes, edges, collapsed) {

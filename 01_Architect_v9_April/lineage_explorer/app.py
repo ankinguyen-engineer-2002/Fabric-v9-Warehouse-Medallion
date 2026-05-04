@@ -46,7 +46,7 @@ if not check_login():
 
 DATA_DIR = Path(__file__).parent / "data"
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=60)
 def load_csv(filename):
     path = DATA_DIR / filename
     if not path.exists():
@@ -149,7 +149,7 @@ def build_recursive_mini_dag(lineage_rows, selected_schema, selected_table):
     walk(selected_schema, selected_table, selected=True)
     return {"nodes": mini_nodes, "edges": mini_edges}
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=60)
 def build_dag_data():
     rows = load_augmented_lineage_rows()
     registry = {r.get("target_table", ""): r for r in load_csv("registry.csv")}
@@ -353,7 +353,7 @@ with tab2:
 # ══ TAB 3: View Definitions ══
 with tab3:
     st.header("👁️ View Definitions")
-    st.caption("SQL source code of all ETL views (bronze / silver / gold)")
+    st.caption("SQL source code of all ETL views (ReferenceMaster_ENH / Domain_ENH / ForecastAccuracy_DW)")
     views = load_csv("views.csv")
     if views:
         schemas = sorted(set(v.get("schema", "") for v in views))
@@ -365,4 +365,4 @@ with tab3:
         st.info(f"Total: {len(filtered)} views")
 
 st.markdown("---")
-st.caption("Fabric Lineage Flow — Supply Chain | Data auto-refreshed via GitHub Actions")
+st.caption("Fabric Lineage Flow — Supply Chain | Hybrid Medallion v10 (Bob Standards) | Data auto-refreshed via GitHub Actions")
