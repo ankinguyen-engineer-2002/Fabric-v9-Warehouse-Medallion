@@ -61,51 +61,22 @@ jobs:
 
           data_dir = "01_Architect_v9_April/lineage_explorer/data"
 
-          # Build canonical → physical name map from AssetRegistry
-          cursor.execute("""
-              SELECT asset_id, legacy_sp_name, physical_schema + '.' + physical_object AS physical_name
-              FROM Meta.AssetRegistry WHERE is_active = 1
-          """)
-          name_map = {}
-          for r in cursor.fetchall():
-              name_map[r[0]] = r[2]
-              if r[1]: name_map[r[1]] = r[2]
-
-          # Extra mappings for nodes not in registry — use ACTUAL lakehouse table names
-          name_map.update({
-              'bronze.brz_saleshistory_afi__invoicedetail_edw': 'SupplyChain_Lakehouse.brz_saleshistory_afi__invoicedetail_ver2',
-              'bronze.brz_saleshistory_afi__invoiceheader_edw': 'SupplyChain_Lakehouse.brz_saleshistory_afi__invoiceheader_ver2',
-              'bronze.brz_supplychain_enh_1__demandforecastsnapshotdaily_edw': 'SupplyChain_Lakehouse.brz_supplychain_enh_1__demandforecastsnapshotdaily_ver2',
-              'bronze.ref_product_edw': 'SupplyChain_Lakehouse.ref_product_ver2',
-              'bronze.brz_wholesale_codis_afi__codatan': 'Enterprise_Lakehouse.Wholesale_Codis_AFI.codatan',
-              'bronze.brz_wholesale_codis_afi__comast': 'Enterprise_Lakehouse.Wholesale_Codis_AFI.COMAST',
-              'bronze.brz_wholesale_codis_afi__extord': 'Enterprise_Lakehouse.Wholesale_Codis_AFI.EXTORD',
-              'bronze.brz_wholesale_codis_afi__extorit': 'Enterprise_Lakehouse.Wholesale_Codis_AFI.EXTORIT',
-              'manual': 'Manual.ForecastHorizon',
-          })
-
-          def to_physical(canonical):
-              return name_map.get(canonical, canonical)
-
+          # Export lineage — edges already use physical names (no mapping needed)
           def split_name(name):
-              for sep in ['::', '.']:
-                  if sep in name:
-                      parts = name.split(sep, 1)
-                      return parts[0], parts[1]
+              if '.' in name:
+                  parts = name.split('.', 1)
+                  return parts[0], parts[1]
               return name, name
 
-          # Export lineage with physical names (v10: Meta.LineageEdge → AssetRegistry mapping)
           cursor.execute("SELECT source_asset, target_asset, edge_type FROM Meta.LineageEdge ORDER BY target_asset, source_asset")
           rows = cursor.fetchall()
           with open(f"{data_dir}/lineage.csv", "w", newline="") as f:
               w = csv.writer(f)
               w.writerow(["lineage_id","source_schema","source_table","target_schema","target_table","relationship_type","sp_name"])
               for i, r in enumerate(rows, 1):
-                  src = to_physical(r[0])
-                  tgt = to_physical(r[1])
-                  ss, st = split_name(src)
-                  ts, tt = split_name(tgt)
-                  w.writerow([i, ss, st, ts, tt, r[2], tgt])
+                  ss, st = split_name(r[0])
+                  ts, tt = split_name(r[1])
+                  w.writerow([i, ss, st, ts, tt, r[2], r[1]])
 
           # Export registry with physical names
           cursor.execute("""
@@ -127,10 +98,6 @@ jobs:
               w.writerow(cols)
               for r in rows:
                   row = list(r)
-                  # Translate source_objects canonical → physical
-                  if row[9]:
-                      for k, v in name_map.items():
-                          row[9] = str(row[9]).replace(f'"{k}"', f'"{v}"')
                   w.writerow(row)
 
           # Export views (v10: from sys.sql_modules via cross-DB)

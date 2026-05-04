@@ -163,21 +163,25 @@ def build_dag_data():
     # Compute silver waves from depends_on
     slv_waves = {}
     slv_regs = [r for r in registry.values() if r.get("layer", "").strip() == "DomainSilver"]
-    # Wave 0: no silver dependencies
+    # Build set of Silver table names for dependency matching
+    slv_table_set = set(r.get("target_table", "") for r in slv_regs)
+
+    # Wave 0: no Silver dependencies in depends_on
     for r in slv_regs:
         deps = r.get("depends_on", "") or ""
-        if not deps or deps in ("nan", "None") or "silver" not in deps:
+        if not deps or deps in ("nan", "None"):
             slv_waves[r.get("target_table", "")] = 0
-    # Build snake_case → PascalCase lookup for dependency resolution
-    snake_to_pascal = {}
-    for tbl, reg in registry.items():
-        # slv_invoice_detail_line_level → InvoiceDetailLineLevel
-        snake_name = tbl[0].lower() + "".join(f"_{c.lower()}" if c.isupper() else c for c in tbl[1:])
-        snake_to_pascal[f"slv_{snake_name}"] = tbl
-        snake_to_pascal[tbl.lower()] = tbl
-        snake_to_pascal[tbl] = tbl
+        else:
+            try:
+                dep_list = json.loads(deps)
+                # Check if any dependency is a Silver table (by physical name match)
+                has_slv_dep = any(d.split(".")[-1] in slv_table_set for d in dep_list)
+                if not has_slv_dep:
+                    slv_waves[r.get("target_table", "")] = 0
+            except:
+                slv_waves[r.get("target_table", "")] = 0
 
-    # Wave 1..N: collect all candidates per wave THEN assign
+    # Wave 1..N: iterative assignment
     for wave in range(1, 30):
         newly_assigned = {}
         for r in slv_regs:
@@ -186,12 +190,7 @@ def build_dag_data():
             deps = r.get("depends_on", "") or ""
             try:
                 dep_list = json.loads(deps)
-                dep_tables = []
-                for d in dep_list:
-                    if "silver" in d or "slv" in d:
-                        raw_name = d.split(".")[-1]
-                        resolved = snake_to_pascal.get(raw_name, raw_name)
-                        dep_tables.append(resolved)
+                dep_tables = [d.split(".")[-1] for d in dep_list if d.split(".")[-1] in slv_table_set]
                 if dep_tables and all(dt in slv_waves for dt in dep_tables):
                     newly_assigned[tbl] = wave
             except: pass
@@ -210,48 +209,48 @@ def build_dag_data():
         node_to_registry[f"gld_{snake}"] = tbl
         node_to_registry[snake] = tbl
 
+    # Build schema→tier lookup from registry
+    schema_tier = {}
+    for tbl, reg in registry.items():
+        schema = reg.get("target_schema", "")
+        layer = (reg.get("layer", "") or "").strip()
+        if layer == "DomainSilver": schema_tier[schema] = "slv"
+        elif layer == "Staging": schema_tier[schema] = "stg"
+        elif layer == "ReferenceMaster": schema_tier[schema] = "brz"
+        elif layer == "Gold": schema_tier[schema] = "gld"
+
     def get_tier(name):
-        """Tier assignment using registry layer + wave computation."""
+        """Tier assignment using physical schema names."""
         n = name.lower()
-        if "enterprise_lakehouse" in n or "supplychain_lakehouse" in n:
+        # External sources → Bronze
+        if "enterprise_lakehouse" in n or "supplychain_lakehouse" in n or "manual" in n:
             return "other"
 
-        # Resolve snake_case node name to PascalCase registry key
-        reg_key = node_to_registry.get(name) or node_to_registry.get(n, name)
+        # Extract table name (after last dot)
+        tbl = name.split(".")[-1] if "." in name else name
+        schema = name.split(".")[0] if "." in name else ""
 
-        # Check registry layer (v10 format)
-        layer = layer_map.get(reg_key, "")
+        # Direct registry match
+        layer = layer_map.get(tbl, "")
         if layer == "DomainSilver":
-            return f"slv{slv_waves.get(reg_key, 0)}"
+            return f"slv{slv_waves.get(tbl, 0)}"
         if layer == "Staging":
             return "stg"
-        if layer in ("ReferenceMaster", "LogicalBronze"):
+        if layer == "ReferenceMaster":
             return "brz"
         if layer == "Gold":
             return "gld"
 
-        # EDW supplement staging tables — separate tier between Source and Bronze
-        if n.endswith("_edw") or n.endswith("Edw"):
-            return "stg"
+        # Schema-based fallback
+        if schema in schema_tier:
+            tier = schema_tier[schema]
+            return f"slv{slv_waves.get(tbl, 0)}" if tier == "slv" else tier
 
-        # Fallback: schema-based (physical names from v10 Bob Standards)
-        schema = name.split(".")[0] if "." in name else ""
-        if schema.endswith("_ENH"):
-            return f"slv{slv_waves.get(reg_key, 0)}"
-        if schema.endswith("_WRK") or schema == "Staging_WRK":
-            return "stg"
-        if schema.endswith("_DW") or schema == "ForecastAccuracy_DW":
-            return "gld"
-        if schema == "ReferenceMaster_ENH":
-            return "brz"
-
-        # Legacy fallback: prefix-based (canonical names)
-        if n.startswith("brz_") or n.startswith("ref_"):
-            return "brz"
-        if n.startswith("slv_"):
-            return f"slv{slv_waves.get(reg_key, 0)}"
-        if n.startswith("gld_") or n.startswith("dim_") or n.startswith("Dim") or n.startswith("Fact"):
-            return "gld"
+        # Name-based fallback
+        if "Edw" in name: return "stg"
+        if schema.endswith("_ENH"): return f"slv{slv_waves.get(tbl, 0)}"
+        if schema.endswith("_WRK"): return "stg"
+        if schema.endswith("_DW"): return "gld"
         return "other"
 
     for row in rows:
