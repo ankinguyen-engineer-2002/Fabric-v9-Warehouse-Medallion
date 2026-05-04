@@ -33,10 +33,10 @@ Scored against 15 criteria derived from 10+ authoritative Microsoft sources:
 |---|---|---|---|---:|---|
 | 1 | Medallion 3-layer separation | "Keep each layer separated in its own lakehouse or data warehouse" | 2 Lakehouses (Bronze) + Processing WH (Silver) + Gold WH (Gold) | **10/10** | Matches Pattern 2: Bronze/Silver lakehouse, Gold warehouse |
 | 2 | Bronze = shortcuts, no copy | "Create a shortcut instead of copying data across" | Enterprise_Lakehouse shortcuts; staging only for 4 EDW exceptions | **9/10** | -1: 4 EDW supplement tables still copied (documented in ADR-002) |
-| 3 | Silver = clean, standardize | "Fix errors, standardize formats, remove duplicates" using Delta tables | 3 domain schemas PascalCase, VIEW + CTAS pattern, Delta tables | **9/10** | -1: Column naming uses snake_case vs recommended PascalCase |
+| 3 | Silver = clean, standardize | "Fix errors, standardize formats, remove duplicates" using Delta tables | 5 domain schemas with Bob suffix (`_ENH`, `_WRK`), VIEW + CTAS pattern, Delta tables, PascalCase columns | **10/10** | Schema suffix + PascalCase columns per Bob DOCX (rebuilt 2026-05-04) |
 | 4 | Gold = curated, BI-ready | "Organize for reports and dashboards" in dedicated serving item | Dedicated Gold Warehouse, FactForecastActual/Kpi with Fact prefix | **10/10** | Exact match |
 | 5 | Direct Lake for Gold | "Ideal choice for the gold analytics layer in medallion architecture" | Gold physical tables in Delta format, Direct Lake ready | **9/10** | -1: Semantic model not yet created (TMDL captured, pending deploy) |
-| 6 | Star schema / Kimball | "De-normalized star schema encouraged"; "Fact/Dim prefixes" | Fact tables in Gold, dims in ReferenceMaster (Processing WH) | **7/10** | -3: Dim tables not yet in Gold WH; incomplete star schema |
+| 6 | Star schema / Kimball | "De-normalized star schema encouraged"; "Fact/Dim prefixes" | Complete star schema in `ForecastAccuracy_DW`: 2 Fact + 5 Dim tables | **10/10** | DimCalendar, DimCustomerGrouping, DimWarehouse, DimProduct, DimForecastHorizon (added 2026-05-04) |
 | 7 | Metadata-driven ETL | "Metadata-driven frameworks enable incremental ingestion at scale" | AssetRegistry, 8 load patterns, 1 generic SP for all tables | **10/10** | Exceeds: MS mentions metadata-driven; v10 has full control plane |
 | 8 | ETL logging | "Log the results of the ETL process" | RunLog (UTC+CST), PipelineRunLog, retry 3x, snapshot conflict handling | **10/10** | Exceeds: MS says "log results"; v10 has UTC+CST, retry, conflict handling |
 | 9 | Cross-database queries | "CTAS, INSERT...SELECT from other warehouses in same workspace" | Gold views read from Processing WH via 3-part naming; pipeline Script activity | **10/10** | Exact match with MS ingestion patterns |
@@ -47,7 +47,7 @@ Scored against 15 criteria derived from 10+ authoritative Microsoft sources:
 | 14 | CI/CD & deployment | "Standard change control process for deployment" | Blocked by IT. Manual deploy via REST API scripts | **5/10** | Partial: Scripts exist, but no automated pipeline |
 | 15 | Stored procedures | "Transform data with a stored procedure in a Warehouse" (MS tutorial) | 16 SPs + 3 functions, 8 load patterns, DAG engine, DQ engine | **10/10** | Exact match: MS tutorial shows SP pattern; v10 extends it significantly |
 
-### Total: 130/150 = 86.7%
+### Total: 134/150 = 89.3% (was 130/150 = 86.7% before 2026-05-04 rebuild)
 
 ---
 
@@ -61,7 +61,7 @@ Scored against 15 criteria derived from 10+ authoritative Microsoft sources:
 | **Staff/Principal** | **85-95%** | Enterprise-grade: multi-mart, DAG, contracts, Direct Lake, security |
 | Distinguished | 95%+ | Full governance, CI/CD, alerting, multi-region, disaster recovery |
 
-### v10 Assessment: Staff/Principal level (86.7%)
+### v10 Assessment: Staff/Principal level (89.3%)
 
 ---
 

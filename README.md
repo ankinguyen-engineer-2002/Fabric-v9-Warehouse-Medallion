@@ -122,25 +122,27 @@ Pure T-SQL stored procedures. No Notebooks. No PySpark. No Lakehouse ETL.<br/>
 │                             Processing_Warehouse                             │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│  Staging (N tables, N views, 1 SP)                                           │
-│  ├── {EdwTable_1}            ← CTAS from SupplyChain Lakehouse               │
-│  ├── {EdwTable_N}            ← CTAS from SupplyChain Lakehouse               │
-│  ├── vw_{Source_1}...N       → column mapping from raw sources               │
+│  Staging_WRK (4 tables, 4 views, 1 SP)                                       │
+│  ├── InvoiceDetailEdw        ← CTAS from SupplyChain Lakehouse               │
+│  ├── InvoiceHeaderEdw        ← CTAS from SupplyChain Lakehouse               │
+│  ├── ProductEdw, DemandForecastSnapshotDailyEdw                              │
+│  ├── vw_Codatan, vw_Comast, vw_Extord, vw_Extorit                           │
 │  └── usp_RefreshEdwTables    → CTAS all EDW supplement tables                │
 │                                                                              │
-│  ReferenceMaster (N tables, N views)                                         │
-│  ├── {RefTable_1}            ← Enterprise_Lakehouse source                   │
-│  ├── {RefTable_N}            ← Enterprise_Lakehouse source                   │
+│  ReferenceMaster_ENH (10 tables, 11 views)                                   │
+│  ├── Calendar, ItemMaster, Warehouse, CustomerGrouping, ...                  │
 │  └── Role: Domain reference data, loaded via usp_GenericLoad                 │
 │                                                                              │
-│  {DomainSchema_1} (N tables, N views)       — DAG Wave 0,1 —                 │
-│  ├── {DomainTable_A}         ← Staging + ReferenceMaster                     │
-│  ├── {DomainTable_B}         ← DomainTable_A + REF                           │
+│  SalesHistory_ENH (4 tables, 4 views)       — DAG Wave 0,1 —                 │
+│  ├── InvoiceDetailLineLevel  ← Staging_WRK + ReferenceMaster_ENH             │
+│  ├── InvoiceWeekly, ActualDemandMonthly, ActualDemandWeekly                  │
 │  └── ...                                                                     │
 │                                                                              │
-│  {DomainSchema_N} (N tables, N views)       — DAG Wave 0,2 —                 │
-│  ├── {DomainTable_C}         ← Staging + REF                                 │
-│  └── ...                                                                     │
+│  ForecastHistory_ENH (2 tables, 2 views)    — DAG Wave 0,1 —                 │
+│  ├── ForecastDemandMonthly, NaiveForecastMonthly                             │
+│                                                                              │
+│  OpenOrderHistory_ENH (2 tables, 2 views)   — DAG Wave 0,1 —                 │
+│  ├── OpenOrderLineLevel, OpenOrderMonthly                                    │
 │                                                                              │
 │  Meta (20 tables, 5 views, 16 SPs, 3 functions)                              │
 │  ├── AssetRegistry             Registry: asset, layer, schedule              │
@@ -158,9 +160,11 @@ Pure T-SQL stored procedures. No Notebooks. No PySpark. No Lakehouse ETL.<br/>
 │                                Gold_Warehouse                                │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│  {ServingSchema} (N tables, N views)                                         │
-│  ├── Fact{Subject_1}         ← cross-DB CTAS from Silver                     │
-│  ├── Fact{Subject_2}         ← cross-DB CTAS from Silver                     │
+│  ForecastAccuracy_DW (7 tables, 7 views)  — Complete Star Schema —           │
+│  ├── FactForecastActual      ← cross-DB CTAS from Silver                     │
+│  ├── FactForecastKpi         ← cross-DB CTAS from Silver                     │
+│  ├── DimCalendar, DimCustomerGrouping, DimWarehouse                          │
+│  ├── DimProduct, DimForecastHorizon                                          │
 │  └── Role: Direct Lake semantic model reads from here                        │
 │                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
@@ -191,18 +195,19 @@ SupplyChain_Lakehouse (EDW supplement dataflows)
 
 **Rules:**
 - Default: direct read via 3-part naming (no local copy)
-- Exception: CTAS into `Staging` schema only when EDW supplement, unstable source, snapshot consistency, or replay/debug needed
-- Source access views (`Staging.vw_{Source}`, etc.) handle column mapping from raw formats
+- Exception: CTAS into `Staging_WRK` schema only when EDW supplement, unstable source, snapshot consistency, or replay/debug needed
+- Source access views (`Staging_WRK.vw_{Source}`, etc.) handle column mapping from raw formats
 
 ### Silver — Domain Process Schemas
 
 ```
 Processing_Warehouse/
-  ├── Staging/              Exception-only persistence (EDW supplement)
-  ├── ReferenceMaster/      Domain reference data (Calendar, ItemMaster, etc.)
-  ├── {DomainSchema_1}/     Business transformations for domain 1
-  ├── {DomainSchema_2}/     Business transformations for domain 2
-  └── {DomainSchema_N}/     N domain schemas, PascalCase naming
+  ├── Staging_WRK/          Exception-only persistence (EDW supplement)
+  ├── ReferenceMaster_ENH/  Domain reference data (Calendar, ItemMaster, etc.)
+  ├── SalesHistory_ENH/     Invoice + demand transformations
+  ├── ForecastHistory_ENH/  Forecast demand + naive forecast
+  ├── OpenOrderHistory_ENH/ Open order transformations
+  └── Meta/                 Control plane (registry, DQ, lineage, logging)
 ```
 
 **Pattern for each table:**
@@ -238,18 +243,26 @@ Gold_Warehouse/
 
 ```
 Processing_Warehouse/
-├── Staging/                           ── Exception-only persistence ──
-│   ├── Tables/   (N EDW supplement)   CTAS from Lakehouse _ver2
-│   ├── Views/    (N source access)    Column mapping from raw sources
+├── Staging_WRK/                       ── Exception-only persistence ──
+│   ├── Tables/   (4 EDW supplement)   CTAS from Lakehouse _ver2 (PascalCase)
+│   ├── Views/    (4 source access)    Column mapping from raw sources
 │   └── SPs/      (1)                  usp_RefreshEdwTables
 │
-├── ReferenceMaster/                   ── Domain reference data ──
-│   ├── Tables/   (N ref tables)       Calendar, ItemMaster, OrderType, etc.
-│   └── Views/    (N source views)     vw_Calendar → Enterprise_Lakehouse.MasterData_DW.DimDate
+├── ReferenceMaster_ENH/               ── Domain reference data ──
+│   ├── Tables/   (10 ref tables)      Calendar, ItemMaster, OrderType, etc.
+│   └── Views/    (11 source views)    vw_Calendar → Enterprise_Lakehouse.MasterData_DW.DimDate
 │
-├── {DomainSchema}/                    ── Domain Silver (repeat per domain) ──
-│   ├── Tables/   (N domain tables)    Business-transformed data
-│   └── Views/    (N transform views)  VIEW = transformation logic
+├── SalesHistory_ENH/                  ── Invoice + demand ──
+│   ├── Tables/   (4)                  InvoiceDetailLineLevel, InvoiceWeekly, ActualDemand*
+│   └── Views/    (4)                  Business transformation logic
+│
+├── ForecastHistory_ENH/               ── Forecast demand ──
+│   ├── Tables/   (2)                  ForecastDemandMonthly, NaiveForecastMonthly
+│   └── Views/    (2)                  Forecast transformation logic
+│
+├── OpenOrderHistory_ENH/              ── Open orders ──
+│   ├── Tables/   (2)                  OpenOrderLineLevel, OpenOrderMonthly
+│   └── Views/    (2)                  Open order transformation logic
 │
 └── Meta/                              ── Control Plane ──
     ├── Tables/   (20)                 AssetRegistry, DQRule, LineageEdge, RunLog, ...
@@ -258,9 +271,11 @@ Processing_Warehouse/
     └── Functions (3)                  ufn_utc_to_cst, ufn_should_run, ufn_cron_is_due
 
 Gold_Warehouse/
-└── {ServingSchema}/                   ── Gold serving ──
-    ├── Tables/   (N fact/dim)         Physical tables for Direct Lake
-    └── Views/    (N gold views)       Cross-DB read from Processing WH
+└── ForecastAccuracy_DW/               ── Gold star schema ──
+    ├── Facts/    (2)                  FactForecastActual, FactForecastKpi
+    ├── Dims/     (5)                  DimCalendar, DimCustomerGrouping, DimWarehouse,
+    │                                  DimProduct, DimForecastHorizon
+    └── Views/    (7)                  Cross-DB read from Processing WH
 ```
 
 ---
@@ -272,14 +287,14 @@ Gold_Warehouse/
 ```
 Source (Lakehouse/Shortcuts)
   │
-  ├─ Staging.usp_RefreshEdwTables ──→ Staging tables (EDW supplement CTAS)
-  ├─ ReferenceMaster views ──→ ReferenceMaster tables (via usp_GenericLoad)
+  ├─ Staging_WRK.usp_RefreshEdwTables ──→ Staging_WRK tables (EDW supplement CTAS)
+  ├─ ReferenceMaster_ENH views ──→ ReferenceMaster_ENH tables (via usp_GenericLoad)
   │
   ├─ Silver Wave 0 (no Silver deps, parallel)
-  │   └─ Tables that read from Staging + ReferenceMaster + Enterprise_Lakehouse
+  │   └─ Tables that read from Staging_WRK + ReferenceMaster_ENH + Enterprise_Lakehouse
   │
   ├─ Silver Wave 1 (depends on Wave 0, parallel)
-  │   └─ Tables that read from Wave 0 tables + ReferenceMaster
+  │   └─ Tables that read from Wave 0 tables + ReferenceMaster_ENH
   │
   ├─ Silver Wave N (depends on Wave N-1)
   │   └─ Iterative until all Silver tables assigned
@@ -397,7 +412,7 @@ SELECT Meta.ufn_cron_is_due('*/15 8-22 * * 1-5'); -- every 15min, 8AM-10PM, week
 | 5 | `daterange` | DELETE N days + INSERT N days | `date_key` + `date_range_days` |
 | 6 | `identity` | INSERT WHERE PK > MAX(PK) | `primary_key` |
 | 7 | `cdc` | DELETE changed PKs + INSERT + update watermark | `primary_key` + `watermark_column` |
-| 8 | `scd2` | Close old versions + insert new with versioning | `primary_key` (adds _scd2_* columns) |
+| 8 | `scd2` | Close old versions + insert new with versioning | `primary_key` (adds SCD2* columns) |
 
 ### SCD2 Auto-Generated Columns
 
@@ -405,11 +420,11 @@ When `load_type = 'scd2'`, the framework automatically adds:
 
 | Column | Type | Purpose |
 |---|---|---|
-| `_scd2_start_dt` | DATETIME2(6) | Version start timestamp |
-| `_scd2_end_dt` | DATETIME2(6) | Version end (9999-12-31 for current) |
-| `_scd2_is_current` | INT | 1 = current version |
-| `_scd2_version` | INT | Version number (incrementing) |
-| `_load_dt` | DATETIME2(6) | ETL load timestamp |
+| `SCD2StartDT` | DATETIME2(6) | Version start timestamp |
+| `SCD2EndDT` | DATETIME2(6) | Version end (9999-12-31 for current) |
+| `SCD2IsCurrent` | INT | 1 = current version |
+| `SCD2Version` | INT | Version number (incrementing) |
+| `LoadDT` | DATETIME2(6) | ETL load timestamp |
 
 ---
 
@@ -481,7 +496,7 @@ When `load_type = 'scd2'`, the framework automatically adds:
 | `completeness` | % of non-NULL values in a column | % value vs threshold |
 | `row_count` | Total rows in table | Count vs minimum threshold |
 | `uniqueness` | Duplicate count on a column | 0 = PASS |
-| `freshness` | Hours since last `_load_dt` | Hours vs threshold |
+| `freshness` | Hours since last `LoadDT` | Hours vs threshold |
 | `custom_sql` | Custom SQL returning 0 = pass | Configurable |
 | `referential_integrity` | FK violations | 0 = PASS |
 | `validity` | Value range/format checks | 0 = PASS |
@@ -530,18 +545,18 @@ INSERT INTO Meta.AssetRegistry (
 ) VALUES (
     'newsource.new_table', 'DomainSilver', 'WarehouseTransform',
     'MySchema', 'NewTable', 'overwrite', 'daily', '0 2 * * *',
-    'myproject', 1, '["Staging.SourceTable"]', 'MySchema.vw_NewTable'
+    'myproject', 1, '["Staging_WRK.SourceTable"]', 'MySchema_ENH.vw_NewTable'
 );
 
--- 2. Create the transformation view
-CREATE VIEW MySchema.vw_NewTable AS
-SELECT col1, col2, SUM(qty) AS total_qty
-FROM Staging.SourceTable
-GROUP BY col1, col2;
+-- 2. Create the transformation view (PascalCase columns, _ENH suffix)
+CREATE VIEW MySchema_ENH.vw_NewTable AS
+SELECT Col1, Col2, SUM(Qty) AS TotalQty
+FROM Staging_WRK.SourceTable
+GROUP BY Col1, Col2;
 
 -- 3. Test
-EXEC Meta.usp_GenericLoad @target_schema='MySchema', @target_table='NewTable';
-SELECT COUNT(*) FROM MySchema.NewTable;
+EXEC Meta.usp_GenericLoad @target_schema='MySchema_ENH', @target_table='NewTable';
+SELECT COUNT(*) FROM MySchema_ENH.NewTable;
 ```
 
 Framework auto-handles: logging, watermark update, next_run_time, lineage, DQ eligibility.

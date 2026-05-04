@@ -15,7 +15,7 @@ flowchart TD
     end
 
     subgraph STAGING["pl_sc_staging"]
-        S1["refresh_edw<br/>Staging.usp_RefreshEdwTables<br/>4 EDW tables ~155M rows"]
+        S1["refresh_edw<br/>Staging_WRK.usp_RefreshEdwTables<br/>4 EDW tables ~155M rows"]
         S2["lk_ref<br/>Lookup REF tables<br/>+ smart skip filter"]
         S3["fe_ref<br/>ForEach batch=6<br/>Meta.usp_GenericLoad"]
     end
@@ -32,8 +32,9 @@ flowchart TD
     end
 
     subgraph GOLDP["pl_sc_gold"]
-        G1["load_fact_actual<br/>CTAS → Gold Warehouse"]
-        G2["load_fact_kpi<br/>CTAS → Gold Warehouse"]
+        G0["load_dims<br/>5 Dim CTAS → ForecastAccuracy_DW"]
+        G1["load_fact_actual<br/>CTAS → ForecastAccuracy_DW"]
+        G2["load_fact_kpi<br/>CTAS → ForecastAccuracy_DW"]
     end
 
     subgraph DQ["pl_dq_check"]
@@ -51,5 +52,5 @@ flowchart TD
     SV1 --> SV2 --> SV3
     SV3 -->|invoke per wave| WAVE
     W1 --> W2
-    G1 --> G2
+    G0 --> G1 --> G2
     D1 --> D2
