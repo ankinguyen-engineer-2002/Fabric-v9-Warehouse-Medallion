@@ -31,10 +31,9 @@ flowchart TD
         W2["fe_exec_sps<br/>ForEach batch=8 PARALLEL<br/>Meta.usp_GenericLoad"]
     end
 
-    subgraph GOLDP["pl_sc_gold"]
-        G0["load_dims<br/>5 Dim CTAS → ForecastAccuracy_DW"]
-        G1["load_fact_actual<br/>CTAS → ForecastAccuracy_DW"]
-        G2["load_fact_kpi<br/>CTAS → ForecastAccuracy_DW"]
+    subgraph GOLDP["pl_sc_gold (registry-driven)"]
+        GL["lk_gold<br/>Lookup AssetRegistry<br/>WHERE canonical_layer='Gold'"]
+        GF["fe_gold<br/>ForEach batch=4 PARALLEL<br/>dynamic DROP+CTAS from view"]
     end
 
     subgraph DQ["pl_dq_check"]
@@ -52,5 +51,5 @@ flowchart TD
     SV1 --> SV2 --> SV3
     SV3 -->|invoke per wave| WAVE
     W1 --> W2
-    G0 --> G1 --> G2
+    GL --> GF
     D1 --> D2

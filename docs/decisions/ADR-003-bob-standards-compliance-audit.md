@@ -137,10 +137,13 @@ Full rebuild completed in a single session:
 | 10 | Gold WH: CREATE 7 views (5 dim + 2 fact) | Complete star schema |
 | 11 | Gold WH: CTAS 7 tables | 5 dims + 2 facts, all verified |
 | 12 | Gold WH: DROP old ForecastAccuracy schema | Done |
-| 13 | Pipeline: UPDATE pl_sc_staging + pl_sc_gold | Schema refs + column refs |
-| 14 | Pipeline: Manual test run pl_sc_master | Triggered |
-| 15 | Lineage: EXEC usp_BuildLineage | 52 edges rebuilt |
-| 16 | Documentation: ADR-003, ADR-004 updated | Scores re-assessed |
+| 13 | Pipeline: UPDATE pl_sc_staging | Schema refs updated |
+| 14 | Pipeline: REFACTOR pl_sc_gold → registry-driven | Lookup + ForEach + dynamic expression. Zero hardcode |
+| 15 | Pipeline: Manual test run pl_sc_master | 31 min, all tables loaded, 0 failures |
+| 16 | Pipeline: Test pl_sc_gold standalone | 1m42s, 7/7 tables, 7/7 LoadDT |
+| 17 | Lineage: EXEC usp_BuildLineage | 52 edges rebuilt |
+| 18 | Full stability scan | 22 Processing + 7 Gold tables verified |
+| 19 | Documentation: All docs, diagrams, mermaid updated | Complete |
 
 ---
 

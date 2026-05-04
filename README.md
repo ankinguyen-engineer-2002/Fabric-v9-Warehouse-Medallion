@@ -21,7 +21,8 @@
 
 A production-ready **metadata-driven** data warehouse framework.<br/>
 Pure T-SQL stored procedures. No Notebooks. No PySpark. No Lakehouse ETL.<br/>
-**1 generic SP** handles 8 load patterns for any number of tables.
+**Registry-driven**: 1 generic SP (Silver) + 1 dynamic pipeline (Gold) handles all layers.<br/>
+Add any table = INSERT registry + CREATE VIEW. Zero code change.
 
 [Architecture](#architecture-overview) · [Pipeline Topology](#pipeline-topology) · [Control Plane](#control-plane-detail) · [Load Patterns](#generic-sp--8-load-patterns) · [DQ Engine](#data-quality-engine) · [Onboarding](#onboarding-guide)
 
@@ -91,7 +92,7 @@ Pure T-SQL stored procedures. No Notebooks. No PySpark. No Lakehouse ETL.<br/>
 |---|---|---|---|
 | **Bronze** | Lakehouse (shortcuts) | Logical source access | OneLake shortcuts → no local copy. Stage only for exceptions (EDW supplement, unstable SLA, snapshot) |
 | **Silver** | Processing Warehouse | Domain transformation + control plane | PascalCase schemas by business process. VIEW defines logic → Generic SP executes CTAS |
-| **Gold** | Gold Warehouse (dedicated) | BI serving boundary | Separate Warehouse. Physical tables for Direct Lake. Cross-DB CTAS from Processing WH |
+| **Gold** | Gold Warehouse (dedicated) | BI serving boundary | Separate Warehouse. Registry-driven pipeline (Lookup + ForEach). Views define cross-DB logic → pipeline CTAS materializes |
 | **Meta** | Processing Warehouse | Horizontal control plane | Registry, DQ, lineage, DAG, scheduling, logging. Drives all orchestration |
 
 ---
@@ -161,8 +162,8 @@ Pure T-SQL stored procedures. No Notebooks. No PySpark. No Lakehouse ETL.<br/>
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │  ForecastAccuracy_DW (7 tables, 7 views)  — Complete Star Schema —           │
-│  ├── FactForecastActual      ← cross-DB CTAS from Silver                     │
-│  ├── FactForecastKpi         ← cross-DB CTAS from Silver                     │
+│  ├── FactForecastActual      ← registry-driven pipeline from Silver           │
+│  ├── FactForecastKpi         ← registry-driven pipeline from Silver           │
 │  ├── DimCalendar, DimCustomerGrouping, DimWarehouse                          │
 │  ├── DimProduct, DimForecastHorizon                                          │
 │  └── Role: Direct Lake semantic model reads from here                        │
@@ -235,7 +236,7 @@ Gold_Warehouse/
 - Physical tables are the default semantic model source
 - SQL views are compatibility-only
 - Gold is the only default BI serving boundary
-- Pipeline loads Gold via Script activity (CTAS targeting Gold Warehouse)
+- Pipeline loads Gold via registry-driven Lookup + ForEach (dynamic CTAS from Gold views)
 
 ---
 
@@ -299,7 +300,10 @@ Source (Lakehouse/Shortcuts)
   ├─ Silver Wave N (depends on Wave N-1)
   │   └─ Iterative until all Silver tables assigned
   │
-  └─ Gold (cross-DB CTAS to Gold Warehouse)
+  └─ Gold (registry-driven pipeline → Gold Warehouse)
+      ├─ pl_sc_gold: Lookup AssetRegistry(Gold) → ForEach → dynamic CTAS
+      ├─ Views on Gold WH define cross-DB logic (read from Processing WH)
+      ├─ Pipeline materializes: DROP + CREATE TABLE AS SELECT * FROM view
       └─ Physical Gold tables ──→ Direct Lake Semantic Model ──→ Power BI
 ```
 
@@ -318,7 +322,7 @@ Source (Lakehouse/Shortcuts)
 | `pl_staging` | Staging + REF load | EDW refresh → Lookup REF + smart skip → ForEach | **Smart skip**: monthly REF skipped on daily |
 | `pl_silver` | Silver DAG dispatch | compute waves → Lookup waves → ForEach sequential | **DAG ordering**: waves execute in order |
 | `pl_silver_wave` | Single wave executor | Lookup SPs for wave → ForEach parallel | **Parallel**: batch=8 within wave |
-| `pl_gold` | Gold publish | Script activity → Gold Warehouse | **Cross-DB CTAS** |
+| `pl_gold` | Gold publish | Lookup Gold assets → ForEach → dynamic Script | **Registry-driven**: add Gold table = INSERT registry + CREATE VIEW |
 | `pl_dq_check` | DQ gate | Lookup rules → ForEach → usp_CheckDqSingle | **Per-rule**: CRITICAL stops, WARNING logs |
 
 ### Multi-Mart Architecture
@@ -401,7 +405,19 @@ SELECT Meta.ufn_cron_is_due('*/15 8-22 * * 1-5'); -- every 15min, 8AM-10PM, week
 
 ## Generic SP & 8 Load Patterns
 
-`Meta.usp_GenericLoad` — **1 SP handles all table loads**. Pattern selected by `load_type` in registry.
+### Registry-Driven Load Architecture
+
+All table loads are **registry-driven** — adding any table requires only INSERT registry + CREATE VIEW:
+
+| Layer | Runner | How It Works | Add Table = |
+|---|---|---|---|
+| Bronze + ReferenceMaster + Silver | `usp_GenericLoad` (SP) | SP reads `AssetRegistry` → `DROP + CTAS FROM view` | INSERT + VIEW |
+| Gold | `pl_sc_gold` (Pipeline) | Lookup `AssetRegistry` → ForEach → dynamic `DROP + CTAS FROM view` | INSERT + VIEW |
+| Staging (EDW supplement) | `usp_RefreshEdwTables` (SP) | Hardcoded CTAS from Lakehouse (temporary — will migrate to direct read) | Modify SP |
+
+**Why Gold uses pipeline instead of SP?** Fabric constraint: SP on Processing WH cannot `CREATE TABLE` on Gold WH (cross-DB write blocked). Pipeline bridges both warehouses via separate connections.
+
+`Meta.usp_GenericLoad` — **1 SP handles Bronze + Silver loads**. Pattern selected by `load_type` in registry.
 
 | # | Pattern | Logic | Required Config |
 |---|---|---|---|
@@ -534,7 +550,7 @@ Lineage is automatically rebuilt by `usp_FinalizePipeline` at the end of each pi
 
 ## Adding a New Table
 
-### 3 Steps
+### Silver Table (Processing Warehouse) — 3 Steps
 
 ```sql
 -- 1. Register in Meta.AssetRegistry
@@ -544,7 +560,7 @@ INSERT INTO Meta.AssetRegistry (
     project, is_active, source_objects, legacy_view_name
 ) VALUES (
     'newsource.new_table', 'DomainSilver', 'WarehouseTransform',
-    'MySchema', 'NewTable', 'overwrite', 'daily', '0 2 * * *',
+    'MySchema_ENH', 'NewTable', 'overwrite', 'daily', '0 2 * * *',
     'myproject', 1, '["Staging_WRK.SourceTable"]', 'MySchema_ENH.vw_NewTable'
 );
 
@@ -558,6 +574,31 @@ GROUP BY Col1, Col2;
 EXEC Meta.usp_GenericLoad @target_schema='MySchema_ENH', @target_table='NewTable';
 SELECT COUNT(*) FROM MySchema_ENH.NewTable;
 ```
+
+### Gold Table (Gold Warehouse) — 3 Steps
+
+```sql
+-- 1. Register in Meta.AssetRegistry (on Processing WH)
+INSERT INTO Meta.AssetRegistry (
+    asset_id, canonical_layer, access_mode,
+    physical_schema, physical_object, load_type, frequency, cron_expression,
+    project, is_active, legacy_view_name
+) VALUES (
+    'gold::dim_new', 'Gold', 'GoldPublish',
+    'MyGoldSchema_DW', 'DimNewDimension', 'overwrite', 'daily', '0 2 * * *',
+    'myproject', 1, 'MyGoldSchema_DW.vw_DimNewDimension'
+);
+
+-- 2. Create the cross-DB view (on Gold WH, reads from Processing WH)
+CREATE VIEW MyGoldSchema_DW.vw_DimNewDimension AS
+SELECT Col1, Col2, CAST(GETUTCDATE() AS DATETIME2(6)) AS LoadDT
+FROM SupplyChain_Processing_Warehouse.MySchema_ENH.SourceTable;
+
+-- 3. Test (pl_sc_gold auto-discovers from registry)
+-- Trigger pl_sc_gold manually or wait for next scheduled run
+```
+
+**Same pattern, both layers**: INSERT registry + CREATE VIEW. Zero pipeline change.
 
 Framework auto-handles: logging, watermark update, next_run_time, lineage, DQ eligibility.
 
@@ -588,7 +629,15 @@ main                    ← Architecture template (this README)
 4. **Create views** in domain schema
 5. **Rebuild DAG**: `EXEC Meta.usp_ComputeSilverWaves;`
 6. **Run**: `pl_master` auto-picks up new project via ForEach DISTINCT project
-7. **Create Gold tables** if domain needs BI serving
+7. **Create Gold schema + views** on Gold Warehouse + register in AssetRegistry with `canonical_layer = 'Gold'`
+   ```sql
+   -- On Gold Warehouse
+   CREATE SCHEMA {DomainGold}_DW;
+   CREATE VIEW {DomainGold}_DW.vw_FactX AS SELECT ... FROM Processing_WH.{Domain}_ENH.Table;
+   -- On Processing Warehouse
+   INSERT INTO Meta.AssetRegistry (..., canonical_layer='Gold', physical_schema='{DomainGold}_DW', ...);
+   -- pl_sc_gold auto-discovers via Lookup
+   ```
 8. **Push branch**: `git push -u origin {domain_name}`
 
 **No pipeline changes needed.** The `pl_master → ForEach project → pl_mart` architecture automatically discovers and processes new projects.

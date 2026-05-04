@@ -21,7 +21,7 @@ flowchart TB
         end
 
         subgraph GOLD["GOLD — Dedicated Serving Warehouse"]
-            FA["ServingSchema<br/>Physical tables<br/>Direct Lake ready"]
+            FA["ServingSchema_DW<br/>Fact + Dim tables (star schema)<br/>Views define cross-DB logic<br/>Direct Lake ready"]
         end
 
         subgraph PIPE["Pipeline Orchestration"]
@@ -30,7 +30,7 @@ flowchart TB
             PS["pl_staging"]
             PSV["pl_silver<br/>DAG wave dispatch"]
             PSW["pl_silver_wave<br/>parallel execution"]
-            PG["pl_gold<br/>cross-DB publish"]
+            PG["pl_gold<br/>registry-driven publish<br/>Lookup+ForEach dynamic"]
             PDQ["pl_dq_check"]
         end
     end

@@ -30,7 +30,7 @@ flowchart TB
             PS["pl_sc_staging"]
             PSV["pl_sc_silver<br/>DAG waves 0→1→2"]
             PSW["pl_sc_silver_wave<br/>parallel batch=8"]
-            PG["pl_sc_gold<br/>cross-DB CTAS"]
+            PG["pl_sc_gold<br/>registry-driven publish<br/>Lookup+ForEach dynamic"]
             PDQ["pl_dq_check<br/>54 rules ForEach"]
         end
     end

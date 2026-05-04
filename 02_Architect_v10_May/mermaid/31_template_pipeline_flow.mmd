@@ -31,8 +31,9 @@ flowchart TD
         W2["fe_exec<br/>ForEach batch=N PARALLEL<br/>usp_GenericLoad"]
     end
 
-    subgraph GOLDP["pl_gold"]
-        G1["Script activity<br/>CTAS to Gold Warehouse<br/>cross-DB from Processing WH"]
+    subgraph GOLDP["pl_gold (registry-driven)"]
+        GL["lk_gold<br/>Lookup AssetRegistry<br/>WHERE canonical_layer='Gold'"]
+        GF["fe_gold<br/>ForEach batch=N PARALLEL<br/>dynamic DROP+CTAS from view"]
     end
 
     subgraph DQ["pl_dq_check"]
@@ -50,4 +51,5 @@ flowchart TD
     SV1 --> SV2 --> SV3
     SV3 -->|invoke per wave| WAVE
     W1 --> W2
+    GL --> GF
     D1 --> D2

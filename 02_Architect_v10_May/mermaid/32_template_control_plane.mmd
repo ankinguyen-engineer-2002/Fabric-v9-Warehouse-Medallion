@@ -10,12 +10,13 @@ flowchart LR
             SF["SourceFeed"]
         end
 
-        subgraph EXECUTION["Execution Framework — 16 SPs"]
-            GL["usp_GenericLoad<br/>8 load patterns: overwrite, incremental<br/>upsert, datekey, daterange, identity, cdc, scd2"]
+        subgraph EXECUTION["Execution Framework — Registry-Driven"]
+            GL["usp_GenericLoad<br/>8 load patterns: overwrite, incremental<br/>upsert, datekey, daterange, identity, cdc, scd2<br/><i>Drives: Bronze + REF + Silver</i>"]
+            GPG["pl_gold (dynamic pipeline)<br/>Lookup AssetRegistry(Gold) → ForEach<br/>dynamic DROP+CTAS from view<br/><i>Drives: Gold (cross-DB)</i>"]
             LR2["usp_LogRun<br/>retry 3x, UTC+CST timestamps"]
             LPR["usp_LogPipelineRun"]
             FP["usp_FinalizePipeline<br/>rebuild lineage + log summary"]
-            RET["usp_RefreshEdwTables<br/>EDW supplement CTAS"]
+            RET["usp_RefreshEdwTables<br/>EDW supplement CTAS (temporary)"]
             RSD["usp_RunSilverDag<br/>full DAG from SQL (backup)"]
             CDQ["usp_CheckDq<br/>bulk DQ by layer"]
             CDQS["usp_CheckDqSingle<br/>per-rule: 7 check types"]

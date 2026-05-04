@@ -4,18 +4,19 @@ flowchart LR
         direction TB
 
         subgraph REGISTRY["Asset Registry"]
-            AR["AssetRegistryV10 (28 rows)<br/>asset_id, canonical_layer, access_mode<br/>physical_schema, physical_object<br/>load_type, frequency, cron_expression<br/>next_run_time, project, depends_on"]
+            AR["AssetRegistryV10 (33 rows)<br/>asset_id, canonical_layer, access_mode<br/>physical_schema, physical_object<br/>load_type, frequency, cron_expression<br/>next_run_time, project, depends_on<br/><i>Drives BOTH usp_GenericLoad + pl_sc_gold</i>"]
             AAP["AssetAccessPolicy (28)"]
             OC["ObjectClassification (28)"]
             SF["SourceFeed (52)"]
         end
 
         subgraph EXECUTION["Execution Framework"]
-            GL["usp_GenericLoad<br/>8 load patterns: overwrite, incremental<br/>upsert, datekey, daterange, identity, cdc, scd2"]
+            GL["usp_GenericLoad<br/>8 load patterns: overwrite, incremental<br/>upsert, datekey, daterange, identity, cdc, scd2<br/><i>Drives: Bronze + ReferenceMaster + Silver</i>"]
+            GPG["pl_sc_gold (dynamic pipeline)<br/>Lookup AssetRegistry(Gold) → ForEach<br/>dynamic DROP+CTAS from view<br/><i>Drives: Gold (cross-DB via pipeline)</i>"]
             LR2["usp_LogRun<br/>retry 3x, UTC+CST timestamps"]
             LPR["usp_LogPipelineRun"]
             FP["usp_FinalizePipeline<br/>rebuild lineage + log summary"]
-            RET["usp_RefreshEdwTables<br/>4 EDW supplement CTAS"]
+            RET["Staging_WRK.usp_RefreshEdwTables<br/>4 EDW supplement CTAS (temporary)"]
         end
 
         subgraph DAG["Silver DAG Engine"]

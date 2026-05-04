@@ -37,9 +37,9 @@ Scored against 15 criteria derived from 10+ authoritative Microsoft sources:
 | 4 | Gold = curated, BI-ready | "Organize for reports and dashboards" in dedicated serving item | Dedicated Gold Warehouse, FactForecastActual/Kpi with Fact prefix | **10/10** | Exact match |
 | 5 | Direct Lake for Gold | "Ideal choice for the gold analytics layer in medallion architecture" | Gold physical tables in Delta format, Direct Lake ready | **9/10** | -1: Semantic model not yet created (TMDL captured, pending deploy) |
 | 6 | Star schema / Kimball | "De-normalized star schema encouraged"; "Fact/Dim prefixes" | Complete star schema in `ForecastAccuracy_DW`: 2 Fact + 5 Dim tables | **10/10** | DimCalendar, DimCustomerGrouping, DimWarehouse, DimProduct, DimForecastHorizon (added 2026-05-04) |
-| 7 | Metadata-driven ETL | "Metadata-driven frameworks enable incremental ingestion at scale" | AssetRegistry, 8 load patterns, 1 generic SP for all tables | **10/10** | Exceeds: MS mentions metadata-driven; v10 has full control plane |
+| 7 | Metadata-driven ETL | "Metadata-driven frameworks enable incremental ingestion at scale" | AssetRegistry drives ALL layers: 1 generic SP (Silver) + 1 dynamic pipeline (Gold). Add table = INSERT registry + CREATE VIEW. Zero code change | **10/10** | Exceeds: MS mentions metadata-driven; v10 extends to cross-DB Gold via registry-driven pipeline (refactored 2026-05-04) |
 | 8 | ETL logging | "Log the results of the ETL process" | RunLog (UTC+CST), PipelineRunLog, retry 3x, snapshot conflict handling | **10/10** | Exceeds: MS says "log results"; v10 has UTC+CST, retry, conflict handling |
-| 9 | Cross-database queries | "CTAS, INSERT...SELECT from other warehouses in same workspace" | Gold views read from Processing WH via 3-part naming; pipeline Script activity | **10/10** | Exact match with MS ingestion patterns |
+| 9 | Cross-database queries | "CTAS, INSERT...SELECT from other warehouses in same workspace" | Gold views read from Processing WH via 3-part naming; registry-driven pipeline materializes via dynamic ForEach | **10/10** | Exact match with MS ingestion patterns; Gold pipeline registry-driven (refactored 2026-05-04) |
 | 10 | Pipeline orchestration | "Pipelines with control flow, loops, conditionals" | 7 pipelines, parent-child pattern, ForEach, sequential wave dispatch | **10/10** | Exceeds: multi-mart + DAG wave engine (not prescribed by MS) |
 | 11 | Data quality | MS governance docs: "data quality rules", "monitor quality" | 54 DQ rules, 7 check types, severity gating, per-rule engine | **9/10** | Exceeds MS guidance (-1: DQ not yet active in pipeline flow) |
 | 12 | Lineage & governance | "Data lineage shows how data moves and transforms" | 52 auto-built lineage edges, source contracts 674 columns | **8/10** | -2: Metadata-based lineage, not Fabric native Purview lineage |
@@ -71,7 +71,7 @@ These features are implemented in v10 but NOT explicitly prescribed or demonstra
 
 | Feature | What MS Says | What v10 Has | Impact |
 |---|---|---|---|
-| Generic SP framework | "Use pipelines or SPs" (tutorial shows per-table SPs) | 1 SP handles 8 load patterns for ANY table via registry config | Eliminates per-table SP maintenance; O(1) vs O(n) SP count |
+| Registry-driven load (all layers) | "Use pipelines or SPs" (tutorial shows per-table SPs) | Silver: 1 generic SP (8 load patterns). Gold: dynamic pipeline (Lookup + ForEach). Both driven by AssetRegistry | Add ANY table at ANY layer = INSERT registry + CREATE VIEW. Zero code change. O(1) vs O(n) maintenance |
 | Silver DAG wave engine | Not mentioned | Automatic dependency graph → wave computation → parallel batch execution | Correct execution order without manual pipeline dependencies |
 | Multi-mart routing | Not mentioned | ForEach DISTINCT project; N data marts in parallel; no pipeline changes | Horizontal scale for enterprise |
 | Smart skip scheduling | Not mentioned | Cron parser (5-field, *, step, range, list) + next_run_time filter + frequency-aware skip | Monthly REF tables correctly skip on daily runs |
