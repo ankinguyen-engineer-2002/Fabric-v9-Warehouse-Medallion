@@ -38,11 +38,11 @@ Add any table = INSERT registry + CREATE VIEW. Zero code change.
 
 | ADR | Focus | Status |
 |---|---|---|
-| [ADR-001](docs/decisions/ADR-001-v10-hybrid-medallion.md) | **Hybrid Medallion adoption** — 3-layer design: Lakehouse shortcuts (Bronze), Processing Warehouse (Silver+Meta), Gold Warehouse (serving) | Accepted |
-| [ADR-002](docs/decisions/ADR-002-edw-supplement-exit-strategy.md) | **EDW Supplement exit** — 4 legacy `_edw` fallback paths, per-object exit criteria, dual-read validation before cutover | Accepted |
-| [ADR-003](docs/decisions/ADR-003-bob-standards-compliance-audit.md) | **Enterprise standards audit** — 13 PASS, 7 adapted for Fabric, 2 pending Bob decision (schema suffix + column naming) | Open — pending Bob |
-| [ADR-004](docs/decisions/ADR-004-architecture-maturity-assessment.md) | **Maturity assessment** — 86.7% (Staff/Principal level), scored against 15 Microsoft best-practice criteria | Accepted |
-| [ADR-005](docs/decisions/ADR-005-enterprise-promote-pathway.md) | **Enterprise promote pathway** — US/VN collaboration model, phased dev→promote, portability assessment, 7 open questions for Bob | Proposed — pending Bob |
+| [ADR-001](docs/decisions/ADR-001-v10-hybrid-medallion.md) | **Hybrid Medallion adoption** — 3-layer design: Lakehouse shortcuts (Bronze), Processing Warehouse (Silver+Meta), Gold Warehouse (serving) | **Implemented** |
+| [ADR-002](docs/decisions/ADR-002-edw-supplement-exit-strategy.md) | **EDW Supplement exit** — 4 `Staging_WRK` tables pending Enterprise Lakehouse data completeness | Active |
+| [ADR-003](docs/decisions/ADR-003-bob-standards-compliance-audit.md) | **Enterprise standards audit** — All 4 items resolved (suffix + PascalCase). 6 infra GAPs remain (CI/CD, Security, Alerting) | **Resolved** |
+| [ADR-004](docs/decisions/ADR-004-architecture-maturity-assessment.md) | **Maturity assessment** — 89.3% (Staff/Principal level), scored against 15 Microsoft best-practice criteria | Accepted |
+| [ADR-005](docs/decisions/ADR-005-enterprise-promote-pathway.md) | **Enterprise promote pathway** — US/VN collaboration model, naming resolved, 5 ownership questions pending Bob | Proposed |
 
 ---
 
@@ -744,7 +744,7 @@ SELECT * FROM Meta.vw_TableDictionary;
 
 ## Enterprise Standards Compliance
 
-Architecture audited against enterprise DW standards (Bob/Rakesh). Full audit in [`docs/decisions/ADR-003-bob-standards-compliance-audit.md`](docs/decisions/ADR-003-bob-standards-compliance-audit.md).
+Architecture audited and fully compliant with enterprise DW standards (Bob/Rakesh). Schema suffix (`_DW`/`_ENH`/`_WRK`), PascalCase columns, complete star schema. Full audit in [`docs/decisions/ADR-003-bob-standards-compliance-audit.md`](docs/decisions/ADR-003-bob-standards-compliance-audit.md).
 
 | Status | Count | Detail |
 |---|---|---|
@@ -811,11 +811,11 @@ Architecture audited against enterprise DW standards (Bob/Rakesh). Full audit in
 
 | ADR | Decision | Status |
 |---|---|---|
-| ADR-001 | Adopt Hybrid Medallion architecture | Accepted |
-| ADR-002 | EDW Supplement Exit Strategy | Accepted |
-| ADR-003 | Bob Standards Compliance Audit | Open — pending Bob confirmation on 2 items |
-| ADR-004 | Architecture Maturity Assessment (86.7%) | Accepted |
-| ADR-005 | Enterprise Promote Pathway — US/VN Model | Proposed — pending Bob |
+| ADR-001 | Adopt Hybrid Medallion architecture | **Implemented** (2026-05-02) |
+| ADR-002 | EDW Supplement Exit Strategy | Active — 4 tables pending |
+| ADR-003 | Bob Standards Compliance Audit | **Resolved** (2026-05-04) |
+| ADR-004 | Architecture Maturity Assessment (89.3%) | Accepted |
+| ADR-005 | Enterprise Promote Pathway — US/VN Model | Proposed — 5 questions pending Bob |
 
 ---
 
