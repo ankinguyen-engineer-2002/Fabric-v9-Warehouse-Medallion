@@ -42,7 +42,7 @@ Read all files under `02_Architect_v10_May`:
 | Group | Files | Why it matters |
 |---|---|---|
 | Core proposal | `01_super_plan_medallion_refactor.md` | Current target v10 Medallion plan |
-| Architecture diagrams | `02_architecture_blueprint_mermaid.md`, `mermaid/*.mmd` | Physical/logical architecture, control plane, staging/direct decision |
+| Architecture diagrams | `02_architecture_blueprint_mermaid.md`, `../diagrams/*.mmd` | Physical/logical architecture, control plane, staging/direct decision |
 | Feature parity | `03_v9_feature_parity_checklist.md` | Claimed v9 capabilities preserved in v10 |
 | Bob alignment | `04_revised_bob_standards_proposal.md` | Current interpretation of Bob standards and Direct Lake/TableDictionary corrections |
 | EDW fallback | `15_v10_edw_supplement_exit_strategy.md`, `docs/decisions/ADR-002-edw-supplement-exit-strategy.md` | Object-level `_edw` fallback lifecycle, validation, and retirement |

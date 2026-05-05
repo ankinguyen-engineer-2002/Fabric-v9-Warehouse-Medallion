@@ -11,7 +11,7 @@ Chon huong **Hybrid Medallion, domain-owned Silver, exception-based staging**.
 
 Target flow:
 
-Pure Mermaid file: [`mermaid/01_super_plan_target_flow.mmd`](mermaid/01_super_plan_target_flow.mmd)
+Pure Mermaid file: [`../diagrams/01_super_plan_target_flow.mmd`](../diagrams/01_super_plan_target_flow.mmd)
 
 ```mermaid
 flowchart LR

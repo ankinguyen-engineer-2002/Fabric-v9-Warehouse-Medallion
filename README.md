@@ -84,7 +84,7 @@ Add any table = INSERT registry + CREATE VIEW. Zero code change.
 
 ## Architecture Overview
 
-![Architecture Overview](./02_Architect_v10_May/mermaid/render_check/30_template_architecture_overview.svg)
+![Architecture Overview](./02_Architect_v10_May/diagrams/render_check/30_template_architecture_overview.svg)
 
 ### 3-Layer Medallion Mapping
 
@@ -266,7 +266,7 @@ Gold_Warehouse/
 
 ## Data Flow Diagram
 
-![Silver DAG Waves](./02_Architect_v10_May/mermaid/render_check/33_template_silver_dag.svg)
+![Silver DAG Waves](./02_Architect_v10_May/diagrams/render_check/33_template_silver_dag.svg)
 
 ```
 Source (Lakehouse/Shortcuts)
@@ -294,7 +294,7 @@ Source (Lakehouse/Shortcuts)
 
 ## Pipeline Topology
 
-![Pipeline Flow](./02_Architect_v10_May/mermaid/render_check/31_template_pipeline_flow.svg)
+![Pipeline Flow](./02_Architect_v10_May/diagrams/render_check/31_template_pipeline_flow.svg)
 
 ### 7 Pipelines — Parent-Child Architecture
 
@@ -429,7 +429,7 @@ When `load_type = 'scd2'`, the framework automatically adds:
 
 ## Control Plane Detail
 
-![Control Plane](./02_Architect_v10_May/mermaid/render_check/32_template_control_plane.svg)
+![Control Plane](./02_Architect_v10_May/diagrams/render_check/32_template_control_plane.svg)
 
 ### 16 Stored Procedures
 
@@ -776,19 +776,19 @@ Architecture audited and fully compliant with enterprise DW standards (Bob/Rakes
 
 | Diagram | File |
 |---|---|
-| Architecture Overview | `mermaid/30_template_architecture_overview.mmd` / `.svg` |
-| Pipeline Flow | `mermaid/31_template_pipeline_flow.mmd` / `.svg` |
-| Control Plane Detail | `mermaid/32_template_control_plane.mmd` / `.svg` |
-| Silver DAG Waves | `mermaid/33_template_silver_dag.mmd` / `.svg` |
+| Architecture Overview | `diagrams/30_template_architecture_overview.mmd` / `.svg` |
+| Pipeline Flow | `diagrams/31_template_pipeline_flow.mmd` / `.svg` |
+| Control Plane Detail | `diagrams/32_template_control_plane.mmd` / `.svg` |
+| Silver DAG Waves | `diagrams/33_template_silver_dag.mmd` / `.svg` |
 
 ### Architecture Diagrams — Domain Detail (domain branches)
 
 | Diagram | File |
 |---|---|
-| Architecture Overview (detail) | `mermaid/20_architecture_overview.mmd` / `.svg` |
-| Pipeline Flow (detail) | `mermaid/21_pipeline_flow.mmd` / `.svg` |
-| Control Plane Detail | `mermaid/22_control_plane_detail.mmd` / `.svg` |
-| Silver DAG Waves (detail) | `mermaid/23_silver_dag_waves.mmd` / `.svg` |
+| Architecture Overview (detail) | `diagrams/20_architecture_overview.mmd` / `.svg` |
+| Pipeline Flow (detail) | `diagrams/21_pipeline_flow.mmd` / `.svg` |
+| Control Plane Detail | `diagrams/22_control_plane_detail.mmd` / `.svg` |
+| Silver DAG Waves (detail) | `diagrams/23_silver_dag_waves.mmd` / `.svg` |
 
 ### Decision Records (`docs/decisions/`)
 

@@ -96,8 +96,8 @@ Status legend:
 | Pending | `02_Architect_v10_May/03_v9_feature_parity_checklist.md` | Claimed v9-to-v10 parity |
 | Pending | `02_Architect_v10_May/04_revised_bob_standards_proposal.md` | Revised Bob standards interpretation |
 | Pending | `02_Architect_v10_May/05_deep_audit_protocol.md` | Audit process |
-| Pending | `02_Architect_v10_May/mermaid/*.mmd` | Current architecture visuals |
-| Superseded | `02_Architect_v10_May/mermaid/render_check/*.svg` | Rendered outputs; use for visual check only |
+| Pending | `02_Architect_v10_May/diagrams/*.mmd` | Current architecture visuals |
+| Superseded | `02_Architect_v10_May/diagrams/render_check/*.svg` | Rendered outputs; use for visual check only |
 | Pending | `02_Architect_v10_May/SQL Server Data Warehouse Standards.docx` | Bob/DE team standards; local-only evidence unless sharing is approved |
 
 ## 3. Git Chronology To Inspect

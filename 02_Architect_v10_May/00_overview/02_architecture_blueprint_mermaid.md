@@ -9,18 +9,18 @@ Diem quan trong: **v9 control plane khong phai Bronze/Silver/Gold**. No la lop d
 
 ## 1. Pure Mermaid Files
 
-Neu copy len Mermaid Live Editor, hay copy truc tiep cac file `.mmd` trong folder [`mermaid`](mermaid/), khong copy cac block `text`.
+Neu copy len Mermaid Live Editor, hay copy truc tiep cac file `.mmd` trong folder [`diagrams`](../diagrams/), khong copy cac block `text`.
 
-- [`mermaid/01_super_plan_target_flow.mmd`](mermaid/01_super_plan_target_flow.mmd)
-- [`mermaid/02_main_architecture.mmd`](mermaid/02_main_architecture.mmd)
-- [`mermaid/03_control_plane.mmd`](mermaid/03_control_plane.mmd)
-- [`mermaid/04_direct_vs_staging_decision.mmd`](mermaid/04_direct_vs_staging_decision.mmd)
-- [`mermaid/05_short_term_transition.mmd`](mermaid/05_short_term_transition.mmd)
-- [`mermaid/06_long_term_target.mmd`](mermaid/06_long_term_target.mmd)
-- [`mermaid/07_pipeline_sequence.mmd`](mermaid/07_pipeline_sequence.mmd)
-- [`mermaid/08_mart_schedule_smart_skip.mmd`](mermaid/08_mart_schedule_smart_skip.mmd)
-- [`mermaid/09_v9_feature_parity_control_plane.mmd`](mermaid/09_v9_feature_parity_control_plane.mmd)
-- [`mermaid/10_bob_standards_overlay.mmd`](mermaid/10_bob_standards_overlay.mmd)
+- [`../diagrams/01_super_plan_target_flow.mmd`](../diagrams/01_super_plan_target_flow.mmd)
+- [`../diagrams/02_main_architecture.mmd`](../diagrams/02_main_architecture.mmd)
+- [`../diagrams/03_control_plane.mmd`](../diagrams/03_control_plane.mmd)
+- [`../diagrams/04_direct_vs_staging_decision.mmd`](../diagrams/04_direct_vs_staging_decision.mmd)
+- [`../diagrams/05_short_term_transition.mmd`](../diagrams/05_short_term_transition.mmd)
+- [`../diagrams/06_long_term_target.mmd`](../diagrams/06_long_term_target.mmd)
+- [`../diagrams/07_pipeline_sequence.mmd`](../diagrams/07_pipeline_sequence.mmd)
+- [`../diagrams/08_mart_schedule_smart_skip.mmd`](../diagrams/08_mart_schedule_smart_skip.mmd)
+- [`../diagrams/09_v9_feature_parity_control_plane.mmd`](../diagrams/09_v9_feature_parity_control_plane.mmd)
+- [`../diagrams/10_bob_standards_overlay.mmd`](../diagrams/10_bob_standards_overlay.mmd)
 
 ## 2. Overview De Nhin
 
@@ -68,7 +68,7 @@ Note: day la control-plane target can preserve/activate trong v10. Mot so capabi
 
 GitHub/Mermaid version:
 
-Pure Mermaid file: [`mermaid/02_main_architecture.mmd`](mermaid/02_main_architecture.mmd)
+Pure Mermaid file: [`../diagrams/02_main_architecture.mmd`](../diagrams/02_main_architecture.mmd)
 
 ```mermaid
 flowchart LR
@@ -207,7 +207,7 @@ Recommendation: giu `Meta` local truoc. Khong nen move control plane qua som vi 
 
 Control plane khong chua business fact. No chua metadata van hanh.
 
-Pure Mermaid file: [`mermaid/03_control_plane.mmd`](mermaid/03_control_plane.mmd)
+Pure Mermaid file: [`../diagrams/03_control_plane.mmd`](../diagrams/03_control_plane.mmd)
 
 ```mermaid
 flowchart TD
@@ -263,15 +263,15 @@ flowchart TD
 
 Dedicated multi-mart, schedule, smart-skip Mermaid:
 
-Pure Mermaid file: [`mermaid/08_mart_schedule_smart_skip.mmd`](mermaid/08_mart_schedule_smart_skip.mmd)
+Pure Mermaid file: [`../diagrams/08_mart_schedule_smart_skip.mmd`](../diagrams/08_mart_schedule_smart_skip.mmd)
 
 Full v9 feature parity control-plane Mermaid:
 
-Pure Mermaid file: [`mermaid/09_v9_feature_parity_control_plane.mmd`](mermaid/09_v9_feature_parity_control_plane.mmd)
+Pure Mermaid file: [`../diagrams/09_v9_feature_parity_control_plane.mmd`](../diagrams/09_v9_feature_parity_control_plane.mmd)
 
 ## 7. Direct vs Staging Logic
 
-Pure Mermaid file: [`mermaid/04_direct_vs_staging_decision.mmd`](mermaid/04_direct_vs_staging_decision.mmd)
+Pure Mermaid file: [`../diagrams/04_direct_vs_staging_decision.mmd`](../diagrams/04_direct_vs_staging_decision.mmd)
 
 ```mermaid
 flowchart TD
@@ -346,7 +346,7 @@ Keep v9 running
 
 Short-term diagram:
 
-Pure Mermaid file: [`mermaid/05_short_term_transition.mmd`](mermaid/05_short_term_transition.mmd)
+Pure Mermaid file: [`../diagrams/05_short_term_transition.mmd`](../diagrams/05_short_term_transition.mmd)
 
 ```mermaid
 flowchart LR
@@ -398,7 +398,7 @@ Logical Bronze shortcut is trusted
 
 Long-term diagram:
 
-Pure Mermaid file: [`mermaid/06_long_term_target.mmd`](mermaid/06_long_term_target.mmd)
+Pure Mermaid file: [`../diagrams/06_long_term_target.mmd`](../diagrams/06_long_term_target.mmd)
 
 ```mermaid
 flowchart LR
@@ -537,7 +537,7 @@ pl_domain_mart
 
 Mermaid:
 
-Pure Mermaid file: [`mermaid/07_pipeline_sequence.mmd`](mermaid/07_pipeline_sequence.mmd)
+Pure Mermaid file: [`../diagrams/07_pipeline_sequence.mmd`](../diagrams/07_pipeline_sequence.mmd)
 
 ```mermaid
 sequenceDiagram
