@@ -1,0 +1,7 @@
+{
+  "id": "f06a2361-15fd-4f91-9d37-941fefe62aaf",
+  "type": "SemanticModel",
+  "displayName": "sc_forecast_control_tower",
+  "description": "v10 clone of Supply Chain Control Tower \u2014 Direct Lake on SupplyChain_Gold_Warehouse, PascalCase columns, ForecastAccuracy_DW schema",
+  "workspaceId": "c8d9fc83-18b6-4e1d-8264-0b49eed36fe0"
+}
