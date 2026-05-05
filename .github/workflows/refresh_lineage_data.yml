@@ -28,7 +28,15 @@ jobs:
           sudo apt-get update
           sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
 
+      # ── Optional step: refresh semantic model lineage ──
+      # Requires Service Principal with:
+      #   1. Fabric API scope: Item.ReadWrite.All (or workspace contributor)
+      #   2. Processing WH grants: INSERT + DELETE on Meta.LineageEdge + Meta.SemanticModelContract
+      # If SP lacks either, this step fails gracefully (continue-on-error) — manual
+      # refresh via tools/build_semantic_model_lineage.py keeps Meta tables in sync.
+      # The existing CSV export below will pick up edges regardless of this step's outcome.
       - name: Refresh Semantic Model Lineage (discover Gold → SemanticModel edges)
+        continue-on-error: true
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
