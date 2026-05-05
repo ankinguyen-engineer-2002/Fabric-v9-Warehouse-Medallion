@@ -205,10 +205,31 @@ Effort: 1 PR to lineage_explorer/.
 ## 8. Status
 
 - [x] Plan drafted (this doc)
-- [ ] Phase 1 POC — pending Aric approval
-- [ ] Phase 2 schedule — pending Phase 1
-- [ ] Phase 3 Streamlit — pending Phase 1
-- [ ] Phase 4 guard — pending all
+- [x] **Phase 1 POC — DONE 2026-05-05**: `tools/build_semantic_model_lineage.py` discovers all 4 semantic models, identifies 1 Gold consumer (`sc_forecast_control_tower`), populates 7 edges in `Meta.LineageEdge` + 7 contracts in `Meta.SemanticModelContract`
+- [x] **Phase 4 guard — DONE 2026-05-05**: `Meta.usp_BuildLineage` now filters `DELETE WHERE edge_type IN ('direct','derived')`, preserving semantic edges. Tested rebuild — semantic edges survived.
+- [ ] Phase 2 schedule — pending (proposed: GitHub Action with OIDC SP)
+- [ ] Phase 3 Streamlit — pending (`01_Architect_v9_April/lineage_explorer/app.py` update)
+
+### Live state after Phase 1+4 (2026-05-05)
+- `Meta.LineageEdge`: 53 direct + 7 semantic = 60 edges
+- `Meta.SemanticModelContract`: 7 rows (was 2 stale + 0 live)
+- 7 semantic edges visible in lineage:
+  ```
+  ForecastAccuracy_DW.DimCalendar              → SemanticModel.sc_forecast_control_tower (directLake)
+  ForecastAccuracy_DW.DimCustomerGrouping      → SemanticModel.sc_forecast_control_tower (directLake)
+  ForecastAccuracy_DW.DimForecastHorizon       → SemanticModel.sc_forecast_control_tower (directLake)
+  ForecastAccuracy_DW.DimProduct               → SemanticModel.sc_forecast_control_tower (directLake)
+  ForecastAccuracy_DW.DimWarehouse             → SemanticModel.sc_forecast_control_tower (directLake)
+  ForecastAccuracy_DW.FactForecastActual       → SemanticModel.sc_forecast_control_tower (directLake)
+  ForecastAccuracy_DW.FactForecastKpi          → SemanticModel.sc_forecast_control_tower (directLake)
+  ```
+
+### Manual refresh procedure (until Phase 2 cron is set up)
+```bash
+cd /Users/MAC/Documents/20260413_Fabric_Refactor_Architect
+python3 02_Architect_v10_May/tools/build_semantic_model_lineage.py
+```
+Run anytime a semantic model is added/repointed/removed. Daily `pl_sc_master` will preserve the semantic edges automatically (Phase 4 guard).
 
 ## References
 
