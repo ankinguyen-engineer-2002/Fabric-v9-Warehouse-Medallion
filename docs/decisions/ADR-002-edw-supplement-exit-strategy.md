@@ -166,10 +166,10 @@ Khi Bob team confirm data completeness cho từng bảng:
 
 Detailed implementation rules are maintained in:
 
-- `02_Architect_v10_May/15_v10_edw_supplement_exit_strategy.md`
-- `02_Architect_v10_May/12_v10_object_classification_mapping.md`
-- `02_Architect_v10_May/14_v10_step_by_step_implementation_runbook.md`
-- `02_Architect_v10_May/16_v10_readiness_scorecard_and_v9_cleanup.md`
+- `02_Architect_v10_May/30_runbook/15_v10_edw_supplement_exit_strategy.md`
+- `02_Architect_v10_May/20_proposals/12_v10_object_classification_mapping.md`
+- `02_Architect_v10_May/30_runbook/14_v10_step_by_step_implementation_runbook.md`
+- `02_Architect_v10_May/30_runbook/16_v10_readiness_scorecard_and_v9_cleanup.md`
 
 ## References
 

@@ -289,4 +289,4 @@ Local evidence:
 - v9 generic SP migration: `01_Architect_v9_April/docs/01_operations/05_generic_sp_migration.md`
 - v9 timezone / TableDictionary mapping: `01_Architect_v9_April/docs/01_operations/06_timezone_sync.md`
 - v9 setup: `01_Architect_v9_April/01_sc_forecast/docs/02_setup.md`
-- v10 feature parity: `02_Architect_v10_May/03_v9_feature_parity_checklist.md`
+- v10 feature parity: `02_Architect_v10_May/00_overview/03_v9_feature_parity_checklist.md`

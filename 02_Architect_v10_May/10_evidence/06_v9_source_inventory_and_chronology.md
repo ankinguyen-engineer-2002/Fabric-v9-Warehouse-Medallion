@@ -91,11 +91,11 @@ Status legend:
 
 | Status | File | Audit purpose |
 |---|---|---|
-| Pending | `02_Architect_v10_May/01_super_plan_medallion_refactor.md` | Current v10 target plan |
-| Pending | `02_Architect_v10_May/02_architecture_blueprint_mermaid.md` | v10 architecture narrative and diagrams |
-| Pending | `02_Architect_v10_May/03_v9_feature_parity_checklist.md` | Claimed v9-to-v10 parity |
-| Pending | `02_Architect_v10_May/04_revised_bob_standards_proposal.md` | Revised Bob standards interpretation |
-| Pending | `02_Architect_v10_May/05_deep_audit_protocol.md` | Audit process |
+| Pending | `02_Architect_v10_May/00_overview/01_super_plan_medallion_refactor.md` | Current v10 target plan |
+| Pending | `02_Architect_v10_May/00_overview/02_architecture_blueprint_mermaid.md` | v10 architecture narrative and diagrams |
+| Pending | `02_Architect_v10_May/00_overview/03_v9_feature_parity_checklist.md` | Claimed v9-to-v10 parity |
+| Pending | `02_Architect_v10_May/20_proposals/04_revised_bob_standards_proposal.md` | Revised Bob standards interpretation |
+| Pending | `02_Architect_v10_May/10_evidence/05_deep_audit_protocol.md` | Audit process |
 | Pending | `02_Architect_v10_May/diagrams/*.mmd` | Current architecture visuals |
 | Superseded | `02_Architect_v10_May/diagrams/render_check/*.svg` | Rendered outputs; use for visual check only |
 | Pending | `02_Architect_v10_May/SQL Server Data Warehouse Standards.docx` | Bob/DE team standards; local-only evidence unless sharing is approved |

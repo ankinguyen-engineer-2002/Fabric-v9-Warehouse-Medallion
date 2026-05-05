@@ -74,7 +74,7 @@ Purpose: classify current v9 registry objects before any v10 build, rename, move
 
 ## 5. EDW Supplement Exit Strategy
 
-Detailed cutover and rollback rules are defined in `02_Architect_v10_May/15_v10_edw_supplement_exit_strategy.md` and formalized in `docs/decisions/ADR-002-edw-supplement-exit-strategy.md`.
+Detailed cutover and rollback rules are defined in `02_Architect_v10_May/30_runbook/15_v10_edw_supplement_exit_strategy.md` and formalized in `docs/decisions/ADR-002-edw-supplement-exit-strategy.md`.
 
 Initial build rule:
 

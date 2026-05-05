@@ -307,16 +307,16 @@ Top gaps:
 
 Local project evidence:
 
-- `02_Architect_v10_May/07_v9_capability_evidence_ledger.md`
-- `02_Architect_v10_May/08_v10_gap_matrix.md`
-- `02_Architect_v10_May/09_bob_standards_mapping_matrix.md`
+- `02_Architect_v10_May/10_evidence/07_v9_capability_evidence_ledger.md`
+- `02_Architect_v10_May/20_proposals/08_v10_gap_matrix.md`
+- `02_Architect_v10_May/20_proposals/09_bob_standards_mapping_matrix.md`
 - `01_Architect_v9_April/docs/01_operations/03_scheduling.md`
 - `01_Architect_v9_April/docs/01_operations/07_sqlproj_validation.md`
 - `01_Architect_v9_April/01_sc_forecast/enterprise/01_roadmap.md`
 - `01_Architect_v9_April/01_sc_forecast/docs/operations/edw_source_swap.md`
 - `docs/decisions/ADR-002-edw-supplement-exit-strategy.md`
-- `02_Architect_v10_May/15_v10_edw_supplement_exit_strategy.md`
-- `02_Architect_v10_May/16_v10_readiness_scorecard_and_v9_cleanup.md`
+- `02_Architect_v10_May/30_runbook/15_v10_edw_supplement_exit_strategy.md`
+- `02_Architect_v10_May/30_runbook/16_v10_readiness_scorecard_and_v9_cleanup.md`
 
 Official docs checked:
 

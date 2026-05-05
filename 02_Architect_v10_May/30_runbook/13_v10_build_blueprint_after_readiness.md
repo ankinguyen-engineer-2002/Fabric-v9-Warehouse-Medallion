@@ -157,9 +157,9 @@ Rules:
 
 Detailed mapping:
 
-- `02_Architect_v10_May/12_v10_object_classification_mapping.md`
+- `02_Architect_v10_May/20_proposals/12_v10_object_classification_mapping.md`
 - `docs/decisions/ADR-002-edw-supplement-exit-strategy.md`
-- `02_Architect_v10_May/16_v10_readiness_scorecard_and_v9_cleanup.md`
+- `02_Architect_v10_May/30_runbook/16_v10_readiness_scorecard_and_v9_cleanup.md`
 
 ## 6. Validation Gates
 

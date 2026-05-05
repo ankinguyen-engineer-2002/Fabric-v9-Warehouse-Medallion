@@ -64,7 +64,7 @@ Example completed row format:
 
 ```text
 Evidence: 01_Architect_v9_April/docs/01_operations/03_scheduling.md:13-21
-v10 coverage: 02_Architect_v10_May/03_v9_feature_parity_checklist.md:14
+v10 coverage: 02_Architect_v10_May/00_overview/03_v9_feature_parity_checklist.md:14
 ```
 
 ## 5. Reading Notes

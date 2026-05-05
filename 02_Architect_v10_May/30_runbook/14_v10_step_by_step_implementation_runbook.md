@@ -43,18 +43,18 @@
 
 ### Local project evidence
 
-- [Verified] v10 architecture plan: `02_Architect_v10_May/01_super_plan_medallion_refactor.md`
-- [Verified] v9/v10 feature parity: `02_Architect_v10_May/03_v9_feature_parity_checklist.md`
-- [Verified] Bob standards Fabric adaptation: `02_Architect_v10_May/04_revised_bob_standards_proposal.md`
-- [Verified] v9 capability evidence ledger: `02_Architect_v10_May/07_v9_capability_evidence_ledger.md`
-- [Verified] v10 gap matrix: `02_Architect_v10_May/08_v10_gap_matrix.md`
-- [Verified] Bob standards mapping matrix: `02_Architect_v10_May/09_bob_standards_mapping_matrix.md`
-- [Verified] final v10 amendment plan: `02_Architect_v10_May/10_final_v10_amendment_plan.md`
-- [Verified] implementation readiness pack: `02_Architect_v10_May/11_v10_implementation_readiness_pack.md`
-- [Verified] object classification mapping: `02_Architect_v10_May/12_v10_object_classification_mapping.md`
-- [Verified] post-readiness build blueprint: `02_Architect_v10_May/13_v10_build_blueprint_after_readiness.md`
+- [Verified] v10 architecture plan: `02_Architect_v10_May/00_overview/01_super_plan_medallion_refactor.md`
+- [Verified] v9/v10 feature parity: `02_Architect_v10_May/00_overview/03_v9_feature_parity_checklist.md`
+- [Verified] Bob standards Fabric adaptation: `02_Architect_v10_May/20_proposals/04_revised_bob_standards_proposal.md`
+- [Verified] v9 capability evidence ledger: `02_Architect_v10_May/10_evidence/07_v9_capability_evidence_ledger.md`
+- [Verified] v10 gap matrix: `02_Architect_v10_May/20_proposals/08_v10_gap_matrix.md`
+- [Verified] Bob standards mapping matrix: `02_Architect_v10_May/20_proposals/09_bob_standards_mapping_matrix.md`
+- [Verified] final v10 amendment plan: `02_Architect_v10_May/20_proposals/10_final_v10_amendment_plan.md`
+- [Verified] implementation readiness pack: `02_Architect_v10_May/30_runbook/11_v10_implementation_readiness_pack.md`
+- [Verified] object classification mapping: `02_Architect_v10_May/20_proposals/12_v10_object_classification_mapping.md`
+- [Verified] post-readiness build blueprint: `02_Architect_v10_May/30_runbook/13_v10_build_blueprint_after_readiness.md`
 - [Verified] EDW supplement decision: `docs/decisions/ADR-002-edw-supplement-exit-strategy.md`
-- [Verified] v10 readiness scorecard and v9 cleanup candidate list: `02_Architect_v10_May/16_v10_readiness_scorecard_and_v9_cleanup.md`
+- [Verified] v10 readiness scorecard and v9 cleanup candidate list: `02_Architect_v10_May/30_runbook/16_v10_readiness_scorecard_and_v9_cleanup.md`
 - [Verified] live readiness export: `02_Architect_v10_May/readiness_exports/20260430_230936/` (local-only raw evidence; intentionally ignored from Git)
 - [Verified] Bob standard DOCX: `02_Architect_v10_May/SQL Server Data Warehouse Standards.docx` (local-only evidence; intentionally ignored from Git unless sharing is approved)
 
@@ -159,7 +159,7 @@ SupplyChain Dev / approved Enterprise_SupplyChain workspace
 **Files / artifacts:**
 
 - Read: `02_Architect_v10_May/readiness_exports/20260430_230936/`
-- Read: `02_Architect_v10_May/12_v10_object_classification_mapping.md`
+- Read: `02_Architect_v10_May/20_proposals/12_v10_object_classification_mapping.md`
 - Create: `02_Architect_v10_May/build_runs/<YYYYMMDD_HHMMSS>/`
 - Create: `02_Architect_v10_May/build_runs/<YYYYMMDD_HHMMSS>/baseline_manifest.md`
 
@@ -185,8 +185,8 @@ SupplyChain Dev / approved Enterprise_SupplyChain workspace
 **Files / artifacts:**
 
 - Create: `02_Architect_v10_May/build_runs/<YYYYMMDD_HHMMSS>/approval_pack.md`
-- Reference: `02_Architect_v10_May/09_bob_standards_mapping_matrix.md`
-- Reference: `02_Architect_v10_May/12_v10_object_classification_mapping.md`
+- Reference: `02_Architect_v10_May/20_proposals/09_bob_standards_mapping_matrix.md`
+- Reference: `02_Architect_v10_May/20_proposals/12_v10_object_classification_mapping.md`
 
 **Steps:**
 
@@ -956,7 +956,7 @@ Rollback path recorded
 - Compatibility views no longer used.
 - Deprecated docs replaced by v10 runbook.
 
-Detailed candidate list: `02_Architect_v10_May/16_v10_readiness_scorecard_and_v9_cleanup.md`.
+Detailed candidate list: `02_Architect_v10_May/30_runbook/16_v10_readiness_scorecard_and_v9_cleanup.md`.
 
 **Steps:**
 
@@ -985,8 +985,8 @@ Detailed candidate list: `02_Architect_v10_May/16_v10_readiness_scorecard_and_v9
 Detailed exit runbook:
 
 - `docs/decisions/ADR-002-edw-supplement-exit-strategy.md`
-- `02_Architect_v10_May/15_v10_edw_supplement_exit_strategy.md`
-- `02_Architect_v10_May/16_v10_readiness_scorecard_and_v9_cleanup.md`
+- `02_Architect_v10_May/30_runbook/15_v10_edw_supplement_exit_strategy.md`
+- `02_Architect_v10_May/30_runbook/16_v10_readiness_scorecard_and_v9_cleanup.md`
 
 ### 6.2 Logical Bronze direct-read candidates
 

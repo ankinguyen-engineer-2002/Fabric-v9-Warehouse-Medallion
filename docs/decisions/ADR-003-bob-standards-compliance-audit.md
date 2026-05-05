@@ -10,9 +10,9 @@ v10 Hybrid Medallion architecture was audited against Bob's `SQL Server Data War
 
 Source evidence:
 - `02_Architect_v10_May/SQL Server Data Warehouse Standards.docx` (local-only)
-- `02_Architect_v10_May/04_revised_bob_standards_proposal.md`
-- `02_Architect_v10_May/09_bob_standards_mapping_matrix.md`
-- `02_Architect_v10_May/08_v10_gap_matrix.md`
+- `02_Architect_v10_May/20_proposals/04_revised_bob_standards_proposal.md`
+- `02_Architect_v10_May/20_proposals/09_bob_standards_mapping_matrix.md`
+- `02_Architect_v10_May/20_proposals/08_v10_gap_matrix.md`
 - Live Fabric audit: 2026-05-03
 
 ---
@@ -150,8 +150,8 @@ Full rebuild completed in a single session:
 ## 8. References
 
 - Bob DOCX: `02_Architect_v10_May/SQL Server Data Warehouse Standards.docx`
-- Bob mapping: `02_Architect_v10_May/09_bob_standards_mapping_matrix.md`
-- Bob proposal: `02_Architect_v10_May/04_revised_bob_standards_proposal.md`
-- Gap matrix: `02_Architect_v10_May/08_v10_gap_matrix.md`
+- Bob mapping: `02_Architect_v10_May/20_proposals/09_bob_standards_mapping_matrix.md`
+- Bob proposal: `02_Architect_v10_May/20_proposals/04_revised_bob_standards_proposal.md`
+- Gap matrix: `02_Architect_v10_May/20_proposals/08_v10_gap_matrix.md`
 - ADR-001: Adopt Hybrid Medallion
 - ADR-002: EDW Supplement Exit Strategy

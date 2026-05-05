@@ -152,4 +152,4 @@ This prevents both risks:
 ## 10. Related Documents
 
 - `docs/decisions/ADR-002-edw-supplement-exit-strategy.md`
-- `02_Architect_v10_May/16_v10_readiness_scorecard_and_v9_cleanup.md`
+- `02_Architect_v10_May/30_runbook/16_v10_readiness_scorecard_and_v9_cleanup.md`

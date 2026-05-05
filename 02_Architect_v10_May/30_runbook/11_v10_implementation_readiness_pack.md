@@ -192,15 +192,15 @@ v10 action:
 
 Detailed runbook:
 
-- `02_Architect_v10_May/15_v10_edw_supplement_exit_strategy.md`
+- `02_Architect_v10_May/30_runbook/15_v10_edw_supplement_exit_strategy.md`
 - `docs/decisions/ADR-002-edw-supplement-exit-strategy.md`
-- `02_Architect_v10_May/16_v10_readiness_scorecard_and_v9_cleanup.md`
+- `02_Architect_v10_May/30_runbook/16_v10_readiness_scorecard_and_v9_cleanup.md`
 
 ## 4. Step 3 - Object Classification Mapping
 
 Detailed mapping:
 
-- `02_Architect_v10_May/12_v10_object_classification_mapping.md`
+- `02_Architect_v10_May/20_proposals/12_v10_object_classification_mapping.md`
 
 Summary:
 
