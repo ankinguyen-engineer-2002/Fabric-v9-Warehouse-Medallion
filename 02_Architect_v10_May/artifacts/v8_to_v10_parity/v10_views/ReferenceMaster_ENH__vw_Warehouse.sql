@@ -1,0 +1,1 @@
+CREATE VIEW ReferenceMaster_ENH.vw_Warehouse AS SELECT * FROM Enterprise_Lakehouse.SupplyChain_DW.DimAFIWarehouses

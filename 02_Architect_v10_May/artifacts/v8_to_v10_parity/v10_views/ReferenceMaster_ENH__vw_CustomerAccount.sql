@@ -1,0 +1,1 @@
+CREATE VIEW ReferenceMaster_ENH.vw_CustomerAccount AS SELECT * FROM Enterprise_Lakehouse.Customers.AccountMaster

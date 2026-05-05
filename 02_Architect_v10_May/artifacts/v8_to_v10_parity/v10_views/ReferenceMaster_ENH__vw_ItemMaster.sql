@@ -1,0 +1,1 @@
+CREATE VIEW ReferenceMaster_ENH.vw_ItemMaster AS SELECT * FROM Enterprise_Lakehouse.MasterData_DW.DimItemMaster
