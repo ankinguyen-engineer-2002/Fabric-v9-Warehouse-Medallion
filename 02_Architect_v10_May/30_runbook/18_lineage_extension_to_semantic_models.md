@@ -207,7 +207,12 @@ Effort: 1 PR to lineage_explorer/.
 - [x] Plan drafted (this doc)
 - [x] **Phase 1 POC — DONE 2026-05-05**: `tools/build_semantic_model_lineage.py` discovers all 4 semantic models, identifies 1 Gold consumer (`sc_forecast_control_tower`), populates 7 edges in `Meta.LineageEdge` + 7 contracts in `Meta.SemanticModelContract`
 - [x] **Phase 4 guard — DONE 2026-05-05**: `Meta.usp_BuildLineage` now filters `DELETE WHERE edge_type IN ('direct','derived')`, preserving semantic edges. Tested rebuild — semantic edges survived.
-- [x] **Phase 2 cron schedule — DONE 2026-05-05**: GitHub Action `.github/workflows/refresh_lineage_data.yml` extended with new step "Refresh Semantic Model Lineage" that discovers Gold consumers via Fabric API + writes to Meta tables BEFORE the existing CSV export step. Runs every 10 min via existing cron `*/10 * * * *`. Reuses existing SP credentials in GH secrets.
+- [x] **Phase 2 cron schedule — DONE 2026-05-05** (with caveat): GitHub Action `.github/workflows/refresh_lineage_data.yml` extended with new step "Refresh Semantic Model Lineage". Runs every 10 min via existing cron `*/10 * * * *`. Reuses existing SP credentials in GH secrets.
+  - **CAVEAT discovered on first run**: existing Service Principal lacks two grants:
+    1. Fabric API scope `Item.ReadWrite.All` (or workspace contributor) — `getDefinition` returns HTTP 404
+    2. Processing WH grants for `INSERT/DELETE` on `Meta.LineageEdge` + `Meta.SemanticModelContract`
+  - **Workaround**: step has `continue-on-error: true` so failure doesn't break the existing CSV export. Manual refresh via `python3 tools/build_semantic_model_lineage.py` (uses Aric's `az login` with broader scopes) covers the gap until IT grants perms.
+  - **Verified end-to-end**: workflow run `25366733652` completed successfully; semantic step failed gracefully; CSV export ran; 7 semantic edges exported to `lineage.csv` and auto-committed via "Auto-refresh lineage data [skip ci]".
 - [x] **Phase 3 Streamlit visual — DONE 2026-05-05**: Updated `01_Architect_v9_April/lineage_explorer/app.py` `get_tier()` to recognize `SemanticModel.*` nodes (returns `sem` tier); updated `templates/lineage.html` adding `sem` tier (color `#ec4899` pink, icon ✦) + LAYER_LABELS/COLORS layer 9 + FIXED_LAYERS sem→9. Source/target node ID logic preserves `SemanticModel.<name>` full path for clarity.
 
 ### Live state after Phase 1+4 (2026-05-05)
@@ -224,12 +229,20 @@ Effort: 1 PR to lineage_explorer/.
   ForecastAccuracy_DW.FactForecastKpi          → SemanticModel.sc_forecast_control_tower (directLake)
   ```
 
-### Manual refresh procedure (until Phase 2 cron is set up)
+### Manual refresh procedure (required when adding/changing semantic models, until SP perms upgraded)
 ```bash
 cd /Users/MAC/Documents/20260413_Fabric_Refactor_Architect
 python3 02_Architect_v10_May/tools/build_semantic_model_lineage.py
 ```
-Run anytime a semantic model is added/repointed/removed. Daily `pl_sc_master` will preserve the semantic edges automatically (Phase 4 guard).
+Run anytime a semantic model is added/repointed/removed. Daily `pl_sc_master` and 10-min GH Actions auto-refresh both preserve existing semantic edges (Phase 4 guard for the SP, simple SELECT for GH Actions). Once SP gets `Item.ReadWrite.All` Fabric scope + INSERT/DELETE on Meta tables, the GH Actions semantic step will auto-discover changes without manual run.
+
+### IT permission request (to fully automate Phase 2)
+Submit ticket requesting these grants for the `AZURE_CLIENT_ID` Service Principal used by `refresh_lineage_data.yml`:
+1. **Fabric API scope**: `Item.ReadWrite.All` (or `Workspace.Contributor` on workspace `c8d9fc83-18b6-4e1d-8264-0b49eed36fe0`)
+2. **Processing WH grants** in `SupplyChain_Processing_Warehouse`:
+   ```sql
+   GRANT INSERT, DELETE ON SCHEMA::Meta TO [<sp-app-name>];
+   ```
 
 ## References
 
