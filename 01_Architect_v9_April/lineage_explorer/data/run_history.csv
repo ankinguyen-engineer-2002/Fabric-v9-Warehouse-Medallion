@@ -1,4 +1,6 @@
 sp_name,status,rows_affected,duration_seconds,start_time,load_type
+ReferenceMaster_ENH.ForecastHorizon,success,8,2,2026-05-05 07:54:14.573333,overwrite
+ReferenceMaster_ENH.Calendar,success,21551,7,2026-05-05 07:50:55.410000,overwrite
 ForecastHistory_ENH.NaiveForecastMonthly,success,2048377,25,2026-05-04 13:17:02.196667,overwrite
 ForecastHistory_ENH.NaiveForecastMonthly,success,2048377,104,2026-05-04 13:10:56.423333,overwrite
 OpenOrderHistory_ENH.OpenOrderMonthly,success,79424,4,2026-05-04 13:10:51.306667,overwrite
@@ -47,5 +49,3 @@ OpenOrderHistory_ENH.OpenOrderMonthly,success,79509,2,2026-05-04 10:19:59.700000
 SalesHistory_ENH.ActualDemandWeekly,success,7860186,55,2026-05-04 10:19:59.560000,overwrite
 SalesHistory_ENH.ActualDemandMonthly,success,2651191,64,2026-05-04 10:16:06.120000,overwrite
 SalesHistory_ENH.ActualDemandWeekly,success,7860186,80,2026-05-04 10:16:05.600000,overwrite
-SalesHistory_ENH.InvoiceWeekly,success,37557568,179,2026-05-04 10:16:05.580000,overwrite
-OpenOrderHistory_ENH.OpenOrderMonthly,success,79509,8,2026-05-04 10:16:05.230000,overwrite
