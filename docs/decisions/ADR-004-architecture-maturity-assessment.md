@@ -35,7 +35,7 @@ Scored against 15 criteria derived from 10+ authoritative Microsoft sources:
 | 2 | Bronze = shortcuts, no copy | "Create a shortcut instead of copying data across" | Enterprise_Lakehouse shortcuts; staging only for 4 EDW exceptions | **9/10** | -1: 4 EDW supplement tables still copied (documented in ADR-002) |
 | 3 | Silver = clean, standardize | "Fix errors, standardize formats, remove duplicates" using Delta tables | 5 domain schemas with Bob suffix (`_ENH`, `_WRK`), VIEW + CTAS pattern, Delta tables, PascalCase columns | **10/10** | Schema suffix + PascalCase columns per Bob DOCX (rebuilt 2026-05-04) |
 | 4 | Gold = curated, BI-ready | "Organize for reports and dashboards" in dedicated serving item | Dedicated Gold Warehouse, FactForecastActual/Kpi with Fact prefix | **10/10** | Exact match |
-| 5 | Direct Lake for Gold | "Ideal choice for the gold analytics layer in medallion architecture" | Gold physical tables in Delta format, Direct Lake ready | **9/10** | -1: Semantic model not yet created (TMDL captured, pending deploy) |
+| 5 | Direct Lake for Gold | "Ideal choice for the gold analytics layer in medallion architecture" | Gold physical tables in Delta format; semantic model `sc_forecast_control_tower` deployed 2026-05-05 with Direct Lake | **10/10** | RESOLVED 2026-05-05: see ADR-007 |
 | 6 | Star schema / Kimball | "De-normalized star schema encouraged"; "Fact/Dim prefixes" | Complete star schema in `ForecastAccuracy_DW`: 2 Fact + 5 Dim tables | **10/10** | DimCalendar, DimCustomerGrouping, DimWarehouse, DimProduct, DimForecastHorizon (added 2026-05-04) |
 | 7 | Metadata-driven ETL | "Metadata-driven frameworks enable incremental ingestion at scale" | AssetRegistry drives ALL layers: 1 generic SP (Silver) + 1 dynamic pipeline (Gold). Add table = INSERT registry + CREATE VIEW. Zero code change | **10/10** | Exceeds: MS mentions metadata-driven; v10 extends to cross-DB Gold via registry-driven pipeline (refactored 2026-05-04) |
 | 8 | ETL logging | "Log the results of the ETL process" | RunLog (UTC+CST), PipelineRunLog, retry 3x, snapshot conflict handling | **10/10** | Exceeds: MS says "log results"; v10 has UTC+CST, retry, conflict handling |
@@ -47,7 +47,7 @@ Scored against 15 criteria derived from 10+ authoritative Microsoft sources:
 | 14 | CI/CD & deployment | "Standard change control process for deployment" | Blocked by IT. Manual deploy via REST API scripts | **5/10** | Partial: Scripts exist, but no automated pipeline |
 | 15 | Stored procedures | "Transform data with a stored procedure in a Warehouse" (MS tutorial) | 16 SPs + 3 functions, 8 load patterns, DAG engine, DQ engine | **10/10** | Exact match: MS tutorial shows SP pattern; v10 extends it significantly |
 
-### Total: 134/150 = 89.3% (was 130/150 = 86.7% before 2026-05-04 rebuild)
+### Total: 135/150 = 90.0% (was 134/150 = 89.3% before 2026-05-05 semantic model deploy; was 130/150 = 86.7% before 2026-05-04 Bob rebuild)
 
 ---
 
@@ -61,7 +61,7 @@ Scored against 15 criteria derived from 10+ authoritative Microsoft sources:
 | **Staff/Principal** | **85-95%** | Enterprise-grade: multi-mart, DAG, contracts, Direct Lake, security |
 | Distinguished | 95%+ | Full governance, CI/CD, alerting, multi-region, disaster recovery |
 
-### v10 Assessment: Staff/Principal level (89.3%)
+### v10 Assessment: Staff/Principal level (90.0% as of 2026-05-05)
 
 ---
 
@@ -146,7 +146,7 @@ Other patterns become relevant when:
 | Gap | Current Score | Target | Fix Description | Effort |
 |---|---|---|---|---|
 | Security model | 4/10 | 8/10 | Design workspace roles, SQL endpoint grants, semantic RLS/OLS, Meta.SecurityPolicy | 1 session |
-| Semantic model | 9/10 | 10/10 | Deploy sc_forecast_control_tower with TMDL (captured, PascalCase columns ready) | 1 session |
+| ~~Semantic model~~ | ~~9/10~~ | ~~10/10~~ | **DONE 2026-05-05** — sc_forecast_control_tower deployed (id f06a2361). See ADR-007 + doc 17 | ~~1 session~~ |
 | ~~Star schema~~ | ~~7/10~~ | ~~10/10~~ | **DONE** (2026-05-04) — 5 Dim tables added to ForecastAccuracy_DW | ~~30 min~~ |
 
 ### High (important for enterprise maturity)
@@ -173,9 +173,10 @@ Other patterns become relevant when:
 
 | Action | Score Impact | New Total |
 |---|---|---|
-| Current baseline (post Bob Standards rebuild) | — | **134/150 (89.3%)** |
-| + Security matrix design | +4 | 138/150 (92.0%) |
-| + Semantic model deploy | +1 | 139/150 (92.7%) |
+| Pre Bob Standards rebuild (2026-05-04) | — | 130/150 (86.7%) |
+| Post Bob Standards rebuild (2026-05-04) | +4 | 134/150 (89.3%) |
+| + Semantic model deploy (2026-05-05) | +1 | **135/150 (90.0%) — current** |
+| + Security matrix design | +4 | 139/150 (92.7%) |
 | ~~+ Dim tables in Gold WH~~ | ~~+3~~ | ~~DONE (included in 89.3%)~~ |
 | + DQ activation in pipeline | +1 | 140/150 (93.3%) |
 | + CI/CD (unblock IT) | +3 | 143/150 (95.3%) |

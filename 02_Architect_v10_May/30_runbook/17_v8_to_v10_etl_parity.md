@@ -327,4 +327,38 @@ v10 separates DQ data into Processing WH `Meta` schema. Gold WH doesn't have a D
 
 ---
 
-**Status as of 2026-05-05**: Investigation complete. Port plan defined. Awaiting Aric approval to execute Phase 2 (ALTER scripts).
+**Status as of 2026-05-05**:
+- ✅ Phase 1 (Investigation) — complete. Commit `18f97f94`.
+- ✅ Phase 2 (ALTER + rerun pipeline) — complete. All 4 ALTER VIEW + 4 DROP+CTAS executed:
+  - Silver `vw_Calendar` 46 → 74 cols, table re-materialized 75 cols × 21,551 rows
+  - Gold `vw_DimCalendar` 10 → 75 cols, table 75 cols × 21,551 rows (matches v8 exact)
+  - Gold `vw_FactForecastKpi` 12 → 19 cols (added 7 derived metrics), table 19 cols × 36.4M rows
+  - Silver+Gold `ForecastHorizon` views/tables added `Rank` col, 8 rows each
+- ✅ Phase 3 (TMDL clone deploy) — complete. Commit `dddc73f3`.
+  - New semantic model `sc_forecast_control_tower` (id `f06a2361-15fd-4f91-9d37-941fefe62aaf`) live on Gold WH
+  - 17 TMDL parts deployed via Fabric `createSemanticModel` API
+  - 35 DAX measures + 9 relationships + 8 tables verified content-match with v8 source
+  - Direct Lake repointed: workspace c8d9fc83 / WH 98e2a911 / schema `ForecastAccuracy_DW`
+  - `dq_forecast_accuracy` dropped per Bob design
+
+### Verification matrix (post-deploy 2026-05-05)
+
+| Aspect | v8 Control Tower | v10 sc_forecast_control_tower | Match |
+|---|---|---|---|
+| Tables (data) | 7 + dq + Measure + 2 param = 11 | 7 + Measure + 2 param = 10 | ✓ as designed |
+| DimCalendar / DimWarehouse / DimProduct / DimForecastHorizon / DimCustomerGrouping cols | 74 / 8 / 89 / 2 / 1 | 74 / 8 / 89 / 2 / 1 | ✓ EXACT |
+| FactForecastActual / FactForecastKpi cols | 9 / 18 | 9 / 18 | ✓ EXACT |
+| Measures count + names | 35 | 35 | ✓ all match |
+| Relationships | 9 | 9 | ✓ semantic match |
+| Direct Lake source | v9 e146ffe2 | v10 98e2a911 | ✓ repointed |
+| Row count: DimCalendar | 21,551 | 21,551 | ✓ |
+| Row count: DimWarehouse / DimForecastHorizon | 55 / 8 | 55 / 8 | ✓ |
+| Row count: DimProduct | 373,326 | 379,305 (+1.6%) | ✓ near match |
+| Row count: FactForecastActual | 48.82M | 47.11M (-3.5%) | 🟡 data drift (Actual+Naive newer cutoff; 6 forecast lags exact match 7,011,236 rows each) |
+| Row count: FactForecastKpi | 36.37M | 36.40M (+0.08%) | ✓ |
+| Row count: DimCustomerGrouping | 9 | 35,617 | 🟡 v10 enriched with `Customer` col; semantic model uses CustomerGroupCode only → effective parity preserved |
+
+### Cross-references
+- ADR-007: Decision rationale + consequences
+- Doc 18: Plan to extend lineage to track semantic-model edges (Meta.LineageEdge + Meta.SemanticModelContract)
+- Commits: `18f97f94` (Phase 1) + `dddc73f3` (Phase 2+3)
