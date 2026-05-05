@@ -207,8 +207,8 @@ Effort: 1 PR to lineage_explorer/.
 - [x] Plan drafted (this doc)
 - [x] **Phase 1 POC — DONE 2026-05-05**: `tools/build_semantic_model_lineage.py` discovers all 4 semantic models, identifies 1 Gold consumer (`sc_forecast_control_tower`), populates 7 edges in `Meta.LineageEdge` + 7 contracts in `Meta.SemanticModelContract`
 - [x] **Phase 4 guard — DONE 2026-05-05**: `Meta.usp_BuildLineage` now filters `DELETE WHERE edge_type IN ('direct','derived')`, preserving semantic edges. Tested rebuild — semantic edges survived.
-- [ ] Phase 2 schedule — pending (proposed: GitHub Action with OIDC SP)
-- [ ] Phase 3 Streamlit — pending (`01_Architect_v9_April/lineage_explorer/app.py` update)
+- [x] **Phase 2 cron schedule — DONE 2026-05-05**: GitHub Action `.github/workflows/refresh_lineage_data.yml` extended with new step "Refresh Semantic Model Lineage" that discovers Gold consumers via Fabric API + writes to Meta tables BEFORE the existing CSV export step. Runs every 10 min via existing cron `*/10 * * * *`. Reuses existing SP credentials in GH secrets.
+- [x] **Phase 3 Streamlit visual — DONE 2026-05-05**: Updated `01_Architect_v9_April/lineage_explorer/app.py` `get_tier()` to recognize `SemanticModel.*` nodes (returns `sem` tier); updated `templates/lineage.html` adding `sem` tier (color `#ec4899` pink, icon ✦) + LAYER_LABELS/COLORS layer 9 + FIXED_LAYERS sem→9. Source/target node ID logic preserves `SemanticModel.<name>` full path for clarity.
 
 ### Live state after Phase 1+4 (2026-05-05)
 - `Meta.LineageEdge`: 53 direct + 7 semantic = 60 edges

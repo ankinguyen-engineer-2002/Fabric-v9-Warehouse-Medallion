@@ -226,6 +226,10 @@ def build_dag_data():
         if "enterprise_lakehouse" in n or "supplychain_lakehouse" in n or "manual" in n:
             return "other"
 
+        # Semantic models (downstream from Gold)
+        if name.startswith("SemanticModel.") or "semanticmodel" in n:
+            return "sem"
+
         # Extract table name (after last dot)
         tbl = name.split(".")[-1] if "." in name else name
         schema = name.split(".")[0] if "." in name else ""
@@ -259,13 +263,19 @@ def build_dag_data():
         tgt_schema = row.get("target_schema", "").strip()
         tgt_table = row.get("target_table", "").strip()
 
-        # Source node ID: full path for external, table name for internal
+        # Source node ID: full path for external/semantic, table name for internal
         if "Enterprise_Lakehouse" in src_schema or "SupplyChain_Lakehouse" in src_schema:
+            src_id = f"{src_schema}.{src_table}"
+        elif src_schema == "SemanticModel":
             src_id = f"{src_schema}.{src_table}"
         else:
             src_id = src_table
 
-        tgt_id = tgt_table
+        # Target node ID: full path for SemanticModel target, table name for internal
+        if tgt_schema == "SemanticModel":
+            tgt_id = f"{tgt_schema}.{tgt_table}"
+        else:
+            tgt_id = tgt_table
         if src_id not in seen:
             seen.add(src_id)
             nodes.append({"id": src_id, "layer": get_tier(src_id), "load_type": "", "status": "", "last_load_date": "", "rows_loaded": 0})

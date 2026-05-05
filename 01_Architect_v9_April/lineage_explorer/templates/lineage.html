@@ -78,6 +78,7 @@ const TYPE_CONFIG = {
   slv3:  { color: "#1d4ed8", label: "SLV-W3", icon: "◆" },
   slv4:  { color: "#1e40af", label: "SLV-W4", icon: "◆" },
   gld:   { color: "#f59e0b", label: "GLD",   icon: "★" },
+  sem:   { color: "#ec4899", label: "SemanticModel", icon: "✦" },
   dq:    { color: "#ef4444", label: "DQ",    icon: "●" },
   other: { color: "#94a3b8", label: "Bronze (Source)", icon: "○" },
 };
@@ -121,8 +122,8 @@ function apiJsonToGraph(data) {
 }
 
 /* ─── DAG Layout ─── */
-const LAYER_LABELS = {0:'Bronze (Sources)',1:'Silver (Staging_WRK)',2:'Silver (ReferenceMaster_ENH)',3:'Silver W0 (Domain_ENH)',4:'Silver W1',5:'Silver W2',6:'Silver W3',7:'Silver W4',8:'Gold (ForecastAccuracy_DW)'};
-const LAYER_COLORS = {0:'#94a3b8',1:'#a78bfa',2:'#22c55e',3:'#60a5fa',4:'#3b82f6',5:'#2563eb',6:'#1d4ed8',7:'#1e40af',8:'#f59e0b'};
+const LAYER_LABELS = {0:'Bronze (Sources)',1:'Silver (Staging_WRK)',2:'Silver (ReferenceMaster_ENH)',3:'Silver W0 (Domain_ENH)',4:'Silver W1',5:'Silver W2',6:'Silver W3',7:'Silver W4',8:'Gold (ForecastAccuracy_DW)',9:'Semantic Models'};
+const LAYER_COLORS = {0:'#94a3b8',1:'#a78bfa',2:'#22c55e',3:'#60a5fa',4:'#3b82f6',5:'#2563eb',6:'#1d4ed8',7:'#1e40af',8:'#f59e0b',9:'#ec4899'};
 
 function layoutDAG(nodes, edges, collapsed) {
   const vis = nodes.filter(n => !collapsed.has(n.type));
@@ -137,7 +138,7 @@ function layoutDAG(nodes, edges, collapsed) {
 
   const layers = new Map(), done = new Set();
   const nodeById = new Map(); vis.forEach(n => nodeById.set(n.id, n));
-  const FIXED_LAYERS = {other: 0, orphan: 0, stg: 1, brz: 2, ref: 2, slv: 3, slv0: 3, slv1: 4, slv2: 5, slv3: 6, slv4: 7, gld: 8};
+  const FIXED_LAYERS = {other: 0, orphan: 0, stg: 1, brz: 2, ref: 2, slv: 3, slv0: 3, slv1: 4, slv2: 5, slv3: 6, slv4: 7, gld: 8, sem: 9};
   function assign(id) {
     if (done.has(id)) return layers.get(id) || 0;
     done.add(id);
@@ -172,7 +173,7 @@ function layoutDAG(nodes, edges, collapsed) {
   /* Initial sort: group by sub-type, then alphabetical */
   sorted.forEach(l => {
     groups.get(l).sort((a,b) => {
-      const o = {other:0,orphan:0,brz:1,ref:2,slv:3,slv0:3,slv1:3,slv2:3,slv3:3,slv4:3,gld:4,dq:5};
+      const o = {other:0,orphan:0,brz:1,ref:2,slv:3,slv0:3,slv1:3,slv2:3,slv3:3,slv4:3,gld:4,sem:5,dq:6};
       const d = (o[a.type]||9)-(o[b.type]||9);
       return d!==0 ? d : a.name.localeCompare(b.name);
     });

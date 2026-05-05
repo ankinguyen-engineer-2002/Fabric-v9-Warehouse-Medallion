@@ -28,6 +28,93 @@ jobs:
           sudo apt-get update
           sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
 
+      - name: Refresh Semantic Model Lineage (discover Gold → SemanticModel edges)
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          FABRIC_SERVER: ${{ secrets.FABRIC_SERVER }}
+        run: |
+          python << 'EOF'
+          import os, json, struct, base64, time, re, urllib.request, pyodbc
+          from urllib.request import Request, urlopen
+          from datetime import datetime, timezone
+
+          tenant = os.environ["AZURE_TENANT_ID"]
+          client_id = os.environ["AZURE_CLIENT_ID"]
+          client_secret = os.environ["AZURE_CLIENT_SECRET"]
+          server = os.environ["FABRIC_SERVER"]
+          WORKSPACE_ID = "c8d9fc83-18b6-4e1d-8264-0b49eed36fe0"
+          GOLD_WH_ID = "98e2a911-5af9-442e-9cc8-5d8dadb8b762"
+
+          def get_token(scope):
+              url = f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
+              data = f"grant_type=client_credentials&client_id={client_id}&client_secret={client_secret}&scope={scope}"
+              return json.loads(urlopen(Request(url, data=data.encode(), method="POST",
+                  headers={"Content-Type":"application/x-www-form-urlencoded"})).read().decode())["access_token"]
+
+          fab_token = get_token("https://api.fabric.microsoft.com/.default")
+          sql_token = get_token("https://database.windows.net/.default")
+
+          # Discover semantic models that consume Gold WH
+          def fab_get(path):
+              return json.loads(urlopen(Request(f"https://api.fabric.microsoft.com{path}",
+                  headers={"Authorization": f"Bearer {fab_token}"})).read())
+
+          models = fab_get(f"/v1/workspaces/{WORKSPACE_ID}/semanticModels").get("value", [])
+          discovered = []
+          for sm in models:
+              try:
+                  req = Request(f"https://api.fabric.microsoft.com/v1/workspaces/{WORKSPACE_ID}/semanticModels/{sm['id']}/getDefinition?format=TMDL",
+                      method="POST", headers={"Authorization": f"Bearer {fab_token}", "Content-Length": "0"})
+                  resp = urlopen(req)
+                  if resp.status != 202: continue
+                  op = resp.headers.get("x-ms-operation-id")
+                  for _ in range(30):
+                      time.sleep(2)
+                      d = fab_get(f"/v1/operations/{op}")
+                      if d.get("status") == "Succeeded":
+                          parts = fab_get(f"/v1/operations/{op}/result").get("definition",{}).get("parts",[])
+                          urls, tbls = [], []
+                          for p in parts:
+                              c = base64.b64decode(p.get("payload","")).decode("utf-8", errors="replace") if p.get("payloadType")=="InlineBase64" else p.get("payload","")
+                              if p["path"].endswith("expressions.tmdl"):
+                                  urls += re.findall(r'AzureStorage\.DataLake\("([^"]+)"', c)
+                              if p["path"].endswith(".tmdl") and "/tables/" in p["path"]:
+                                  for pm in re.finditer(r"partition\s+\S+\s+=\s+entity\s*\n((?:\s+.+\n)+)", c, re.MULTILINE):
+                                      body = pm.group(1)
+                                      em = re.search(r"entityName:\s*(\S+)", body)
+                                      sm_ = re.search(r"schemaName:\s*(\S+)", body)
+                                      mm = re.search(r"mode:\s*(\S+)", body)
+                                      if em: tbls.append({"entity":em.group(1),"schema":sm_.group(1) if sm_ else None,"mode":mm.group(1) if mm else "unknown"})
+                          if any(GOLD_WH_ID in u for u in urls):
+                              for t in tbls: discovered.append({**t, "model_name": sm["displayName"], "model_id": sm["id"]})
+                          break
+                      if d.get("status") == "Failed": break
+              except Exception as e: print(f"  skip {sm.get('displayName')}: {e}")
+
+          print(f"Discovered {len(discovered)} (gold_table × semantic_model) pairs")
+
+          # Write to Meta tables
+          tb = sql_token.encode("UTF-16-LE")
+          ts = struct.pack(f"<I{len(tb)}s", len(tb), tb)
+          conn = pyodbc.connect(f"DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={server};DATABASE=SupplyChain_Processing_Warehouse;Encrypt=yes;TrustServerCertificate=no", attrs_before={1256: ts})
+          conn.autocommit = True
+          c = conn.cursor()
+          c.execute("DELETE FROM Meta.LineageEdge WHERE edge_type='semantic'")
+          for d in discovered:
+              gold_id = f"{d['schema']}.{d['entity']}"
+              sm_id = f"SemanticModel.{d['model_name']}"
+              eid = f"semantic::{d['model_name']}::{d['entity']}"
+              c.execute("INSERT INTO Meta.LineageEdge (edge_id, source_asset, target_asset, edge_type, transform_type, is_synthetic, created_at_utc, notes) VALUES (?,?,?,'semantic',?,0,SYSUTCDATETIME(),?)",
+                  eid, gold_id, sm_id, d["mode"], f"GH Action auto-discover, model_id={d['model_id']}")
+              c.execute("DELETE FROM Meta.SemanticModelContract WHERE contract_id=?", eid)
+              c.execute("INSERT INTO Meta.SemanticModelContract (contract_id, gold_asset_id, semantic_model_name, source_mode, direct_lake_required, fallback_allowed, validation_status, last_validated_utc, notes) VALUES (?,?,?,?,?,0,'discovered',SYSUTCDATETIME(),?)",
+                  eid, gold_id, d["model_name"], d["mode"], 1 if d["mode"]=="directLake" else 0, f"GH Action auto-discover, model_id={d['model_id']}")
+          conn.close()
+          print(f"  ✓ Wrote {len(discovered)} edges + contracts")
+          EOF
+
       - name: Get Azure Token & Export CSVs
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
