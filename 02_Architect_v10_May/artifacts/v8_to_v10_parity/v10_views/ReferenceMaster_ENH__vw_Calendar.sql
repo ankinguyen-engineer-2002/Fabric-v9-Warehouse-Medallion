@@ -1,0 +1,26 @@
+CREATE VIEW ReferenceMaster_ENH.vw_Calendar AS
+SELECT
+    CAST(DateKey AS INT) AS SKDate, CAST(MapicsDate AS INT) AS MapicsDate,
+    CAST(DateID AS DATE) AS Date, CAST(DateTimeID AS DATE) AS Datetime,
+    CAST(CalendarDate AS DATE) AS Calendar, TRIM(CalendarDateName) AS CalendarDateName,
+    CAST(CalendarDayOfWeek AS INT) AS CalDayOfWeekNum, TRIM(CalendarDayOfWeekName) AS CalDayOfWeekName,
+    CAST(CalendarDayOfMonth AS INT) AS CalDayOfMonthNum, CAST(CalendarDayOfYear AS INT) AS CalDayOfYearNum,
+    CAST(CalendarWeek AS INT) AS CalWeekNum, CAST(CalendarWeekYear AS INT) AS CalWeekYearNum,
+    TRIM(CalendarWeekYearName) AS CalWeekYearName,
+    CAST(CalendarWeekFirstDate AS DATE) AS CalWeekFirst, CAST(CalendarWeekLastDate AS DATE) AS CalWeekLast,
+    CAST(CalendarMonth AS INT) AS CalMonthNum, CAST(CalendarMonthYear AS INT) AS CalMonthYearNum,
+    TRIM(CalendarMonthName) AS CalMonthName, TRIM(CalendarMonthYearName) AS CalMonthYearName,
+    CAST(CalendarMonthFirstDate AS DATE) AS CalMonthFirst, CAST(CalendarMonthLastDate AS DATE) AS CalMonthLast,
+    CAST(CalendarQuarter AS INT) AS CalQuarterNum, TRIM(CalendarQuarterName) AS CalQuarterName,
+    CAST(CalendarYear AS INT) AS CalYearNum, TRIM(CalendarYearName) AS CalYearName,
+    CAST(FiscalMonth AS INT) AS FSCMonthNum, CAST(FiscalMonthYear AS INT) AS FSCMonthYearNum,
+    TRIM(FiscalMonthName) AS FSCMonthName, TRIM(FiscalMonthYearName) AS FSCMonthYearName,
+    CAST(FiscalMonthFirstDate AS DATE) AS FSCMonthFirst, CAST(FiscalMonthLastDate AS DATE) AS FSCMonthLast,
+    CAST(FiscalQuarter AS INT) AS FSCQuarterNum, TRIM(FiscalQuarterName) AS FSCQuarterName,
+    CAST(FiscalQuarterYear AS INT) AS FSCQuarterYearNum, TRIM(FiscalQuarterYearName) AS FSCQuarterYearName,
+    CAST(FiscalYear AS INT) AS FSCYearNum, TRIM(FiscalYearName) AS FSCYearName,
+    CAST(FiscalWeek AS INT) AS FSCWeekNum, CAST(FiscalWeekYear AS INT) AS FSCWeekYearNum,
+    CAST(FiscalWeekFirstDate AS DATE) AS FSCWeekFirst, CAST(FiscalWeekLastDate AS DATE) AS FSCWeekLast,
+    TRIM(HolidayIndicator) AS HolidayIndicatorCode, TRIM(HolidayName) AS HolidayName,
+    TRIM(WorkingDayIndicator) AS WorkingDayCode, TRIM(WeekdayWeekend) AS WeekdayWeekendCode
+FROM Enterprise_Lakehouse.MasterData_DW.DimDate WHERE DateKey IS NOT NULL

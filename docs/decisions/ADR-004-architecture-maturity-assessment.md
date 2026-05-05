@@ -33,13 +33,13 @@ Scored against 15 criteria derived from 10+ authoritative Microsoft sources:
 |---|---|---|---|---:|---|
 | 1 | Medallion 3-layer separation | "Keep each layer separated in its own lakehouse or data warehouse" | 2 Lakehouses (Bronze) + Processing WH (Silver) + Gold WH (Gold) | **10/10** | Matches Pattern 2: Bronze/Silver lakehouse, Gold warehouse |
 | 2 | Bronze = shortcuts, no copy | "Create a shortcut instead of copying data across" | Enterprise_Lakehouse shortcuts; staging only for 4 EDW exceptions | **9/10** | -1: 4 EDW supplement tables still copied (documented in ADR-002) |
-| 3 | Silver = clean, standardize | "Fix errors, standardize formats, remove duplicates" using Delta tables | 3 domain schemas PascalCase, VIEW + CTAS pattern, Delta tables | **9/10** | -1: Column naming uses snake_case vs recommended PascalCase |
+| 3 | Silver = clean, standardize | "Fix errors, standardize formats, remove duplicates" using Delta tables | 5 domain schemas with Bob suffix (`_ENH`, `_WRK`), VIEW + CTAS pattern, Delta tables, PascalCase columns | **10/10** | Schema suffix + PascalCase columns per Bob DOCX (rebuilt 2026-05-04) |
 | 4 | Gold = curated, BI-ready | "Organize for reports and dashboards" in dedicated serving item | Dedicated Gold Warehouse, FactForecastActual/Kpi with Fact prefix | **10/10** | Exact match |
-| 5 | Direct Lake for Gold | "Ideal choice for the gold analytics layer in medallion architecture" | Gold physical tables in Delta format, Direct Lake ready | **9/10** | -1: Semantic model not yet created (TMDL captured, pending deploy) |
-| 6 | Star schema / Kimball | "De-normalized star schema encouraged"; "Fact/Dim prefixes" | Fact tables in Gold, dims in ReferenceMaster (Processing WH) | **7/10** | -3: Dim tables not yet in Gold WH; incomplete star schema |
-| 7 | Metadata-driven ETL | "Metadata-driven frameworks enable incremental ingestion at scale" | AssetRegistry, 8 load patterns, 1 generic SP for all tables | **10/10** | Exceeds: MS mentions metadata-driven; v10 has full control plane |
+| 5 | Direct Lake for Gold | "Ideal choice for the gold analytics layer in medallion architecture" | Gold physical tables in Delta format; semantic model `sc_forecast_control_tower` deployed 2026-05-05 with Direct Lake | **10/10** | RESOLVED 2026-05-05: see ADR-007 |
+| 6 | Star schema / Kimball | "De-normalized star schema encouraged"; "Fact/Dim prefixes" | Complete star schema in `ForecastAccuracy_DW`: 2 Fact + 5 Dim tables | **10/10** | DimCalendar, DimCustomerGrouping, DimWarehouse, DimProduct, DimForecastHorizon (added 2026-05-04) |
+| 7 | Metadata-driven ETL | "Metadata-driven frameworks enable incremental ingestion at scale" | AssetRegistry drives ALL layers: 1 generic SP (Silver) + 1 dynamic pipeline (Gold). Add table = INSERT registry + CREATE VIEW. Zero code change | **10/10** | Exceeds: MS mentions metadata-driven; v10 extends to cross-DB Gold via registry-driven pipeline (refactored 2026-05-04) |
 | 8 | ETL logging | "Log the results of the ETL process" | RunLog (UTC+CST), PipelineRunLog, retry 3x, snapshot conflict handling | **10/10** | Exceeds: MS says "log results"; v10 has UTC+CST, retry, conflict handling |
-| 9 | Cross-database queries | "CTAS, INSERT...SELECT from other warehouses in same workspace" | Gold views read from Processing WH via 3-part naming; pipeline Script activity | **10/10** | Exact match with MS ingestion patterns |
+| 9 | Cross-database queries | "CTAS, INSERT...SELECT from other warehouses in same workspace" | Gold views read from Processing WH via 3-part naming; registry-driven pipeline materializes via dynamic ForEach | **10/10** | Exact match with MS ingestion patterns; Gold pipeline registry-driven (refactored 2026-05-04) |
 | 10 | Pipeline orchestration | "Pipelines with control flow, loops, conditionals" | 7 pipelines, parent-child pattern, ForEach, sequential wave dispatch | **10/10** | Exceeds: multi-mart + DAG wave engine (not prescribed by MS) |
 | 11 | Data quality | MS governance docs: "data quality rules", "monitor quality" | 54 DQ rules, 7 check types, severity gating, per-rule engine | **9/10** | Exceeds MS guidance (-1: DQ not yet active in pipeline flow) |
 | 12 | Lineage & governance | "Data lineage shows how data moves and transforms" | 52 auto-built lineage edges, source contracts 674 columns | **8/10** | -2: Metadata-based lineage, not Fabric native Purview lineage |
@@ -47,7 +47,7 @@ Scored against 15 criteria derived from 10+ authoritative Microsoft sources:
 | 14 | CI/CD & deployment | "Standard change control process for deployment" | Blocked by IT. Manual deploy via REST API scripts | **5/10** | Partial: Scripts exist, but no automated pipeline |
 | 15 | Stored procedures | "Transform data with a stored procedure in a Warehouse" (MS tutorial) | 16 SPs + 3 functions, 8 load patterns, DAG engine, DQ engine | **10/10** | Exact match: MS tutorial shows SP pattern; v10 extends it significantly |
 
-### Total: 130/150 = 86.7%
+### Total: 135/150 = 90.0% (was 134/150 = 89.3% before 2026-05-05 semantic model deploy; was 130/150 = 86.7% before 2026-05-04 Bob rebuild)
 
 ---
 
@@ -61,7 +61,7 @@ Scored against 15 criteria derived from 10+ authoritative Microsoft sources:
 | **Staff/Principal** | **85-95%** | Enterprise-grade: multi-mart, DAG, contracts, Direct Lake, security |
 | Distinguished | 95%+ | Full governance, CI/CD, alerting, multi-region, disaster recovery |
 
-### v10 Assessment: Staff/Principal level (86.7%)
+### v10 Assessment: Staff/Principal level (90.0% as of 2026-05-05)
 
 ---
 
@@ -71,7 +71,7 @@ These features are implemented in v10 but NOT explicitly prescribed or demonstra
 
 | Feature | What MS Says | What v10 Has | Impact |
 |---|---|---|---|
-| Generic SP framework | "Use pipelines or SPs" (tutorial shows per-table SPs) | 1 SP handles 8 load patterns for ANY table via registry config | Eliminates per-table SP maintenance; O(1) vs O(n) SP count |
+| Registry-driven load (all layers) | "Use pipelines or SPs" (tutorial shows per-table SPs) | Silver: 1 generic SP (8 load patterns). Gold: dynamic pipeline (Lookup + ForEach). Both driven by AssetRegistry | Add ANY table at ANY layer = INSERT registry + CREATE VIEW. Zero code change. O(1) vs O(n) maintenance |
 | Silver DAG wave engine | Not mentioned | Automatic dependency graph → wave computation → parallel batch execution | Correct execution order without manual pipeline dependencies |
 | Multi-mart routing | Not mentioned | ForEach DISTINCT project; N data marts in parallel; no pipeline changes | Horizontal scale for enterprise |
 | Smart skip scheduling | Not mentioned | Cron parser (5-field, *, step, range, list) + next_run_time filter + frequency-aware skip | Monthly REF tables correctly skip on daily runs |
@@ -82,6 +82,63 @@ These features are implemented in v10 but NOT explicitly prescribed or demonstra
 
 ---
 
+## Control Plane Live Audit (2026-05-04)
+
+### Feature Classification: Active vs Capability vs Phantom
+
+| Feature | Classification | Evidence |
+|---|---|---|
+| **usp_GenericLoad** (overwrite pattern) | **ACTIVE** | 239 RunLog entries, 22 tables loaded daily |
+| **pl_sc_gold** (registry-driven) | **ACTIVE** | Lookup+ForEach, 7 tables loaded, tested 2x (refactored 2026-05-04) |
+| **Silver DAG waves** | **ACTIVE** | 8 entries, 3 waves (0→1→2), execution order verified in RunLog |
+| **Lineage engine** | **ACTIVE** | 52 edges, auto-rebuilt by usp_BuildLineage/usp_FinalizePipeline |
+| **RunLog + PipelineRunLog** | **ACTIVE** | 239 + 25 entries, UTC + CST dual timestamps |
+| **UTC → CST timezone** | **ACTIVE** | ufn_utc_to_cst returns correct CDT 5h offset |
+| **Smart skip** | **ACTIVE** | monthly tables (10) correctly skipped on daily runs, daily (12) loaded |
+| **Cron parser** | **ACTIVE** | ufn_cron_is_due works (5-field cron), drives next_run_time |
+| **Multi-mart routing** | **PARTIALLY PROVEN** | 2 projects in registry (`supplychain` 28 assets, `SC_ForecastAccuracy` 5 assets). ForEach loops both, but second project is Gold dims only — not a full independent domain yet |
+
+### Load Pattern Honest Assessment
+
+| Pattern | Code in SP | Tables Using It | Live Executions | Classification |
+|---|---|---|---|---|
+| `overwrite` | ✓ | **33/33 tables** | **239 runs** | **ACTIVE — proven** |
+| `incremental` | ✓ | 0 | 0 | **CAPABILITY** — code tested in unit, never in production |
+| `upsert` | ✓ | 0 | 0 | **CAPABILITY** |
+| `datekey` | ✓ | 0 | 0 | **CAPABILITY** |
+| `daterange` | ✓ | 0 | 0 | **CAPABILITY** |
+| `identity` | ✓ | 0 | 0 | **CAPABILITY** |
+| `cdc` | ✓ | 0 | 0 | **CAPABILITY** |
+| `scd2` | ✓ | 0 | 0 | **CAPABILITY** |
+
+**Why only overwrite?** All current sources are full-refresh. 4 EDW supplement tables pull full snapshots via Dataflow đường vòng (vì Enterprise Lakehouse chưa đủ data). Verified 2026-05-04: Enterprise Lakehouse equivalents **đã tồn tại** (exact column match) nhưng pending data completeness từ Bob team.
+
+**When `incremental` becomes real** (per ADR-002 exit plan): Khi Enterprise Lakehouse đủ data, 3/4 bảng lớn chuyển sang `incremental` load — đây là lúc pattern prove value lần đầu:
+- `DemandForecastSnapshot` (42M): watermark `SnapshotTS`, append-only daily ~50K rows
+- `InvoiceDetail` (88M): watermark `InvoiceDate`, daily delta << full
+- `InvoiceHeader` (24M): watermark `InvoiceDate`
+
+Other patterns become relevant when:
+- `incremental`: **Confirmed first use case** — 3 tables above (per ADR-002 exit plan)
+- `upsert`/`cdc`: Master data with change feeds (customer updates)
+- `scd2`: Track history (product price, warehouse status changes)
+- `datekey`/`daterange`: Partition-level refresh for date-partitioned sources
+
+### Phantom Features (seeded but never executed)
+
+| Feature | Data Seeded | Executions | Status |
+|---|---|---|---|
+| **DQ Engine** | 54 rules (30 active) | 0 DQGateRun entries | `pl_dq_check` exists but not wired into `pl_sc_master` |
+| **Source Contracts** | 674 column definitions | 0 validation runs | `usp_ValidateSourceContract` exists but never called |
+| **Reconciliation** | 6 rules | 0 results | `usp_RunReconciliation` exists but never called |
+| **Performance Baseline** | 0 entries | 0 | Table exists, no data |
+| **Pipeline Cost Log** | 0 entries | 0 | Table exists, no data |
+| **Approval Log** | 0 entries | 0 | Table exists, no data |
+| **Security Policy** | 0 entries | 0 | Table exists, no data |
+| **Deployment Checklist** | 0 entries | 0 | Table exists, no data |
+
+---
+
 ## Known Gaps and Upgrade Paths
 
 ### Critical (must fix before production cutover)
@@ -89,8 +146,8 @@ These features are implemented in v10 but NOT explicitly prescribed or demonstra
 | Gap | Current Score | Target | Fix Description | Effort |
 |---|---|---|---|---|
 | Security model | 4/10 | 8/10 | Design workspace roles, SQL endpoint grants, semantic RLS/OLS, Meta.SecurityPolicy | 1 session |
-| Semantic model | 9/10 → 7/10 (effective) | 10/10 | Deploy sc_forecast_control_tower with TMDL (captured), create dim tables in Gold WH | 1 session |
-| Star schema | 7/10 | 10/10 | CTAS dim tables (Calendar, Product, Warehouse, CustomerGrouping, ForecastHorizon) into Gold WH | 30 min |
+| ~~Semantic model~~ | ~~9/10~~ | ~~10/10~~ | **DONE 2026-05-05** — sc_forecast_control_tower deployed (id f06a2361). See ADR-007 + doc 17 | ~~1 session~~ |
+| ~~Star schema~~ | ~~7/10~~ | ~~10/10~~ | **DONE** (2026-05-04) — 5 Dim tables added to ForecastAccuracy_DW | ~~30 min~~ |
 
 ### High (important for enterprise maturity)
 
@@ -116,14 +173,15 @@ These features are implemented in v10 but NOT explicitly prescribed or demonstra
 
 | Action | Score Impact | New Total |
 |---|---|---|
-| Current baseline | — | 130/150 (86.7%) |
-| + Security matrix design | +4 | 134/150 (89.3%) |
-| + Semantic model deploy | +1 | 135/150 (90.0%) |
-| + Dim tables in Gold WH | +3 | 138/150 (92.0%) |
-| + DQ activation in pipeline | +1 | 139/150 (92.7%) |
-| + CI/CD (unblock IT) | +3 | 142/150 (94.7%) |
-| + Alerting (unblock IT) | +2 | 144/150 (96.0%) |
-| **Maximum achievable** | — | **144/150 (96.0%)** |
+| Pre Bob Standards rebuild (2026-05-04) | — | 130/150 (86.7%) |
+| Post Bob Standards rebuild (2026-05-04) | +4 | 134/150 (89.3%) |
+| + Semantic model deploy (2026-05-05) | +1 | **135/150 (90.0%) — current** |
+| + Security matrix design | +4 | 139/150 (92.7%) |
+| ~~+ Dim tables in Gold WH~~ | ~~+3~~ | ~~DONE (included in 89.3%)~~ |
+| + DQ activation in pipeline | +1 | 140/150 (93.3%) |
+| + CI/CD (unblock IT) | +3 | 143/150 (95.3%) |
+| + Alerting (unblock IT) | +2 | 145/150 (96.7%) |
+| **Maximum achievable** | — | **145/150 (96.7%)** |
 
 ---
 

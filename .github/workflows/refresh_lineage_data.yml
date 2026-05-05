@@ -28,6 +28,101 @@ jobs:
           sudo apt-get update
           sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
 
+      # ── Optional step: refresh semantic model lineage ──
+      # Requires Service Principal with:
+      #   1. Fabric API scope: Item.ReadWrite.All (or workspace contributor)
+      #   2. Processing WH grants: INSERT + DELETE on Meta.LineageEdge + Meta.SemanticModelContract
+      # If SP lacks either, this step fails gracefully (continue-on-error) — manual
+      # refresh via tools/build_semantic_model_lineage.py keeps Meta tables in sync.
+      # The existing CSV export below will pick up edges regardless of this step's outcome.
+      - name: Refresh Semantic Model Lineage (discover Gold → SemanticModel edges)
+        continue-on-error: true
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          FABRIC_SERVER: ${{ secrets.FABRIC_SERVER }}
+        run: |
+          python << 'EOF'
+          import os, json, struct, base64, time, re, urllib.request, pyodbc
+          from urllib.request import Request, urlopen
+          from datetime import datetime, timezone
+
+          tenant = os.environ["AZURE_TENANT_ID"]
+          client_id = os.environ["AZURE_CLIENT_ID"]
+          client_secret = os.environ["AZURE_CLIENT_SECRET"]
+          server = os.environ["FABRIC_SERVER"]
+          WORKSPACE_ID = "c8d9fc83-18b6-4e1d-8264-0b49eed36fe0"
+          GOLD_WH_ID = "98e2a911-5af9-442e-9cc8-5d8dadb8b762"
+
+          def get_token(scope):
+              url = f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
+              data = f"grant_type=client_credentials&client_id={client_id}&client_secret={client_secret}&scope={scope}"
+              return json.loads(urlopen(Request(url, data=data.encode(), method="POST",
+                  headers={"Content-Type":"application/x-www-form-urlencoded"})).read().decode())["access_token"]
+
+          fab_token = get_token("https://api.fabric.microsoft.com/.default")
+          sql_token = get_token("https://database.windows.net/.default")
+
+          # Discover semantic models that consume Gold WH
+          def fab_get(path):
+              return json.loads(urlopen(Request(f"https://api.fabric.microsoft.com{path}",
+                  headers={"Authorization": f"Bearer {fab_token}"})).read())
+
+          models = fab_get(f"/v1/workspaces/{WORKSPACE_ID}/semanticModels").get("value", [])
+          discovered = []
+          for sm in models:
+              try:
+                  req = Request(f"https://api.fabric.microsoft.com/v1/workspaces/{WORKSPACE_ID}/semanticModels/{sm['id']}/getDefinition?format=TMDL",
+                      method="POST", headers={"Authorization": f"Bearer {fab_token}", "Content-Length": "0"})
+                  resp = urlopen(req)
+                  if resp.status != 202: continue
+                  op = resp.headers.get("x-ms-operation-id")
+                  for _ in range(30):
+                      time.sleep(2)
+                      d = fab_get(f"/v1/operations/{op}")
+                      if d.get("status") == "Succeeded":
+                          parts = fab_get(f"/v1/operations/{op}/result").get("definition",{}).get("parts",[])
+                          urls, tbls = [], []
+                          for p in parts:
+                              c = base64.b64decode(p.get("payload","")).decode("utf-8", errors="replace") if p.get("payloadType")=="InlineBase64" else p.get("payload","")
+                              if p["path"].endswith("expressions.tmdl"):
+                                  urls += re.findall(r'AzureStorage\.DataLake\("([^"]+)"', c)
+                              if p["path"].endswith(".tmdl") and "/tables/" in p["path"]:
+                                  for pm in re.finditer(r"partition\s+\S+\s+=\s+entity\s*\n((?:\s+.+\n)+)", c, re.MULTILINE):
+                                      body = pm.group(1)
+                                      em = re.search(r"entityName:\s*(\S+)", body)
+                                      sm_ = re.search(r"schemaName:\s*(\S+)", body)
+                                      mm = re.search(r"mode:\s*(\S+)", body)
+                                      if em: tbls.append({"entity":em.group(1),"schema":sm_.group(1) if sm_ else None,"mode":mm.group(1) if mm else "unknown"})
+                          if any(GOLD_WH_ID in u for u in urls):
+                              for t in tbls: discovered.append({**t, "model_name": sm["displayName"], "model_id": sm["id"]})
+                          break
+                      if d.get("status") == "Failed": break
+              except Exception as e: print(f"  skip {sm.get('displayName')}: {e}")
+
+          print(f"Discovered {len(discovered)} (gold_table × semantic_model) pairs")
+
+          # Write to Meta tables
+          tb = sql_token.encode("UTF-16-LE")
+          ts = struct.pack(f"<I{len(tb)}s", len(tb), tb)
+          conn = pyodbc.connect(f"DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={server};DATABASE=SupplyChain_Processing_Warehouse;Encrypt=yes;TrustServerCertificate=no", attrs_before={1256: ts})
+          conn.autocommit = True
+          c = conn.cursor()
+          c.execute("DELETE FROM Meta.LineageEdge WHERE edge_type='semantic'")
+          for d in discovered:
+              gold_id = f"{d['schema']}.{d['entity']}"
+              sm_id = f"SemanticModel.{d['model_name']}"
+              eid = f"semantic::{d['model_name']}::{d['entity']}"
+              c.execute("INSERT INTO Meta.LineageEdge (edge_id, source_asset, target_asset, edge_type, transform_type, is_synthetic, created_at_utc, notes) VALUES (?,?,?,'semantic',?,0,SYSUTCDATETIME(),?)",
+                  eid, gold_id, sm_id, d["mode"], f"GH Action auto-discover, model_id={d['model_id']}")
+              c.execute("DELETE FROM Meta.SemanticModelContract WHERE contract_id=?", eid)
+              c.execute("INSERT INTO Meta.SemanticModelContract (contract_id, gold_asset_id, semantic_model_name, source_mode, direct_lake_required, fallback_allowed, validation_status, last_validated_utc, notes) VALUES (?,?,?,?,?,0,'discovered',SYSUTCDATETIME(),?)",
+                  eid, gold_id, d["model_name"], d["mode"], 1 if d["mode"]=="directLake" else 0, f"GH Action auto-discover, model_id={d['model_id']}")
+          conn.close()
+          print(f"  ✓ Wrote {len(discovered)} edges + contracts")
+          EOF
+
       - name: Get Azure Token & Export CSVs
         env:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
@@ -61,36 +156,44 @@ jobs:
 
           data_dir = "01_Architect_v9_April/lineage_explorer/data"
 
-          # Export lineage (v10: Meta.LineageEdge)
-          cursor.execute("""
-              SELECT ROW_NUMBER() OVER (ORDER BY target_asset, source_asset) AS lineage_id,
-                  CASE WHEN CHARINDEX('.', source_asset) > 0 THEN LEFT(source_asset, CHARINDEX('.', source_asset)-1) ELSE 'unknown' END AS source_schema,
-                  CASE WHEN CHARINDEX('.', source_asset) > 0 THEN SUBSTRING(source_asset, CHARINDEX('.', source_asset)+1, LEN(source_asset)) ELSE source_asset END AS source_table,
-                  CASE WHEN CHARINDEX('.', target_asset) > 0 THEN LEFT(target_asset, CHARINDEX('.', target_asset)-1) ELSE 'unknown' END AS target_schema,
-                  CASE WHEN CHARINDEX('.', target_asset) > 0 THEN SUBSTRING(target_asset, CHARINDEX('.', target_asset)+1, LEN(target_asset)) ELSE target_asset END AS target_table,
-                  edge_type AS relationship_type,
-                  target_asset AS sp_name
-              FROM Meta.LineageEdge
-          """)
-          cols = [d[0] for d in cursor.description]
+          # Export lineage — edges already use physical names (no mapping needed)
+          def split_name(name):
+              if '.' in name:
+                  parts = name.split('.', 1)
+                  return parts[0], parts[1]
+              return name, name
+
+          cursor.execute("SELECT source_asset, target_asset, edge_type FROM Meta.LineageEdge ORDER BY target_asset, source_asset")
           rows = cursor.fetchall()
           with open(f"{data_dir}/lineage.csv", "w", newline="") as f:
               w = csv.writer(f)
-              w.writerow(cols)
-              for r in rows:
-                  cleaned = list(r)
-                  cleaned[1] = str(cleaned[1]).replace('"', '').strip()
-                  cleaned[2] = str(cleaned[2]).replace('"', '').strip()
-                  w.writerow(cleaned)
+              w.writerow(["lineage_id","source_schema","source_table","target_schema","target_table","relationship_type","sp_name"])
+              for i, r in enumerate(rows, 1):
+                  ss, st = split_name(r[0])
+                  ts, tt = split_name(r[1])
+                  w.writerow([i, ss, st, ts, tt, r[2], r[1]])
 
-          # Export registry (v10: Meta.vw_sp_registry compatibility view)
-          cursor.execute("SELECT sp_name, view_name, target_schema, target_table, layer, load_type, frequency, execution_order, depends_on, source_objects, is_active FROM Meta.vw_sp_registry")
+          # Export registry with physical names
+          cursor.execute("""
+              SELECT physical_schema + '.' + physical_object AS sp_name,
+                  legacy_view_name AS view_name,
+                  physical_schema AS target_schema,
+                  physical_object AS target_table,
+                  canonical_layer AS layer,
+                  load_type, frequency,
+                  CASE WHEN source_objects IS NOT NULL THEN 1 ELSE 0 END AS execution_order,
+                  depends_on, source_objects, is_active
+              FROM Meta.AssetRegistry WHERE is_active = 1
+              ORDER BY canonical_layer, physical_schema, physical_object
+          """)
           cols = [d[0] for d in cursor.description]
           rows = cursor.fetchall()
           with open(f"{data_dir}/registry.csv", "w", newline="") as f:
               w = csv.writer(f)
               w.writerow(cols)
-              w.writerows(rows)
+              for r in rows:
+                  row = list(r)
+                  w.writerow(row)
 
           # Export views (v10: from sys.sql_modules via cross-DB)
           cursor.execute("""

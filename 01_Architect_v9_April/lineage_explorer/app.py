@@ -1,6 +1,6 @@
 """
-Supply Chain Warehouse v9 — Lineage Explorer
-=============================================
+Supply Chain Warehouse — Lineage Explorer
+==========================================
 Tab 1: Interactive DAG (React SVG)
 Tab 2: ETL Flow by Table
 Tab 3: View Definitions
@@ -26,7 +26,7 @@ def check_login():
     col1, col2, col3 = st.columns([1, 1, 1])
     with col2:
         st.markdown("<h2 style='text-align:center; margin-top:20vh; color:#e2e8f0;'>🔗 Lineage Explorer</h2>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align:center; color:#64748b; margin-bottom:2rem;'>Supply Chain Warehouse v9</p>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align:center; color:#64748b; margin-bottom:2rem;'>Supply Chain Warehouse — Hybrid Medallion</p>", unsafe_allow_html=True)
         with st.form("login_form"):
             username = st.text_input("Username")
             password = st.text_input("Password", type="password")
@@ -46,7 +46,7 @@ if not check_login():
 
 DATA_DIR = Path(__file__).parent / "data"
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=60)
 def load_csv(filename):
     path = DATA_DIR / filename
     if not path.exists():
@@ -149,21 +149,39 @@ def build_recursive_mini_dag(lineage_rows, selected_schema, selected_table):
     walk(selected_schema, selected_table, selected=True)
     return {"nodes": mini_nodes, "edges": mini_edges}
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=60)
 def build_dag_data():
     rows = load_augmented_lineage_rows()
     registry = {r.get("target_table", ""): r for r in load_csv("registry.csv")}
     nodes, edges, seen = [], [], set()
 
-    # Compute silver waves from depends_on (correct: collect-then-assign per wave)
+    # Build layer lookup from registry (v10 uses DomainSilver, ReferenceMaster, etc.)
+    layer_map = {}  # target_table -> layer
+    for tbl, reg in registry.items():
+        layer_map[tbl] = (reg.get("layer", "") or "").strip()
+
+    # Compute silver waves from depends_on
     slv_waves = {}
-    slv_regs = [r for r in registry.values() if r.get("layer", "").upper() == "SLV"]
-    # Wave 0: no silver dependencies
+    slv_regs = [r for r in registry.values() if r.get("layer", "").strip() == "DomainSilver"]
+    # Build set of Silver table names for dependency matching
+    slv_table_set = set(r.get("target_table", "") for r in slv_regs)
+
+    # Wave 0: no Silver dependencies in depends_on
     for r in slv_regs:
         deps = r.get("depends_on", "") or ""
-        if not deps or deps in ("nan", "None") or "silver" not in deps:
+        if not deps or deps in ("nan", "None"):
             slv_waves[r.get("target_table", "")] = 0
-    # Wave 1..N: collect all candidates per wave THEN assign (not during iteration)
+        else:
+            try:
+                dep_list = json.loads(deps)
+                # Check if any dependency is a Silver table (by physical name match)
+                has_slv_dep = any(d.split(".")[-1] in slv_table_set for d in dep_list)
+                if not has_slv_dep:
+                    slv_waves[r.get("target_table", "")] = 0
+            except:
+                slv_waves[r.get("target_table", "")] = 0
+
+    # Wave 1..N: iterative assignment
     for wave in range(1, 30):
         newly_assigned = {}
         for r in slv_regs:
@@ -172,30 +190,71 @@ def build_dag_data():
             deps = r.get("depends_on", "") or ""
             try:
                 dep_list = json.loads(deps)
-                dep_tables = []
-                for d in dep_list:
-                    if "silver" in d or "slv" in d:
-                        name = d.split(".")[-1].replace("usp_load_", "")
-                        dep_tables.append(name)
+                dep_tables = [d.split(".")[-1] for d in dep_list if d.split(".")[-1] in slv_table_set]
                 if dep_tables and all(dt in slv_waves for dt in dep_tables):
                     newly_assigned[tbl] = wave
             except: pass
-        if not newly_assigned: break  # no more tables to assign → done
+        if not newly_assigned: break
         slv_waves.update(newly_assigned)
 
+    # Build reverse lookup: snake_case node ID → PascalCase registry key
+    # e.g. slv_actual_demand_monthly → ActualDemandMonthly
+    node_to_registry = {}
+    for tbl in registry:
+        node_to_registry[tbl] = tbl
+        node_to_registry[tbl.lower()] = tbl
+        # PascalCase → snake_case: InvoiceDetailLineLevel → invoice_detail_line_level
+        snake = "".join(f"_{c.lower()}" if c.isupper() else c for c in tbl).lstrip("_")
+        node_to_registry[f"slv_{snake}"] = tbl
+        node_to_registry[f"gld_{snake}"] = tbl
+        node_to_registry[snake] = tbl
+
+    # Build schema→tier lookup from registry
+    schema_tier = {}
+    for tbl, reg in registry.items():
+        schema = reg.get("target_schema", "")
+        layer = (reg.get("layer", "") or "").strip()
+        if layer == "DomainSilver": schema_tier[schema] = "slv"
+        elif layer == "Staging": schema_tier[schema] = "stg"
+        elif layer == "ReferenceMaster": schema_tier[schema] = "brz"
+        elif layer == "Gold": schema_tier[schema] = "gld"
+
     def get_tier(name):
-        """Strict tier assignment by name prefix — never misplace a node."""
+        """Tier assignment using physical schema names."""
         n = name.lower()
-        if "enterprise_lakehouse" in n or "supplychain_lakehouse" in n:
+        # External sources → Bronze
+        if "enterprise_lakehouse" in n or "supplychain_lakehouse" in n or "manual" in n:
             return "other"
-        if n.startswith("brz_"):
+
+        # Semantic models (downstream from Gold)
+        if name.startswith("SemanticModel.") or "semanticmodel" in n:
+            return "sem"
+
+        # Extract table name (after last dot)
+        tbl = name.split(".")[-1] if "." in name else name
+        schema = name.split(".")[0] if "." in name else ""
+
+        # Direct registry match
+        layer = layer_map.get(tbl, "")
+        if layer == "DomainSilver":
+            return f"slv{slv_waves.get(tbl, 0)}"
+        if layer == "Staging":
+            return "stg"
+        if layer == "ReferenceMaster":
             return "brz"
-        if n.startswith("ref_"):
-            return "brz"  # ref_ in same column as brz
-        if n.startswith("slv_"):
-            return f"slv{slv_waves.get(name, 0)}"
-        if n.startswith("gld_"):
+        if layer == "Gold":
             return "gld"
+
+        # Schema-based fallback
+        if schema in schema_tier:
+            tier = schema_tier[schema]
+            return f"slv{slv_waves.get(tbl, 0)}" if tier == "slv" else tier
+
+        # Name-based fallback
+        if "Edw" in name: return "stg"
+        if schema.endswith("_ENH"): return f"slv{slv_waves.get(tbl, 0)}"
+        if schema.endswith("_WRK"): return "stg"
+        if schema.endswith("_DW"): return "gld"
         return "other"
 
     for row in rows:
@@ -204,13 +263,19 @@ def build_dag_data():
         tgt_schema = row.get("target_schema", "").strip()
         tgt_table = row.get("target_table", "").strip()
 
-        # Source node ID: full path for external, table name for internal
+        # Source node ID: full path for external/semantic, table name for internal
         if "Enterprise_Lakehouse" in src_schema or "SupplyChain_Lakehouse" in src_schema:
+            src_id = f"{src_schema}.{src_table}"
+        elif src_schema == "SemanticModel":
             src_id = f"{src_schema}.{src_table}"
         else:
             src_id = src_table
 
-        tgt_id = tgt_table
+        # Target node ID: full path for SemanticModel target, table name for internal
+        if tgt_schema == "SemanticModel":
+            tgt_id = f"{tgt_schema}.{tgt_table}"
+        else:
+            tgt_id = tgt_table
         if src_id not in seen:
             seen.add(src_id)
             nodes.append({"id": src_id, "layer": get_tier(src_id), "load_type": "", "status": "", "last_load_date": "", "rows_loaded": 0})
@@ -297,7 +362,7 @@ with tab2:
 # ══ TAB 3: View Definitions ══
 with tab3:
     st.header("👁️ View Definitions")
-    st.caption("SQL source code of all ETL views (bronze / silver / gold)")
+    st.caption("SQL source code of all ETL views (ReferenceMaster_ENH / Domain_ENH / ForecastAccuracy_DW)")
     views = load_csv("views.csv")
     if views:
         schemas = sorted(set(v.get("schema", "") for v in views))
@@ -309,4 +374,4 @@ with tab3:
         st.info(f"Total: {len(filtered)} views")
 
 st.markdown("---")
-st.caption("Supply Chain Warehouse v9 — Lineage Explorer | Data auto-refreshed via GitHub Actions")
+st.caption("Fabric Lineage Flow — Supply Chain | Hybrid Medallion v10 (Bob Standards) | Data auto-refreshed via GitHub Actions")

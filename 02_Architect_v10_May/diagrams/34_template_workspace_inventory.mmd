@@ -1,0 +1,71 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1a73e8', 'primaryTextColor': '#fff', 'primaryBorderColor': '#1557b0', 'lineColor': '#555', 'secondaryColor': '#e8f0fe', 'tertiaryColor': '#f1f3f4', 'fontSize': '13px'}}}%%
+flowchart TB
+    subgraph WORKSPACE["Workspace"]
+        direction TB
+
+        subgraph BRONZE_LAYER["BRONZE — Logical Access Layer"]
+            direction LR
+            subgraph EL["Enterprise Lakehouse"]
+                EL1["OneLake Shortcuts"]
+                EL2["Source_Schema_1/"]
+                EL3["Source_Schema_2/"]
+                EL4["Source_Schema_N/"]
+                EL5["200+ source-aligned tables"]
+            end
+            subgraph SL["SupplyChain Lakehouse"]
+                SL1["Dataflow Feeds"]
+                SL2["_ver2 staging tables"]
+                SL3["Reference tables"]
+            end
+        end
+
+        subgraph SILVER_LAYER["SILVER — Processing Warehouse"]
+            direction TB
+            subgraph STG_BOX["Staging"]
+                STG1["N EDW supplement tables"]
+                STG2["N source access views"]
+                STG3["usp_RefreshEdwTables"]
+            end
+            subgraph REF_BOX["ReferenceMaster"]
+                REF1["N reference tables"]
+                REF2["N source views"]
+                REF3["Calendar · ItemMaster · etc."]
+            end
+            subgraph DOM_BOX["Domain Schemas (N)"]
+                DOM1["DomainSchema_1<br/>N tables · N views"]
+                DOM2["DomainSchema_2<br/>N tables · N views"]
+                DOM3["DomainSchema_N<br/>..."]
+            end
+            subgraph META_BOX["Meta Control Plane"]
+                META1["20 tables · 5 views"]
+                META2["16 SPs · 3 functions"]
+                META3["Registry · DQ · Lineage"]
+                META4["DAG · Scheduling · Logging"]
+            end
+        end
+
+        subgraph GOLD_LAYER["GOLD — Dedicated Serving Warehouse"]
+            subgraph GOLD_BOX["ServingSchema"]
+                GOLD1["Physical Fact tables"]
+                GOLD2["Gold transform views"]
+                GOLD3["Direct Lake ready"]
+            end
+        end
+
+        subgraph CONSUME["Consumption"]
+            SM["Semantic Model<br/>Direct Lake"]
+            RPT["Power BI Reports"]
+        end
+    end
+
+    EL --> STG_BOX
+    EL --> REF_BOX
+    EL --> DOM_BOX
+    SL --> STG_BOX
+    STG_BOX --> DOM_BOX
+    REF_BOX --> DOM_BOX
+    DOM_BOX --> GOLD_BOX
+    META_BOX -.->|orchestrates| STG_BOX
+    META_BOX -.->|orchestrates| DOM_BOX
+    META_BOX -.->|orchestrates| GOLD_BOX
+    GOLD_BOX --> SM --> RPT

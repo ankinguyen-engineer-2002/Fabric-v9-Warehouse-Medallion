@@ -1,0 +1,1 @@
+CREATE VIEW ReferenceMaster_ENH.vw_OrderType AS SELECT * FROM Enterprise_Lakehouse.Wholesale_Codis_AFI.AAORDTYP

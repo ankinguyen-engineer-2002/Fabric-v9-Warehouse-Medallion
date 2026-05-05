@@ -1,0 +1,1 @@
+CREATE VIEW ReferenceMaster_ENH.vw_ForecastCycle AS SELECT * FROM SupplyChain_Lakehouse.dbo.ref_forecast_cycle

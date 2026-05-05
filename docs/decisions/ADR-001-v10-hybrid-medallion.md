@@ -2,7 +2,7 @@
 
 Date: 2026-04-30
 
-Status: Proposed
+Status: **Accepted — Implemented** (v10 live since 2026-05-02, Bob Standards applied 2026-05-04)
 
 ## Context
 
@@ -66,13 +66,13 @@ Positive:
 - Supports Bob's governance direction while adapting old SQL Server/ADW standards to Fabric and Direct Lake.
 - Keeps Supply Chain domain agility while allowing enterprise-reusable Silver entities to move to EnterpriseData ownership.
 
-Costs and risks:
+Costs and risks (status as of 2026-05-04):
 
-- Requires metadata expansion for `access_mode`, `canonical_layer`, physical workspace/item, domain group, staging reason, source contract status, and approval status.
-- Requires object classification and naming migration before implementation.
-- Requires Direct Lake fallback validation when any compatibility views are introduced.
-- Requires live verification for smart skip and other partially active v9 features.
-- Requires a security matrix across Fabric workspace roles, item permissions, semantic RLS/OLS, and SQL endpoint grants.
+- ~~Requires metadata expansion for `access_mode`, `canonical_layer`, physical workspace/item, domain group, staging reason, source contract status, and approval status.~~ **DONE** — AssetRegistry expanded to 33 assets with all fields populated.
+- ~~Requires object classification and naming migration before implementation.~~ **DONE** — Bob Standards rebuild: schema suffix (`_ENH`/`_WRK`/`_DW`), PascalCase columns (~1,800 renamed).
+- Requires Direct Lake fallback validation when any compatibility views are introduced. **PENDING** — semantic model not yet deployed.
+- ~~Requires live verification for smart skip and other partially active v9 features.~~ **DONE** — smart skip verified active in pipeline Lookup SQL with `next_run_time` filter.
+- Requires a security matrix across Fabric workspace roles, item permissions, semantic RLS/OLS, and SQL endpoint grants. **PENDING** — blocked by IT/Bob sign-off (GAP-005 in ADR-003).
 
 ## Rejected Alternatives
 
@@ -105,25 +105,25 @@ Reason:
 
 ## Implementation Notes
 
-Implementation must proceed in phases:
+Implementation phases (status as of 2026-05-04):
 
-1. Freeze v9 evidence and export registry, lineage, views, row counts, DQ state, and semantic dependencies.
-2. Verify live pipeline Lookup SQL for smart skip.
-3. Classify every object as logical Bronze, staging exception, domain Silver, enterprise-reusable Silver, Gold serving, or control-plane metadata.
-4. Approve naming and ownership with Bob/Rakesh or assigned technical design approver.
-5. Extend metadata and control-plane logic before physical moves.
-6. Build v10 side-by-side, then run parallel validation before cutover.
+1. ~~Freeze v9 evidence and export registry, lineage, views, row counts, DQ state, and semantic dependencies.~~ **DONE** (2026-04-30)
+2. ~~Verify live pipeline Lookup SQL for smart skip.~~ **DONE** — `next_run_time` filter verified active
+3. ~~Classify every object as logical Bronze, staging exception, domain Silver, enterprise-reusable Silver, Gold serving, or control-plane metadata.~~ **DONE** — 33 assets classified in AssetRegistry
+4. ~~Approve naming and ownership with Bob/Rakesh or assigned technical design approver.~~ **DONE** — Bob Standards adopted: `_ENH`/`_WRK`/`_DW` suffix + PascalCase columns
+5. ~~Extend metadata and control-plane logic before physical moves.~~ **DONE** — AssetRegistry, DQRule, LineageEdge all expanded
+6. ~~Build v10 side-by-side, then run parallel validation before cutover.~~ **DONE** — v10 built 2026-05-01→02, v9 objects deleted, Bob Standards rebuild 2026-05-04, pipeline verified 31 min full run
 
 EDW supplement handling is not decided generically in this ADR. It is governed by `ADR-002` because the four `_edw` objects have different readiness states and require object-level validation.
 
 ## References
 
-- `02_Architect_v10_May/10_final_v10_amendment_plan.md`
-- `02_Architect_v10_May/07_v9_capability_evidence_ledger.md`
-- `02_Architect_v10_May/08_v10_gap_matrix.md`
-- `02_Architect_v10_May/09_bob_standards_mapping_matrix.md`
-- `02_Architect_v10_May/15_v10_edw_supplement_exit_strategy.md`
-- `02_Architect_v10_May/16_v10_readiness_scorecard_and_v9_cleanup.md`
+- `02_Architect_v10_May/20_proposals/10_final_v10_amendment_plan.md`
+- `02_Architect_v10_May/10_evidence/07_v9_capability_evidence_ledger.md`
+- `02_Architect_v10_May/20_proposals/08_v10_gap_matrix.md`
+- `02_Architect_v10_May/20_proposals/09_bob_standards_mapping_matrix.md`
+- `02_Architect_v10_May/30_runbook/15_v10_edw_supplement_exit_strategy.md`
+- `02_Architect_v10_May/30_runbook/16_v10_readiness_scorecard_and_v9_cleanup.md`
 - `docs/decisions/ADR-002-edw-supplement-exit-strategy.md`
 - Microsoft Direct Lake overview: https://learn.microsoft.com/en-us/fabric/fundamentals/direct-lake-overview
 - Microsoft Fabric medallion architecture: https://learn.microsoft.com/en-us/fabric/onelake/onelake-medallion-lakehouse-architecture

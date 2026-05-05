@@ -1,0 +1,296 @@
+[
+  {
+    "schema": "ForecastAccuracy",
+    "table": "FactForecastActual",
+    "column": "id_item_sku",
+    "data_type": "varchar",
+    "ordinal": 1
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "FactForecastActual",
+    "column": "code_warehouse",
+    "data_type": "varchar",
+    "ordinal": 2
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "FactForecastActual",
+    "column": "code_customer_group",
+    "data_type": "varchar",
+    "ordinal": 3
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "FactForecastActual",
+    "column": "dt_fsc_month_first",
+    "data_type": "date",
+    "ordinal": 4
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "FactForecastActual",
+    "column": "dt_fsc_month_last",
+    "data_type": "date",
+    "ordinal": 5
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "FactForecastActual",
+    "column": "code_horizon",
+    "data_type": "varchar",
+    "ordinal": 6
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "FactForecastActual",
+    "column": "code_status",
+    "data_type": "varchar",
+    "ordinal": 7
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "FactForecastActual",
+    "column": "name_version",
+    "data_type": "varchar",
+    "ordinal": 8
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "FactForecastActual",
+    "column": "qty",
+    "data_type": "float",
+    "ordinal": 9
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "FactForecastActual",
+    "column": "_load_dt",
+    "data_type": "datetime2",
+    "ordinal": 10
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "FactForecastKpi",
+    "column": "id_item_sku",
+    "data_type": "varchar",
+    "ordinal": 1
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "FactForecastKpi",
+    "column": "code_warehouse",
+    "data_type": "varchar",
+    "ordinal": 2
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "FactForecastKpi",
+    "column": "dt_fsc_month_first",
+    "data_type": "date",
+    "ordinal": 3
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "FactForecastKpi",
+    "column": "dt_fsc_month_last",
+    "data_type": "date",
+    "ordinal": 4
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "FactForecastKpi",
+    "column": "code_horizon",
+    "data_type": "varchar",
+    "ordinal": 5
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "FactForecastKpi",
+    "column": "dt_snapshot",
+    "data_type": "date",
+    "ordinal": 6
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "FactForecastKpi",
+    "column": "qty_forecast",
+    "data_type": "float",
+    "ordinal": 7
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "FactForecastKpi",
+    "column": "qty_actual",
+    "data_type": "float",
+    "ordinal": 8
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "FactForecastKpi",
+    "column": "qty_naive_forecast",
+    "data_type": "float",
+    "ordinal": 9
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "FactForecastKpi",
+    "column": "qty_fcst_error",
+    "data_type": "float",
+    "ordinal": 10
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "FactForecastKpi",
+    "column": "qty_abs_fcst_error",
+    "data_type": "float",
+    "ordinal": 11
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "FactForecastKpi",
+    "column": "_load_dt",
+    "data_type": "datetime2",
+    "ordinal": 12
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "vw_FactForecastActual",
+    "column": "id_item_sku",
+    "data_type": "varchar",
+    "ordinal": 1
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "vw_FactForecastActual",
+    "column": "code_warehouse",
+    "data_type": "varchar",
+    "ordinal": 2
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "vw_FactForecastActual",
+    "column": "code_customer_group",
+    "data_type": "varchar",
+    "ordinal": 3
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "vw_FactForecastActual",
+    "column": "dt_fsc_month_first",
+    "data_type": "date",
+    "ordinal": 4
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "vw_FactForecastActual",
+    "column": "dt_fsc_month_last",
+    "data_type": "date",
+    "ordinal": 5
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "vw_FactForecastActual",
+    "column": "code_horizon",
+    "data_type": "varchar",
+    "ordinal": 6
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "vw_FactForecastActual",
+    "column": "code_status",
+    "data_type": "varchar",
+    "ordinal": 7
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "vw_FactForecastActual",
+    "column": "name_version",
+    "data_type": "varchar",
+    "ordinal": 8
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "vw_FactForecastActual",
+    "column": "qty",
+    "data_type": "float",
+    "ordinal": 9
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "vw_FactForecastKpi",
+    "column": "id_item_sku",
+    "data_type": "varchar",
+    "ordinal": 1
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "vw_FactForecastKpi",
+    "column": "code_warehouse",
+    "data_type": "varchar",
+    "ordinal": 2
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "vw_FactForecastKpi",
+    "column": "dt_fsc_month_first",
+    "data_type": "date",
+    "ordinal": 3
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "vw_FactForecastKpi",
+    "column": "dt_fsc_month_last",
+    "data_type": "date",
+    "ordinal": 4
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "vw_FactForecastKpi",
+    "column": "code_horizon",
+    "data_type": "varchar",
+    "ordinal": 5
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "vw_FactForecastKpi",
+    "column": "dt_snapshot",
+    "data_type": "date",
+    "ordinal": 6
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "vw_FactForecastKpi",
+    "column": "qty_forecast",
+    "data_type": "float",
+    "ordinal": 7
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "vw_FactForecastKpi",
+    "column": "qty_actual",
+    "data_type": "float",
+    "ordinal": 8
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "vw_FactForecastKpi",
+    "column": "qty_naive_forecast",
+    "data_type": "float",
+    "ordinal": 9
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "vw_FactForecastKpi",
+    "column": "qty_fcst_error",
+    "data_type": "float",
+    "ordinal": 10
+  },
+  {
+    "schema": "ForecastAccuracy",
+    "table": "vw_FactForecastKpi",
+    "column": "qty_abs_fcst_error",
+    "data_type": "float",
+    "ordinal": 11
+  }
+]

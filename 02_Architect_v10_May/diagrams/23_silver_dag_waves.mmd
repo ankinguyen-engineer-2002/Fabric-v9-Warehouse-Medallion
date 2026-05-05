@@ -1,0 +1,57 @@
+%%{init: {'theme': 'base'}}%%
+flowchart LR
+    subgraph SOURCES["Source Access"]
+        STG_ID["Staging_WRK.InvoiceDetailEdw<br/>88M rows"]
+        STG_IH["Staging_WRK.InvoiceHeaderEdw<br/>24M rows"]
+        STG_DF["Staging_WRK.DemandForecastSnapshotDailyEdw<br/>42M rows"]
+        EL_COD["Enterprise_Lakehouse<br/>Codis: codatan/comast/extord/extorit"]
+        REF["ReferenceMaster_ENH<br/>Calendar, CustomerAccountGroup<br/>ForecastCycle, ItemMaster, etc."]
+    end
+
+    subgraph W0["Wave 0 — No Silver Dependencies (parallel)"]
+        IDL["SalesHistory_ENH.InvoiceDetailLineLevel<br/>88M rows"]
+        FDM["ForecastHistory_ENH.ForecastDemandMonthly<br/>42M rows"]
+        OOL["OpenOrderHistory_ENH.OpenOrderLineLevel<br/>193K rows"]
+    end
+
+    subgraph W1["Wave 1 — Depends on Wave 0 (parallel)"]
+        ADM["SalesHistory_ENH.ActualDemandMonthly<br/>2.6M rows"]
+        ADW["SalesHistory_ENH.ActualDemandWeekly<br/>7.8M rows"]
+        IW["SalesHistory_ENH.InvoiceWeekly<br/>37M rows"]
+        OOM["OpenOrderHistory_ENH.OpenOrderMonthly<br/>80K rows"]
+    end
+
+    subgraph W2["Wave 2 — Depends on Wave 1"]
+        NFM["ForecastHistory_ENH.NaiveForecastMonthly<br/>2M rows"]
+    end
+
+    subgraph GOLD["Gold — ForecastAccuracy_DW (Star Schema)"]
+        FFA["FactForecastActual<br/>47M rows"]
+        FFK["FactForecastKpi<br/>36M rows"]
+        DIM["DimCalendar | DimCustomerGrouping<br/>DimWarehouse | DimProduct<br/>DimForecastHorizon"]
+    end
+
+    STG_ID --> IDL
+    STG_IH --> IDL
+    STG_DF --> FDM
+    EL_COD --> OOL
+    REF --> IDL
+    REF --> FDM
+    REF --> OOL
+
+    IDL --> ADM
+    IDL --> ADW
+    IDL --> IW
+    OOL --> ADM
+    OOL --> ADW
+    OOL --> OOM
+
+    ADM --> NFM
+
+    ADM --> FFA
+    FDM --> FFA
+    NFM --> FFA
+    ADM --> FFK
+    FDM --> FFK
+    NFM --> FFK
+    REF --> DIM

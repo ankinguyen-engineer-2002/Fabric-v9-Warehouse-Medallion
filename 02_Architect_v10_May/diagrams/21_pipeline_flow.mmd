@@ -1,0 +1,55 @@
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#1a73e8', 'primaryTextColor': '#fff'}}}%%
+flowchart TD
+    subgraph MASTER["pl_sc_master"]
+        M1["log_start<br/>Meta.usp_LogPipelineRun"]
+        M2["lk_projects<br/>Lookup DISTINCT project"]
+        M3["fe_projects<br/>ForEach project batch=10"]
+        M4["finalize<br/>Meta.usp_FinalizePipeline<br/>rebuild lineage + log"]
+    end
+
+    subgraph MART["pl_sc_mart (per project)"]
+        direction TB
+        MT1["invoke_staging"]
+        MT2["invoke_silver"]
+        MT3["invoke_gold"]
+    end
+
+    subgraph STAGING["pl_sc_staging"]
+        S1["refresh_edw<br/>Staging_WRK.usp_RefreshEdwTables<br/>4 EDW tables ~155M rows"]
+        S2["lk_ref<br/>Lookup REF tables<br/>+ smart skip filter"]
+        S3["fe_ref<br/>ForEach batch=6<br/>Meta.usp_GenericLoad"]
+    end
+
+    subgraph SILVER["pl_sc_silver"]
+        SV1["compute_waves<br/>Meta.usp_ComputeSilverWaves"]
+        SV2["lk_waves<br/>Lookup DISTINCT wave_number"]
+        SV3["fe_waves<br/>ForEach wave SEQUENTIAL"]
+    end
+
+    subgraph WAVE["pl_sc_silver_wave (per wave)"]
+        W1["lk_wave_sps<br/>Lookup SPs for this wave"]
+        W2["fe_exec_sps<br/>ForEach batch=8 PARALLEL<br/>Meta.usp_GenericLoad"]
+    end
+
+    subgraph GOLDP["pl_sc_gold (registry-driven)"]
+        GL["lk_gold<br/>Lookup AssetRegistry<br/>WHERE canonical_layer='Gold'"]
+        GF["fe_gold<br/>ForEach batch=4 PARALLEL<br/>dynamic DROP+CTAS from view"]
+    end
+
+    subgraph DQ["pl_dq_check"]
+        D1["lk_dq_rules<br/>Lookup active rules by layer"]
+        D2["fe_dq_check<br/>ForEach batch=5<br/>Meta.usp_CheckDqSingle"]
+    end
+
+    M1 --> M2 --> M3 --> M4
+    M3 -->|invoke| MART
+    MT1 --> MT2 --> MT3
+    MT1 -->|invoke| STAGING
+    MT2 -->|invoke| SILVER
+    MT3 -->|invoke| GOLDP
+    S1 --> S2 --> S3
+    SV1 --> SV2 --> SV3
+    SV3 -->|invoke per wave| WAVE
+    W1 --> W2
+    GL --> GF
+    D1 --> D2

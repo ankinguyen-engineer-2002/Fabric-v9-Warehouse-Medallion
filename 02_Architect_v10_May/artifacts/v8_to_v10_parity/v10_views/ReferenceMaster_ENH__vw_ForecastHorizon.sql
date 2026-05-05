@@ -1,0 +1,4 @@
+CREATE VIEW ReferenceMaster_ENH.vw_ForecastHorizon AS
+SELECT 'Lag-0' AS HorizonCode UNION ALL SELECT 'Lag-1' UNION ALL SELECT 'Lag-2'
+UNION ALL SELECT 'Lag-3' UNION ALL SELECT 'Lag-4' UNION ALL SELECT '>Lag-4'
+UNION ALL SELECT 'Actual demand' UNION ALL SELECT 'Naive forecast'

@@ -1,0 +1,2 @@
+CREATE VIEW ForecastAccuracy_DW.vw_DimWarehouse AS
+SELECT * FROM SupplyChain_Processing_Warehouse.ReferenceMaster_ENH.Warehouse

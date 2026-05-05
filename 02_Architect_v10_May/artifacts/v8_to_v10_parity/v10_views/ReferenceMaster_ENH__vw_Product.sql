@@ -1,0 +1,1 @@
+CREATE VIEW ReferenceMaster_ENH.vw_Product AS SELECT * FROM Staging_WRK.ProductEdw
