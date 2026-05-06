@@ -103,8 +103,8 @@ Add any table = INSERT registry + CREATE VIEW. Zero code change.
 │                           (No dedicated Warehouse)                           │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│  {SourceLakehouse}                                                        │
-│  ├── OneLake shortcuts → {Source} workspace                           │
+│  {SourceLakehouse}                                                           │
+│  ├── OneLake shortcuts → {Source} workspace                                  │
 │  ├── N schemas · N+ source-aligned tables                                    │
 │  ├── Source_Schema_1/       raw operational data                             │
 │  ├── Source_Schema_2/       master data / dimensions                         │
