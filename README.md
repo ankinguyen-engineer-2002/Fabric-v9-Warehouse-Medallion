@@ -103,18 +103,18 @@ Add any table = INSERT registry + CREATE VIEW. Zero code change.
 │                           (No dedicated Warehouse)                           │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
-│  Enterprise_Lakehouse                                                        │
-│  ├── OneLake shortcuts → Enterprise_Data workspace                           │
+│  {SourceLakehouse}                                                        │
+│  ├── OneLake shortcuts → {Source} workspace                           │
 │  ├── N schemas · N+ source-aligned tables                                    │
 │  ├── Source_Schema_1/       raw operational data                             │
 │  ├── Source_Schema_2/       master data / dimensions                         │
 │  ├── Source_Schema_N/       ...                                              │
 │  └── Role: READ-ONLY. Silver views read directly from here.                  │
 │                                                                              │
-│  SupplyChain_Lakehouse                                                       │
+│  {StagingLakehouse}                                                       │
 │  ├── N Dataflow feeds → _ver2 staging tables                                 │
 │  ├── Reference tables (manual / dataflow seeded)                             │
-│  └── Role: EDW supplement when Enterprise_LH is incomplete                   │
+│  └── Role: EDW supplement when {SourceLakehouse} is incomplete                   │
 │                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                        SILVER — Processing Warehouse                         │
@@ -122,14 +122,14 @@ Add any table = INSERT registry + CREATE VIEW. Zero code change.
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │  {Domain}_WRK (N tables, N views, 1 SP)                                      │
-│  ├── {EdwTable_1}            ← CTAS from SupplyChain Lakehouse               │
-│  ├── {EdwTable_N}            ← CTAS from SupplyChain Lakehouse               │
+│  ├── {EdwTable_1}            ← CTAS from {StagingLakehouse}               │
+│  ├── {EdwTable_N}            ← CTAS from {StagingLakehouse}               │
 │  ├── vw_{Source_1}...N       → column mapping from raw sources               │
 │  └── usp_RefreshEdwTables    → CTAS all EDW supplement tables                │
 │                                                                              │
 │  ReferenceMaster_ENH (N tables, N views)                                     │
-│  ├── {RefTable_1}            ← Enterprise_Lakehouse source                   │
-│  ├── {RefTable_N}            ← Enterprise_Lakehouse source                   │
+│  ├── {RefTable_1}            ← {SourceLakehouse} source                   │
+│  ├── {RefTable_N}            ← {SourceLakehouse} source                   │
 │  └── Role: Domain reference data, loaded via usp_GenericLoad                 │
 │                                                                              │
 │  {DomainSchema}_ENH (N tables, N views)     — DAG Wave 0,1,N —               │
@@ -176,12 +176,12 @@ Add any table = INSERT registry + CREATE VIEW. Zero code change.
 ### Bronze — Logical Access (No Dedicated Warehouse)
 
 ```
-Enterprise_Lakehouse (OneLake shortcuts)
+{SourceLakehouse} (OneLake shortcuts)
   ├── Source_Schema_1/     Raw operational data
   ├── Source_Schema_2/     Master data / dimensions
   └── Source_Schema_N/     ...
 
-SupplyChain_Lakehouse (EDW supplement dataflows)
+{StagingLakehouse} (EDW supplement dataflows)
   └── dbo/                 _ver2 tables (exception sources)
 ```
 
@@ -195,7 +195,7 @@ SupplyChain_Lakehouse (EDW supplement dataflows)
 ```
 Processing_Warehouse/
   ├── {Domain}_WRK/         Exception-only persistence (EDW supplement)
-  ├── ReferenceMaster_ENH/  Domain reference data (Calendar, ItemMaster, etc.)
+  ├── ReferenceMaster_ENH/  Domain reference data ({RefTable_1}, {RefTable_2}, etc.)
   ├── {DomainSchema_1}_ENH/ Business transformations for domain 1
   ├── {DomainSchema_N}_ENH/ ...repeat per domain
   └── Meta/                 Control plane (registry, DQ, lineage, logging)
@@ -240,8 +240,8 @@ Processing_Warehouse/
 │   └── SPs/      (1)                  usp_RefreshEdwTables
 │
 ├── ReferenceMaster_ENH/               ── Domain reference data ──
-│   ├── Tables/   (N ref tables)       Calendar, ItemMaster, Warehouse, etc.
-│   └── Views/    (N source views)     vw_{RefTable} → Enterprise_Lakehouse.{Schema}.{Table}
+│   ├── Tables/   (N ref tables)       {RefTable_1}, {RefTable_2}, ..., etc.
+│   └── Views/    (N source views)     vw_{RefTable} → {SourceLakehouse}.{Schema}.{Table}
 │
 ├── {DomainSchema}_ENH/                ── Domain Silver (repeat per domain) ──
 │   ├── Tables/   (N domain tables)    Business-transformed data
@@ -273,7 +273,7 @@ Source (Lakehouse/Shortcuts)
   ├─ ReferenceMaster_ENH views ──→ ReferenceMaster tables (via usp_GenericLoad)
   │
   ├─ Silver Wave 0 (no Silver deps, parallel)
-  │   └─ Tables that read from Staging_WRK + ReferenceMaster_ENH + Enterprise_Lakehouse
+  │   └─ Tables that read from Staging_WRK + ReferenceMaster_ENH + {SourceLakehouse}
   │
   ├─ Silver Wave 1 (depends on Wave 0, parallel)
   │   └─ Tables that read from Wave 0 tables + ReferenceMaster_ENH
@@ -282,7 +282,7 @@ Source (Lakehouse/Shortcuts)
   │   └─ Iterative until all Silver tables assigned
   │
   └─ Gold (registry-driven pipeline → Gold Warehouse)
-      ├─ pl_sc_gold: Lookup AssetRegistry(Gold) → ForEach → dynamic CTAS
+      ├─ pl_gold: Lookup AssetRegistry(Gold) → ForEach → dynamic CTAS
       ├─ Views on Gold WH define cross-DB logic (read from Processing WH)
       ├─ Pipeline materializes: DROP + CREATE TABLE AS SELECT * FROM view
       └─ Physical Gold tables ──→ Direct Lake Semantic Model ──→ Power BI
@@ -393,7 +393,7 @@ All table loads are **registry-driven** — adding any table requires only INSER
 | Layer | Runner | How It Works | Add Table = |
 |---|---|---|---|
 | Bronze + ReferenceMaster + Silver | `usp_GenericLoad` (SP) | SP reads `AssetRegistry` → `DROP + CTAS FROM view` | INSERT + VIEW |
-| Gold | `pl_sc_gold` (Pipeline) | Lookup `AssetRegistry` → ForEach → dynamic `DROP + CTAS FROM view` | INSERT + VIEW |
+| Gold | `pl_gold` (Pipeline) | Lookup `AssetRegistry` → ForEach → dynamic `DROP + CTAS FROM view` | INSERT + VIEW |
 | Staging (EDW supplement) | `usp_RefreshEdwTables` (SP) | Hardcoded CTAS from Lakehouse (temporary — will migrate to direct read) | Modify SP |
 
 **Why Gold uses pipeline instead of SP?** Fabric constraint: SP on Processing WH cannot `CREATE TABLE` on Gold WH (cross-DB write blocked). Pipeline bridges both warehouses via separate connections.
@@ -573,10 +573,10 @@ INSERT INTO Meta.AssetRegistry (
 -- 2. Create the cross-DB view (on Gold WH, reads from Processing WH)
 CREATE VIEW MyGoldSchema_DW.vw_DimNewDimension AS
 SELECT Col1, Col2, CAST(GETUTCDATE() AS DATETIME2(6)) AS LoadDT
-FROM SupplyChain_Processing_Warehouse.MySchema_ENH.SourceTable;
+FROM {Processing_Warehouse}.MySchema_ENH.SourceTable;
 
--- 3. Test (pl_sc_gold auto-discovers from registry)
--- Trigger pl_sc_gold manually or wait for next scheduled run
+-- 3. Test (pl_gold auto-discovers from registry)
+-- Trigger pl_gold manually or wait for next scheduled run
 ```
 
 **Same pattern, both layers**: INSERT registry + CREATE VIEW. Zero pipeline change.
@@ -617,7 +617,7 @@ main                    ← Architecture template (this README)
    CREATE VIEW {DomainGold}_DW.vw_FactX AS SELECT ... FROM Processing_WH.{Domain}_ENH.Table;
    -- On Processing Warehouse
    INSERT INTO Meta.AssetRegistry (..., canonical_layer='Gold', physical_schema='{DomainGold}_DW', ...);
-   -- pl_sc_gold auto-discovers via Lookup
+   -- pl_gold auto-discovers via Lookup
    ```
 8. **Push branch**: `git push -u origin {domain_name}`
 
