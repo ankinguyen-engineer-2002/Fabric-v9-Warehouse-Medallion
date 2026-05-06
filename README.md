@@ -589,15 +589,20 @@ Framework auto-handles: logging, watermark update, next_run_time, lineage, DQ el
 
 ### Architecture
 
-Each domain/data mart is a **peer branch** from `main`, not nested under another domain.
+Each domain/data mart is a **peer folder** inside `02_Architect_v10_May/projects/`, not a separate branch.
 
 ```
-main                    ← Architecture template (this README)
-├── sc_forecast         ← Supply Chain Forecast Accuracy
-├── inventory_mgmt      ← (future) Inventory Management
-├── logistics_ops       ← (future) Logistics Operations
-└── {domain_name}       ← Any new domain
+main                                                 ← single branch
+└── 02_Architect_v10_May/
+    ├── (template docs — generic, immutable)
+    └── projects/
+        ├── forecast/        ← Supply Chain Forecast Accuracy (LIVE)
+        ├── invhealth/       ← (future) Inventory Health
+        ├── supplier_perf/   ← (future) Supplier Performance
+        └── {domain_name}/   ← any new project
 ```
+
+Each project folder is a **live workspace catalog**: real names, row counts, IDs, ETL DDL, pipeline definitions, semantic model details, lineage. See [`02_Architect_v10_May/projects/README.md`](02_Architect_v10_May/projects/README.md) for the per-project structure template.
 
 ### Steps
 
@@ -742,15 +747,22 @@ Architecture audited and fully compliant with enterprise DW standards (Bob/Rakes
 
 ---
 
-## Branch Strategy
+## Repo Layout — Single Branch, Project Folders
 
-| Branch | Purpose | Content |
+| Location | Role | Content |
 |---|---|---|
-| `main` | **Architecture template** | This README, generic patterns, framework docs |
-| `sc_forecast` | Supply Chain Forecast Accuracy | Full implementation: connection IDs, row counts, pipeline IDs, Mermaid detail |
-| `{future_domain}` | Any new data mart | Branch from main, add domain-specific schemas/views/data |
+| `main` (only branch) | Single source of truth | Template + all project folders |
+| `02_Architect_v10_May/` (root template) | Architecture template, generic, **immutable** | Framework patterns, generic placeholders, decision records template |
+| `02_Architect_v10_May/projects/<name>/` | Per-project live catalog | Real workspace IDs, row counts, ETL DDL, pipeline definitions, semantic model |
+| `lineage_explorer/` | Streamlit lineage app | Reads CSVs auto-refreshed by GitHub Action |
 
-**Rule**: Domains are **peers**, not children. Each domain branch starts from `main` and adds its own schemas, views, and data without depending on other domains.
+**Rule**: Projects are **peer folders** inside `projects/`. Each project folder follows the same template structure. Adding a new project = copy `forecast/` structure + run live scan + fill data. Never modify template content outside `projects/`.
+
+### Active projects
+
+| Project | Folder | Gold schema | Status |
+|---------|--------|-------------|--------|
+| Forecast Accuracy | [`02_Architect_v10_May/projects/forecast/`](02_Architect_v10_May/projects/forecast/README.md) | `ForecastAccuracy_DW` | LIVE |
 
 ---
 
