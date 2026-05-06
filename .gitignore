@@ -26,6 +26,16 @@ venv/
 _private/
 AGENTS.md
 
+# Email drafts / personal communications (never push)
+email_to_*.md
+email_to_*.txt
+
+# Presentation deliverables (personal, never push)
+**/PRESENTATION_*.md
+**/PRESENTATION_*.mmd
+**/PRESENTATION_*.png
+**/PRESENTATION_*.svg
+
 # === Internal evidence / live Fabric exports ===
 02_Architect_v10_May/SQL Server Data Warehouse Standards.docx
 02_Architect_v10_May/artifacts/readiness_exports/*
