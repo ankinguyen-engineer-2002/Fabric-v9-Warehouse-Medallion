@@ -111,10 +111,10 @@ Add any table = INSERT registry + CREATE VIEW. Zero code change.
 │  ├── Source_Schema_N/       ...                                              │
 │  └── Role: READ-ONLY. Silver views read directly from here.                  │
 │                                                                              │
-│  {StagingLakehouse}                                                       │
+│  {StagingLakehouse}                                                          │
 │  ├── N Dataflow feeds → _ver2 staging tables                                 │
 │  ├── Reference tables (manual / dataflow seeded)                             │
-│  └── Role: EDW supplement when {SourceLakehouse} is incomplete                   │
+│  └── Role: EDW supplement when {SourceLakehouse} is incomplete               │
 │                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                        SILVER — Processing Warehouse                         │
@@ -122,14 +122,14 @@ Add any table = INSERT registry + CREATE VIEW. Zero code change.
 ├──────────────────────────────────────────────────────────────────────────────┤
 │                                                                              │
 │  {Domain}_WRK (N tables, N views, 1 SP)                                      │
-│  ├── {EdwTable_1}            ← CTAS from {StagingLakehouse}               │
-│  ├── {EdwTable_N}            ← CTAS from {StagingLakehouse}               │
+│  ├── {EdwTable_1}            ← CTAS from {StagingLakehouse}                  │
+│  ├── {EdwTable_N}            ← CTAS from {StagingLakehouse}                  │
 │  ├── vw_{Source_1}...N       → column mapping from raw sources               │
 │  └── usp_RefreshEdwTables    → CTAS all EDW supplement tables                │
 │                                                                              │
 │  ReferenceMaster_ENH (N tables, N views)                                     │
-│  ├── {RefTable_1}            ← {SourceLakehouse} source                   │
-│  ├── {RefTable_N}            ← {SourceLakehouse} source                   │
+│  ├── {RefTable_1}            ← {SourceLakehouse} source                      │
+│  ├── {RefTable_N}            ← {SourceLakehouse} source                      │
 │  └── Role: Domain reference data, loaded via usp_GenericLoad                 │
 │                                                                              │
 │  {DomainSchema}_ENH (N tables, N views)     — DAG Wave 0,1,N —               │
