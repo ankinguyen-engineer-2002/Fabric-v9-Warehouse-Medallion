@@ -12,10 +12,8 @@
 ![BI](https://img.shields.io/badge/BI-Direct_Lake-F2C811?style=for-the-badge&logo=powerbi&logoColor=black)
 
 ![PIPELINES](https://img.shields.io/badge/PIPELINES-7-2196F3?style=flat-square)
-![OBJECTS](https://img.shields.io/badge/OBJECTS-100+-4CAF50?style=flat-square)
 ![LOAD PATTERNS](https://img.shields.io/badge/LOAD_PATTERNS-8-FF9800?style=flat-square)
 ![DQ CHECK TYPES](https://img.shields.io/badge/DQ_CHECK_TYPES-7-E91E63?style=flat-square)
-![RUNTIME](https://img.shields.io/badge/RUNTIME-~31_min-00BCD4?style=flat-square)
 
 <br/>
 
@@ -41,7 +39,7 @@ Add any table = INSERT registry + CREATE VIEW. Zero code change.
 | [ADR-001](docs/decisions/ADR-001-v10-hybrid-medallion.md) | **Hybrid Medallion adoption** — 3-layer design: Lakehouse shortcuts (Bronze), Processing Warehouse (Silver+Meta), Gold Warehouse (serving) | **Implemented** |
 | [ADR-002](docs/decisions/ADR-002-edw-supplement-exit-strategy.md) | **EDW Supplement exit** — 4 `Staging_WRK` tables pending Enterprise Lakehouse data completeness | Active |
 | [ADR-003](docs/decisions/ADR-003-bob-standards-compliance-audit.md) | **Enterprise standards audit** — All 4 items resolved (suffix + PascalCase). 6 infra GAPs remain (CI/CD, Security, Alerting) | **Resolved** |
-| [ADR-004](docs/decisions/ADR-004-architecture-maturity-assessment.md) | **Maturity assessment** — 89.3% (Staff/Principal level), scored against 15 Microsoft best-practice criteria | Accepted |
+| [ADR-004](docs/decisions/ADR-004-architecture-maturity-assessment.md) | **Maturity assessment** — Staff/Principal level, scored against 15 Microsoft best-practice criteria | Accepted |
 | [ADR-005](docs/decisions/ADR-005-enterprise-promote-pathway.md) | **Enterprise promote pathway** — US/VN collaboration model, naming resolved, 5 ownership questions pending Bob | Proposed |
 
 ---
@@ -66,7 +64,7 @@ Add any table = INSERT registry + CREATE VIEW. Zero code change.
 8. [Generic SP & 8 Load Patterns](#generic-sp--8-load-patterns) — overwrite, incremental, upsert, datekey, daterange, identity, cdc, scd2
 9. [Control Plane Detail](#control-plane-detail) — 20 meta tables, 5 views, 16 SPs, 3 functions
 10. [Data Quality Engine](#data-quality-engine) — 7 check types, severity-based gating, retry-safe writes
-11. [Lineage Engine](#lineage-engine) — Auto-built from source_objects, 52+ edges
+11. [Lineage Engine](#lineage-engine) — Auto-built from `source_objects`, edge graph rebuilt per pipeline run
 
 ### Operations
 12. [Adding a New Table](#adding-a-new-table) — 3 steps: register → view → test
@@ -463,20 +461,20 @@ When `load_type = 'scd2'`, the framework automatically adds:
 
 | Table | Rows | Purpose |
 |---|---|---|
-| `AssetRegistry` | 28+ | Canonical registry: asset, layer, access mode, load type, frequency, cron, project |
-| `AssetAccessPolicy` | 28+ | Access decisions per asset |
-| `ObjectClassification` | 28+ | Physical classification |
-| `SourceFeed` | 52+ | Source feed metadata |
-| `DQRule` | 54+ | DQ rules: 7 check types |
+| `AssetRegistry` | — | Canonical registry: asset, layer, access mode, load type, frequency, cron, project |
+| `AssetAccessPolicy` | — | Access decisions per asset |
+| `ObjectClassification` | — | Physical classification |
+| `SourceFeed` | — | Source feed metadata |
+| `DQRule` | — | DQ rules: 7 check types |
 | `DQGateRun` | — | DQ execution results |
-| `SourceContract` | 674+ | Column-level schema contracts |
+| `SourceContract` | — | Column-level schema contracts |
 | `SourceContractRun` | — | Contract validation results |
-| `ReconciliationRule` | 6+ | Source-target row count checks |
+| `ReconciliationRule` | — | Source-target row count checks |
 | `ReconciliationResult` | — | Reconciliation results |
-| `LineageEdge` | 52+ | Auto-built lineage graph |
-| `RunLog` | 37+ | Per-table execution log |
-| `PipelineRunLog` | 2+ | Pipeline-level audit |
-| `SilverDagWaveRuntime` | 8+ | Computed wave assignments |
+| `LineageEdge` | — | Auto-built lineage graph |
+| `RunLog` | — | Per-table execution log |
+| `PipelineRunLog` | — | Pipeline-level audit |
+| `SilverDagWaveRuntime` | — | Computed wave assignments |
 | `PerformanceBaseline` | — | Performance benchmarks |
 | `PipelineCostLog` | — | Cost tracking |
 | `ApprovalLog` | — | Change approvals |
@@ -737,10 +735,10 @@ Architecture audited and fully compliant with enterprise DW standards (Bob/Rakes
 | Pending Bob decision | 2 | Schema suffix convention (_DW/_ENH/_WRK vs PascalCase), Column naming (snake_case vs PascalCase) |
 | Not applicable | 7 | HASH/REPLICATE, CCIX/CIX, partitioning, statistics, SQL Agent, PolyBase, SSIS |
 
-### Resolved (2026-05-04)
+### Resolved Standards
 
-1. **Schema suffix**: `_DW` (Gold), `_ENH` (Silver), `_WRK` (Staging) adopted per DOCX. Full rebuild completed.
-2. **Column naming**: PascalCase adopted. ~1,800 columns renamed.
+1. **Schema suffix**: `_DW` (Gold), `_ENH` (Silver), `_WRK` (Staging) adopted per DOCX.
+2. **Column naming**: PascalCase adopted across all layers.
 
 ---
 
@@ -794,10 +792,10 @@ Architecture audited and fully compliant with enterprise DW standards (Bob/Rakes
 
 | ADR | Decision | Status |
 |---|---|---|
-| ADR-001 | Adopt Hybrid Medallion architecture | **Implemented** (2026-05-02) |
+| ADR-001 | Adopt Hybrid Medallion architecture | **Implemented** |
 | ADR-002 | EDW Supplement Exit Strategy | Active — 4 tables pending |
-| ADR-003 | Bob Standards Compliance Audit | **Resolved** (2026-05-04) |
-| ADR-004 | Architecture Maturity Assessment (89.3%) | Accepted |
+| ADR-003 | Bob Standards Compliance Audit | **Resolved** |
+| ADR-004 | Architecture Maturity Assessment | Accepted |
 | ADR-005 | Enterprise Promote Pathway — US/VN Model | Proposed — 5 questions pending Bob |
 
 ---
