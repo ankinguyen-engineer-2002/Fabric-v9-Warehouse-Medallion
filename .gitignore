@@ -37,6 +37,9 @@ AGENTS.md
 enterprise_reference/
 _claude_extensions_backup/
 
+# === Archived v9 (local-only, hidden from GitHub) ===
+01_Architect_v9_April/
+
 # === Archive ===
 docs/archive/
 .claude.md
