@@ -21,7 +21,7 @@ Schemas accessed by `forecast`:
 
 ### `SupplyChain_Lakehouse` — EDW Supplement (4 dataflow feeds)
 
-When `Enterprise_Lakehouse` is incomplete or unstable, dataflows write `_edw` tables here. Then `Staging_WRK` views/tables CTAS from these tables.
+When `Enterprise_Lakehouse` is incomplete or unstable, dataflows write `_edw` tables here. Then `Staging_Wrk` views/tables CTAS from these tables.
 
 | Dataflow | Target table | Reason |
 |----------|-------------|--------|
@@ -30,7 +30,7 @@ When `Enterprise_Lakehouse` is incomplete or unstable, dataflows write `_edw` ta
 | `df_brz_SupplyChain_Enh_1_DemandForecastSnapshotDaily_copy1` | `brz_supplychain_enh_1__demandforecastsnapshotdaily_edw` | Forecast snapshot feed (Enhancement schema) |
 | `df_ref_product` | `ref_product_edw` | Product master supplement |
 
-> Note: Reference tables `df_ref_forecast_cycle` and others provide static reference data via dataflow as well, but they are loaded directly into `ReferenceMaster_ENH` Silver schema, not staged.
+> Note: Reference tables `df_ref_forecast_cycle` and others provide static reference data via dataflow as well, but they are loaded directly into `ReferenceMaster_Enh` Silver schema, not staged.
 
 ## Bronze Access Pattern
 
@@ -42,8 +42,8 @@ When `Enterprise_Lakehouse` is incomplete or unstable, dataflows write `_edw` ta
        Enterprise_Lakehouse                   SupplyChain_Lakehouse
        (cross-DB shortcuts)                   (4 EDW dataflow feeds)
                     │                                │
-       direct read via 3-part            CTAS into Staging_WRK.<Table>Edw
-       naming: EL.<Schema>.<Table>       SP: Staging_WRK.usp_RefreshEdwTables
+       direct read via 3-part            CTAS into Staging_Wrk.<Table>Edw
+       naming: EL.<Schema>.<Table>       SP: Staging_Wrk.usp_RefreshEdwTables
                     │                                │
                     └────────► SILVER VIEWS ◄────────┘
 ```
@@ -63,9 +63,9 @@ To find which Silver view uses which Bronze source, see lineage edges in [60_lin
 All 4 staged tables refreshed by single SP:
 
 ```sql
-EXEC Staging_WRK.usp_RefreshEdwTables;
+EXEC Staging_Wrk.usp_RefreshEdwTables;
 ```
 
 Triggered by pipeline `pl_sc_staging` once per run. The SP performs `DROP TABLE IF EXISTS` + `CREATE TABLE AS SELECT` from Lakehouse `_edw` tables.
 
-Full DDL of the SP: see [`etl/meta_sps.sql`](etl/meta_sps.sql) (look for `Staging_WRK.usp_RefreshEdwTables`).
+Full DDL of the SP: see [`etl/meta_sps.sql`](etl/meta_sps.sql) (look for `Staging_Wrk.usp_RefreshEdwTables`).

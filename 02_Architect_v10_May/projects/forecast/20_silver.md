@@ -1,25 +1,25 @@
 # 20 — Silver Layer
 
-> Scanned: 2026-05-06.
+> Scanned: 2026-05-06 · Updated 2026-05-10 post Bob alignment (schema casing `_Enh`/`_Wrk`, view prefix `v_*`).
 > **Warehouse:** `SupplyChain_Processing_Warehouse` (`c0262cef-b8a7-495f-bccc-53b098c7948c`)
-> **Schemas:** `Staging_WRK`, `ReferenceMaster_ENH`, `SalesHistory_ENH`, `ForecastHistory_ENH`, `OpenOrderHistory_ENH`, `Meta`
+> **Schemas:** `Staging_Wrk`, `ReferenceMaster_Enh`, `SalesHistory_Enh`, `ForecastHistory_Enh`, `OpenOrderHistory_Enh`, `Meta`
 
 ## Summary
 
 | Schema | Tables | Views | Total rows |
 |--------|-------:|------:|-----------:|
-| `Staging_WRK` | 4 | 4 | 156,120,911 |
-| `ReferenceMaster_ENH` | 10 | 11 | 637,360 |
-| `SalesHistory_ENH` | 4 | 4 | 136,442,343 |
-| `ForecastHistory_ENH` | 2 | 2 | 44,454,578 |
-| `OpenOrderHistory_ENH` | 2 | 2 | 269,015 |
-| `Meta` | 20 | 5 | (control plane) |
+| `Staging_Wrk` | 4 | 4 | 156,120,911 |
+| `ReferenceMaster_Enh` | 10 | 11 | 637,360 |
+| `SalesHistory_Enh` | 4 | 4 | 136,442,343 |
+| `ForecastHistory_Enh` | 2 | 2 | 44,454,578 |
+| `OpenOrderHistory_Enh` | 2 | 2 | 269,015 |
+| `Meta` | 23 | 4 | (control plane — added `TableDictionary`, `TableDictionary_UpdateLog`, `AuditLog` per Bob alignment 2026-05-10) |
 
 > ETL DDL for all views: see [`etl/staging_ddl.sql`](etl/staging_ddl.sql) and [`etl/silver_views.sql`](etl/silver_views.sql).
 
 ---
 
-## `Staging_WRK` — Raw EDW Projection
+## `Staging_Wrk` — Raw EDW Projection
 
 **Pattern:** TRIM strings, TRY_CONVERT dates, rename to PascalCase. No JOIN. No business logic.
 
@@ -30,20 +30,20 @@
 | `DemandForecastSnapshotDailyEdw` | 42,406,201 | — | `SupplyChain_Lakehouse.dbo.brz_supplychain_enh_1__demandforecastsnapshotdaily_ver2` | overwrite | daily |
 | `ProductEdw` | 379,305 | — | `SupplyChain_Lakehouse.dbo.ref_product_ver2` | overwrite | monthly |
 
-**Views (1-to-1 with EDW source tables, plus 4 `vw_<Codis>` for direct shortcut access):**
+**Views (1-to-1 with EDW source tables, plus 4 `v_<Codis>` for direct shortcut access):**
 
 | View | Maps from | Notes |
 |------|-----------|-------|
-| `vw_Codatan` | `Enterprise_Lakehouse.Wholesale_Codis_AFI.codatan` | Direct shortcut read; TRIM all strings |
-| `vw_Comast` | `Enterprise_Lakehouse.Wholesale_Codis_AFI.COMAST` | Direct shortcut |
-| `vw_Extord` | `Enterprise_Lakehouse.Wholesale_Codis_AFI.EXTORD` | Direct shortcut; BIGINT date → TRY_CONVERT |
-| `vw_Extorit` | `Enterprise_Lakehouse.Wholesale_Codis_AFI.EXTORIT` | Direct shortcut |
+| `v_Codatan` | `Enterprise_Lakehouse.Wholesale_Codis_AFI.codatan` | Direct shortcut read; TRIM all strings |
+| `v_Comast` | `Enterprise_Lakehouse.Wholesale_Codis_AFI.COMAST` | Direct shortcut |
+| `v_Extord` | `Enterprise_Lakehouse.Wholesale_Codis_AFI.EXTORD` | Direct shortcut; BIGINT date → TRY_CONVERT |
+| `v_Extorit` | `Enterprise_Lakehouse.Wholesale_Codis_AFI.EXTORIT` | Direct shortcut |
 
-**Refresh SP:** `Staging_WRK.usp_RefreshEdwTables` performs DROP + CTAS for all 4 EDW supplement tables in one call.
+**Refresh SP:** `Staging_Wrk.usp_RefreshEdwTables` performs DROP + CTAS for all 4 EDW supplement tables in one call.
 
 ---
 
-## `ReferenceMaster_ENH` — Domain Reference Data (Shared)
+## `ReferenceMaster_Enh` — Domain Reference Data (Shared)
 
 | Table | Rows | Source | Load | Freq |
 |-------|-----:|--------|------|------|
@@ -60,35 +60,35 @@
 
 **11 paired views** in same schema map raw sources → PascalCase business columns.
 
-> **Smart skip:** Most ReferenceMaster_ENH assets are `freq=monthly` — pipeline `Lookup` step filters by `next_run_time`, skipping these on daily runs.
+> **Smart skip:** Most ReferenceMaster_Enh assets are `freq=monthly` — pipeline `Lookup` step filters by `next_run_time`, skipping these on daily runs.
 
 ---
 
-## `SalesHistory_ENH` — Demand & Invoice (Wave 0 + 1)
+## `SalesHistory_Enh` — Demand & Invoice (Wave 0 + 1)
 
 | Table | Rows | Wave | Source | ETL summary |
 |-------|-----:|:----:|--------|------------|
-| `InvoiceDetailLineLevel` | 88,373,617 | 0 | `Staging_WRK.InvoiceDetailEdw` + `InvoiceHeaderEdw` + `ReferenceMaster_ENH.CustomerAccountGroup` | LEFT JOIN header on InvoiceID+Date+OrderID; LEFT JOIN CG on Customer; UPPER+TRIM CustomerGroupCode |
-| `ActualDemandMonthly` | 2,651,115 | 1 | `InvoiceDetailLineLevel` + `OpenOrderHistory_ENH.OpenOrderLineLevel` + `Calendar` | GROUP BY ItemSKU, WarehouseCode, CustomerGroupCode, FSCMonthFirst/Last; UNION historical + open |
+| `InvoiceDetailLineLevel` | 88,373,617 | 0 | `Staging_Wrk.InvoiceDetailEdw` + `InvoiceHeaderEdw` + `ReferenceMaster_Enh.CustomerAccountGroup` | LEFT JOIN header on InvoiceID+Date+OrderID; LEFT JOIN CG on Customer; UPPER+TRIM CustomerGroupCode |
+| `ActualDemandMonthly` | 2,651,115 | 1 | `InvoiceDetailLineLevel` + `OpenOrderHistory_Enh.OpenOrderLineLevel` + `Calendar` | GROUP BY ItemSKU, WarehouseCode, CustomerGroupCode, FSCMonthFirst/Last; UNION historical + open |
 | `ActualDemandWeekly` | 7,860,043 | 1 | (same sources, week grain) | Week-grain demand |
 | `InvoiceWeekly` | 37,557,568 | 1 | `InvoiceDetailLineLevel` + `Calendar` | Aggregated invoice lines per week |
 
 ---
 
-## `ForecastHistory_ENH` — Forecast Demand (Wave 0 + 2)
+## `ForecastHistory_Enh` — Forecast Demand (Wave 0 + 2)
 
 | Table | Rows | Wave | Source | ETL summary |
 |-------|-----:|:----:|--------|------------|
-| `ForecastDemandMonthly` | 42,406,201 | 0 | `Staging_WRK.DemandForecastSnapshotDailyEdw` + `ReferenceMaster_ENH.ForecastCycle` | Latest snapshot per cycle; JOIN ForecastCycle for HorizonCode |
-| `NaiveForecastMonthly` | 2,048,377 | 2 | `SalesHistory_ENH.ActualDemandMonthly` | Lag-based naive forecast (depends on Wave 1) |
+| `ForecastDemandMonthly` | 42,406,201 | 0 | `Staging_Wrk.DemandForecastSnapshotDailyEdw` + `ReferenceMaster_Enh.ForecastCycle` | Latest snapshot per cycle; JOIN ForecastCycle for HorizonCode |
+| `NaiveForecastMonthly` | 2,048,377 | 2 | `SalesHistory_Enh.ActualDemandMonthly` | Lag-based naive forecast (depends on Wave 1) |
 
 ---
 
-## `OpenOrderHistory_ENH` — Open Orders (Wave 0 + 1)
+## `OpenOrderHistory_Enh` — Open Orders (Wave 0 + 1)
 
 | Table | Rows | Wave | Source | ETL summary |
 |-------|-----:|:----:|--------|------------|
-| `OpenOrderLineLevel` | 189,591 | 0 | `Staging_WRK.vw_Extord` + `vw_Extorit` + `vw_Codatan` + `Calendar` | 4-way JOIN on CODIS open-order tables; INNER JOIN Calendar on CurrentRequest |
+| `OpenOrderLineLevel` | 189,591 | 0 | `Staging_Wrk.v_Extord` + `v_Extorit` + `v_Codatan` + `Calendar` | 4-way JOIN on CODIS open-order tables; INNER JOIN Calendar on CurrentRequest |
 | `OpenOrderMonthly` | 79,424 | 1 | `OpenOrderLineLevel` + `Calendar` + `CustomerAccountGroup` | GROUP BY ItemSKU, WarehouseCode, CustomerGroupCode, FSCMonth; SUM Qty+Amt, COUNT lines |
 
 ---
@@ -97,18 +97,18 @@
 
 ```
 Wave 0  (no Silver deps — read from Staging + Reference + Lakehouse)
-   ├── SalesHistory_ENH.InvoiceDetailLineLevel
-   ├── ForecastHistory_ENH.ForecastDemandMonthly
-   └── OpenOrderHistory_ENH.OpenOrderLineLevel
+   ├── SalesHistory_Enh.InvoiceDetailLineLevel
+   ├── ForecastHistory_Enh.ForecastDemandMonthly
+   └── OpenOrderHistory_Enh.OpenOrderLineLevel
 
 Wave 1  (depends on Wave 0)
-   ├── SalesHistory_ENH.ActualDemandMonthly
-   ├── SalesHistory_ENH.ActualDemandWeekly
-   ├── SalesHistory_ENH.InvoiceWeekly
-   └── OpenOrderHistory_ENH.OpenOrderMonthly
+   ├── SalesHistory_Enh.ActualDemandMonthly
+   ├── SalesHistory_Enh.ActualDemandWeekly
+   ├── SalesHistory_Enh.InvoiceWeekly
+   └── OpenOrderHistory_Enh.OpenOrderMonthly
 
 Wave 2  (depends on Wave 1)
-   └── ForecastHistory_ENH.NaiveForecastMonthly  ← needs ActualDemandMonthly
+   └── ForecastHistory_Enh.NaiveForecastMonthly  ← needs ActualDemandMonthly
 ```
 
 Waves computed dynamically by `Meta.usp_ComputeSilverWaves` based on `Meta.AssetRegistry.depends_on` JSON arrays. Pipeline `pl_sc_silver` reads `Meta.SilverDagWaveRuntime` and dispatches each wave to `pl_sc_silver_wave` with parallel batch=8 inside the wave.
@@ -146,11 +146,11 @@ Waves computed dynamically by `Meta.usp_ComputeSilverWaves` based on `Meta.Asset
 
 | View | Purpose |
 |------|---------|
-| `vw_AccessDecision` | Computed access mode per asset |
-| `vw_RegistryCompat` | v9 backward-compat view for old code |
-| `vw_SilverWaveRuntime` | Pretty wave assignment query |
-| `vw_TableDictionary` | 63-column Enterprise-compatible adapter |
-| `vw_sp_registry` | v9 compat — sp/view/table mapping |
+| `v_AccessDecision` | Computed access mode per asset |
+| `v_RegistryCompat` | v9 backward-compat view for old code |
+| `v_SilverWaveRuntime` | Pretty wave assignment query |
+| `TableDictionary` | 63-column Enterprise-compatible adapter |
+| `v_sp_registry` | v9 compat — sp/view/table mapping |
 
 ### Stored Procedures (14)
 

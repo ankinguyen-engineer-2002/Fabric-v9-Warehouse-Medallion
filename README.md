@@ -37,10 +37,12 @@ Add any table = INSERT registry + CREATE VIEW. Zero code change.
 | ADR | Focus | Status |
 |---|---|---|
 | [ADR-001](docs/decisions/ADR-001-v10-hybrid-medallion.md) | **Hybrid Medallion adoption** — 3-layer design: Lakehouse shortcuts (Bronze), Processing Warehouse (Silver+Meta), Gold Warehouse (serving) | **Implemented** |
-| [ADR-002](docs/decisions/ADR-002-edw-supplement-exit-strategy.md) | **EDW Supplement exit** — 4 `Staging_WRK` tables pending Enterprise Lakehouse data completeness | Active |
-| [ADR-003](docs/decisions/ADR-003-bob-standards-compliance-audit.md) | **Enterprise standards audit** — All 4 items resolved (suffix + PascalCase). 6 infra GAPs remain (CI/CD, Security, Alerting) | **Resolved** |
+| [ADR-002](docs/decisions/ADR-002-edw-supplement-exit-strategy.md) | **EDW Supplement exit** — 4 `Staging_Wrk` tables pending Enterprise Lakehouse data completeness | Active |
+| [ADR-003](docs/decisions/ADR-003-bob-standards-compliance-audit.md) | **Enterprise standards audit** — All 4 items resolved (suffix + PascalCase). 6 infra GAPs remain. Casing superseded by ADR-008. | **Resolved** |
 | [ADR-004](docs/decisions/ADR-004-architecture-maturity-assessment.md) | **Maturity assessment** — Staff/Principal level, scored against 15 Microsoft best-practice criteria | Accepted |
-| [ADR-005](docs/decisions/ADR-005-enterprise-promote-pathway.md) | **Enterprise promote pathway** — US/VN collaboration model, naming resolved, 5 ownership questions pending Bob | Proposed |
+| [ADR-005](docs/decisions/ADR-005-enterprise-promote-pathway.md) | **Enterprise promote pathway (v2)** — 2-workspace topology, 3 promote targets (MasterData / SupplyChain / value-stream Gold) | Proposed |
+| [ADR-006](docs/decisions/ADR-006-repo-restructure-documentation-maturity.md) | **Repo restructure** — Path A documentation-repo maturity, 4-folder taxonomy under v10 | Accepted |
+| [ADR-008](docs/decisions/ADR-008-bob-alignment-naming-and-integration.md) | **Bob alignment** — naming evidence-aligned to `EnterpriseData-Dev` (`_Enh`/`_Wrk`/`v_*`); TableDictionary + UpdateLog + AuditLog ported from Bob's `ETL_Framework`; auto-update via `usp_LogRun v2` | **Implemented** |
 
 ---
 

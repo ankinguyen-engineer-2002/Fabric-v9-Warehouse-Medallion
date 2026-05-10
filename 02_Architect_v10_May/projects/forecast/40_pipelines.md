@@ -1,6 +1,6 @@
 # 40 — Pipelines
 
-> Scanned: 2026-05-06. Pipeline definitions retrieved via Fabric REST API.
+> Scanned: 2026-05-06 · Updated 2026-05-10 post Bob alignment (2 pipelines patched for new schema names: `pl_sc_staging`, `pl_sc_silver_wave`).
 
 ## Pipeline Inventory (7 v10 pipelines)
 
@@ -33,7 +33,7 @@ pl_sc_master
   │           ├─ invoke_staging  → pl_sc_staging
   │           │    │
   │           │    pl_sc_staging
-  │           │      ├─ Staging_WRK.usp_RefreshEdwTables  (4 EDW tables, ~155M rows)
+  │           │      ├─ Staging_Wrk.usp_RefreshEdwTables  (4 EDW tables, ~155M rows)
   │           │      └─ ForEach REF asset (smart skip via next_run_time)
   │           │           └─ Meta.usp_GenericLoad(@target_schema, @target_table)
   │           │

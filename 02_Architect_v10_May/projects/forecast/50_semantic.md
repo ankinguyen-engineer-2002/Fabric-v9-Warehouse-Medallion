@@ -22,7 +22,7 @@ Cloned from Cherry/BCherry's v8 `Supply Chain Control Tower` (Lakehouse/Spark mo
 
 | Object | v8 → v10 |
 |--------|---------|
-| `DimCalendar` | 10 cols → 74 cols (extended Silver `vw_Calendar` from `Enterprise_Lakehouse.MasterData_DW.DimDate`) |
+| `DimCalendar` | 10 cols → 74 cols (extended Silver `v_Calendar` from `Enterprise_Lakehouse.MasterData_DW.DimDate`) |
 | `FactForecastKpi` | 12 cols → 18 cols (added 7 derived metrics) |
 | `DimForecastHorizon` | 2 cols → 3 cols (+`Rank` for sort order) |
 

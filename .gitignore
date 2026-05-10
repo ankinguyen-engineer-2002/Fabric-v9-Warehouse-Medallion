@@ -46,6 +46,7 @@ email_to_*.txt
 # === Reference repos (cloned, not project code) ===
 enterprise_reference/
 _claude_extensions_backup/
+_external_refs/
 
 # === Archived v9 (local-only, hidden from GitHub) ===
 01_Architect_v9_April/
@@ -65,6 +66,10 @@ docs/archive/
 02_Architect_v10_May/artifacts/build_runs/**/delete_targets_manifest.json
 02_Architect_v10_May/artifacts/build_runs/**/protected_items_manifest.json
 02_Architect_v10_May/tools/__pycache__/
+
+# === Bob alignment — keep scripts/README/RESULTS, ignore run logs + backup snapshots ===
+02_Architect_v10_May/artifacts/bob_alignment_*/run_logs/
+02_Architect_v10_May/artifacts/bob_alignment_*/backup/
 
 # === Work folder info ===
 02_Architect_v10_May/.work-folder-info

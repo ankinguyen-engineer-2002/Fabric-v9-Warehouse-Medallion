@@ -1,3 +1,7 @@
+-- 06_create_renamed_views_gold.sql
+-- 7 Gold views recreated with v_ prefix. 3-part-name refs to Processing schemas updated.
+-- Source: etl/gold_views.sql, transformed.
+
 -- ============================================================
 -- Gold Views — ForecastAccuracy_DW Serving Layer
 -- ============================================================

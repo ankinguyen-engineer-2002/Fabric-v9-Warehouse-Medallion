@@ -1,6 +1,6 @@
 # 30 — Gold Layer
 
-> Scanned: 2026-05-06.
+> Scanned: 2026-05-06 · Updated 2026-05-10 post Bob alignment (view prefix `vw_*` → `v_*`; schema `_DW` ALL CAPS unchanged).
 > **Warehouse:** `SupplyChain_Gold_Warehouse` (`98e2a911-5af9-442e-9cc8-5d8dadb8b762`)
 > **Schema:** `ForecastAccuracy_DW`
 > **Role:** Dedicated serving boundary for Direct Lake semantic model.
@@ -38,23 +38,23 @@ UNION ALL of 3 demand sources into a unified fact for forecast accuracy reportin
 
 **Source SQL:**
 ```sql
-CREATE VIEW ForecastAccuracy_DW.vw_FactForecastActual AS
+CREATE VIEW ForecastAccuracy_DW.v_FactForecastActual AS
 SELECT ItemSKU, WarehouseCode, CustomerGroupCode, FSCMonthFirst, FSCMonthLast,
        CAST('Actual demand' AS VARCHAR(20)) AS HorizonCode, StatusCode, VersionName,
        CAST(QtyDemand AS FLOAT) AS Qty,
        CAST(GETUTCDATE() AS DATETIME2(6)) AS LoadDT
-FROM SupplyChain_Processing_Warehouse.SalesHistory_ENH.ActualDemandMonthly
+FROM SupplyChain_Processing_Warehouse.SalesHistory_Enh.ActualDemandMonthly
 UNION ALL
 SELECT ItemSKU, WarehouseCode, CustomerGroupCode, FSCMonthFirst, FSCMonthLast,
        HorizonCode, StatusCode, VersionCode, CAST(QtyForecast AS FLOAT),
        CAST(GETUTCDATE() AS DATETIME2(6))
-FROM SupplyChain_Processing_Warehouse.ForecastHistory_ENH.ForecastDemandMonthly
+FROM SupplyChain_Processing_Warehouse.ForecastHistory_Enh.ForecastDemandMonthly
 UNION ALL
 SELECT ItemSKU, WarehouseCode, CustomerGroupCode, FSCMonthFirst, FSCMonthLast,
        CAST('Naive forecast' AS VARCHAR(20)), StatusCode, VersionName,
        CAST(QtyDemand AS FLOAT),
        CAST(GETUTCDATE() AS DATETIME2(6))
-FROM SupplyChain_Processing_Warehouse.ForecastHistory_ENH.NaiveForecastMonthly;
+FROM SupplyChain_Processing_Warehouse.ForecastHistory_Enh.NaiveForecastMonthly;
 ```
 
 ### `FactForecastKpi` — 36,401,116 rows
@@ -72,7 +72,7 @@ Computed KPI fact derived from joining `FactForecastActual` against itself (Fore
 
 Spine joins via CROSS JOIN to `DimForecastHorizon` for monthly horizon expansion.
 
-> Full DDL: [`etl/gold_views.sql`](etl/gold_views.sql) — search for `vw_FactForecastKpi`.
+> Full DDL: [`etl/gold_views.sql`](etl/gold_views.sql) — search for `v_FactForecastKpi`.
 
 ---
 
@@ -80,15 +80,15 @@ Spine joins via CROSS JOIN to `DimForecastHorizon` for monthly horizon expansion
 
 | Table | Rows | Cols | Source (cross-DB from Processing WH) | Notes |
 |-------|-----:|-----:|--------------------------------------|-------|
-| `DimCalendar` | 21,551 | — | `ReferenceMaster_ENH.Calendar` | 74 cols total (extended +64 vs v8) |
-| `DimCustomerGrouping` | 35,617 | — | `ReferenceMaster_ENH.CustomerGrouping` | Customer group mapping |
-| `DimForecastHorizon` | 8 | — | `ReferenceMaster_ENH.ForecastHorizon` | +`Rank` col for sort order vs v8 |
-| `DimProduct` | 379,305 | — | `Staging_WRK.ProductEdw` | 32 cols (full Product master) |
-| `DimWarehouse` | 55 | — | `ReferenceMaster_ENH.Warehouse` | Warehouse master |
+| `DimCalendar` | 21,551 | — | `ReferenceMaster_Enh.Calendar` | 74 cols total (extended +64 vs v8) |
+| `DimCustomerGrouping` | 35,617 | — | `ReferenceMaster_Enh.CustomerGrouping` | Customer group mapping |
+| `DimForecastHorizon` | 8 | — | `ReferenceMaster_Enh.ForecastHorizon` | +`Rank` col for sort order vs v8 |
+| `DimProduct` | 379,305 | — | `Staging_Wrk.ProductEdw` | 32 cols (full Product master) |
+| `DimWarehouse` | 55 | — | `ReferenceMaster_Enh.Warehouse` | Warehouse master |
 
 **Pattern (all dims):**
 ```sql
-CREATE VIEW ForecastAccuracy_DW.vw_Dim<Entity> AS
+CREATE VIEW ForecastAccuracy_DW.v_Dim<Entity> AS
 SELECT *, CAST(GETUTCDATE() AS DATETIME2(6)) AS LoadDT
 FROM SupplyChain_Processing_Warehouse.<Schema>.<Table>;
 ```
@@ -113,8 +113,8 @@ INSERT INTO Meta.AssetRegistry (
     'gold::FactForecastActual', 'Gold', 'GoldPublish',
     'ForecastAccuracy_DW', 'FactForecastActual', 'overwrite', 'daily', '0 2 * * *',
     'forecast', 1,
-    '["SalesHistory_ENH.ActualDemandMonthly","ForecastHistory_ENH.ForecastDemandMonthly","ForecastHistory_ENH.NaiveForecastMonthly"]',
-    'ForecastAccuracy_DW.vw_FactForecastActual'
+    '["SalesHistory_Enh.ActualDemandMonthly","ForecastHistory_Enh.ForecastDemandMonthly","ForecastHistory_Enh.NaiveForecastMonthly"]',
+    'ForecastAccuracy_DW.v_FactForecastActual'
 );
 ```
 
