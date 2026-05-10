@@ -239,4 +239,4 @@ All sources verified 2026-05-03. Tagged [Verified] per project Super Rule §0.
 9. [Verified] Data Processing Standards — learn.microsoft.com/azure/cloud-adoption-framework/data/operational-standards-data-processing-standards
 10. [Verified] Greenfield Lakehouse Architecture — learn.microsoft.com/azure/architecture/example-scenario/data/greenfield-lakehouse-fabric
 11. [Verified] Enterprise BI on Fabric — learn.microsoft.com/azure/architecture/example-scenario/analytics/enterprise-bi-microsoft-fabric
-12. [Verified] Bob SQL Server DW Standards — 02_Architect_v10_May/SQL Server Data Warehouse Standards.docx (local)
+12. [Verified] Bob SQL Server DW Standards — Enterprise_SupplyChain_Dev_architect/SQL Server Data Warehouse Standards.docx (local)

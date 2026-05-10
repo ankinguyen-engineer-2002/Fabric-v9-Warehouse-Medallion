@@ -9,10 +9,10 @@ Status: **Resolved** — All 4 items implemented (2026-05-04)
 v10 Hybrid Medallion architecture was audited against Bob's `SQL Server Data Warehouse Standards.docx` and Bob's email feedback. This ADR documents the compliance status, gaps, and pending decisions.
 
 Source evidence:
-- `02_Architect_v10_May/SQL Server Data Warehouse Standards.docx` (local-only)
-- `02_Architect_v10_May/20_proposals/04_revised_bob_standards_proposal.md`
-- `02_Architect_v10_May/20_proposals/09_bob_standards_mapping_matrix.md`
-- `02_Architect_v10_May/20_proposals/08_v10_gap_matrix.md`
+- `Enterprise_SupplyChain_Dev_architect/SQL Server Data Warehouse Standards.docx` (local-only)
+- `Enterprise_SupplyChain_Dev_architect/20_proposals/04_revised_bob_standards_proposal.md`
+- `Enterprise_SupplyChain_Dev_architect/20_proposals/09_bob_standards_mapping_matrix.md`
+- `Enterprise_SupplyChain_Dev_architect/20_proposals/08_v10_gap_matrix.md`
 - Live Fabric audit: 2026-05-03
 
 ---
@@ -149,9 +149,9 @@ Full rebuild completed in a single session:
 
 ## 8. References
 
-- Bob DOCX: `02_Architect_v10_May/SQL Server Data Warehouse Standards.docx`
-- Bob mapping: `02_Architect_v10_May/20_proposals/09_bob_standards_mapping_matrix.md`
-- Bob proposal: `02_Architect_v10_May/20_proposals/04_revised_bob_standards_proposal.md`
-- Gap matrix: `02_Architect_v10_May/20_proposals/08_v10_gap_matrix.md`
+- Bob DOCX: `Enterprise_SupplyChain_Dev_architect/SQL Server Data Warehouse Standards.docx`
+- Bob mapping: `Enterprise_SupplyChain_Dev_architect/20_proposals/09_bob_standards_mapping_matrix.md`
+- Bob proposal: `Enterprise_SupplyChain_Dev_architect/20_proposals/04_revised_bob_standards_proposal.md`
+- Gap matrix: `Enterprise_SupplyChain_Dev_architect/20_proposals/08_v10_gap_matrix.md`
 - ADR-001: Adopt Hybrid Medallion
 - ADR-002: EDW Supplement Exit Strategy

@@ -118,12 +118,12 @@ EDW supplement handling is not decided generically in this ADR. It is governed b
 
 ## References
 
-- `02_Architect_v10_May/20_proposals/10_final_v10_amendment_plan.md`
-- `02_Architect_v10_May/10_evidence/07_v9_capability_evidence_ledger.md`
-- `02_Architect_v10_May/20_proposals/08_v10_gap_matrix.md`
-- `02_Architect_v10_May/20_proposals/09_bob_standards_mapping_matrix.md`
-- `02_Architect_v10_May/30_runbook/15_v10_edw_supplement_exit_strategy.md`
-- `02_Architect_v10_May/30_runbook/16_v10_readiness_scorecard_and_v9_cleanup.md`
+- `Enterprise_SupplyChain_Dev_architect/20_proposals/10_final_v10_amendment_plan.md`
+- `Enterprise_SupplyChain_Dev_architect/10_evidence/07_v9_capability_evidence_ledger.md`
+- `Enterprise_SupplyChain_Dev_architect/20_proposals/08_v10_gap_matrix.md`
+- `Enterprise_SupplyChain_Dev_architect/20_proposals/09_bob_standards_mapping_matrix.md`
+- `Enterprise_SupplyChain_Dev_architect/30_runbook/15_v10_edw_supplement_exit_strategy.md`
+- `Enterprise_SupplyChain_Dev_architect/30_runbook/16_v10_readiness_scorecard_and_v9_cleanup.md`
 - `docs/decisions/ADR-002-edw-supplement-exit-strategy.md`
 - Microsoft Direct Lake overview: https://learn.microsoft.com/en-us/fabric/fundamentals/direct-lake-overview
 - Microsoft Fabric medallion architecture: https://learn.microsoft.com/en-us/fabric/onelake/onelake-medallion-lakehouse-architecture

@@ -141,7 +141,7 @@ Bob's email 2026-05-09 clarified that promote does NOT mean "everything goes to 
 
 ### Recommended Prep Actions (v2 update 2026-05-10)
 
-1. **Execute ADR-008 alignment** ✅ **Done 2026-05-10** — schema casing `_Enh`/`_Wrk`, view prefix `v_*`, port TableDictionary as TABLE + UpdateLog + AuditLog, enhance `usp_LogRun` v2. Pipeline `pl_sc_master` 30m34s clean run end-to-end. Artifacts: `02_Architect_v10_May/artifacts/bob_alignment_2026-05-10/`.
+1. **Execute ADR-008 alignment** ✅ **Done 2026-05-10** — schema casing `_Enh`/`_Wrk`, view prefix `v_*`, port TableDictionary as TABLE + UpdateLog + AuditLog, enhance `usp_LogRun` v2. Pipeline `pl_sc_master` 30m34s clean run end-to-end. Artifacts: `Enterprise_SupplyChain_Dev_architect/artifacts/bob_alignment_2026-05-10/`.
 2. **Send Bob reply email** with Q1-Q4 (see `_open_questions_for_bob.md`) — ready, draft at `email_to_bob_ankit_2026-05-10.md`.
 3. **Audit MasterData_DW.DimDate/DimItemMaster** column structure vs our `v_DimCalendar`/`v_DimProduct` — prep MERGE plan (needs read access on EnterpriseData-Dev).
 4. **Audit Wholesale_Warehouse.SalesHistory_AFI** vs our `SalesHistory_Enh` — check if Staging_Wrk EDW supplements can be retired (ADR-002 EDW Exit pathway).

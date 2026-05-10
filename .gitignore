@@ -37,11 +37,11 @@ email_to_*.txt
 **/PRESENTATION_*.svg
 
 # === Internal evidence / live Fabric exports ===
-02_Architect_v10_May/SQL Server Data Warehouse Standards.docx
-02_Architect_v10_May/artifacts/readiness_exports/*
-!02_Architect_v10_May/artifacts/readiness_exports/README.md
-02_Architect_v10_May/artifacts/detail_clone_v9_forecast/*
-!02_Architect_v10_May/artifacts/detail_clone_v9_forecast/README.md
+Enterprise_SupplyChain_Dev_architect/SQL Server Data Warehouse Standards.docx
+Enterprise_SupplyChain_Dev_architect/artifacts/readiness_exports/*
+!Enterprise_SupplyChain_Dev_architect/artifacts/readiness_exports/README.md
+Enterprise_SupplyChain_Dev_architect/artifacts/detail_clone_v9_forecast/*
+!Enterprise_SupplyChain_Dev_architect/artifacts/detail_clone_v9_forecast/README.md
 
 # === Reference repos (cloned, not project code) ===
 enterprise_reference/
@@ -56,27 +56,27 @@ docs/archive/
 .claude.md
 
 # === Build run artifacts (keep scripts, ignore outputs) ===
-02_Architect_v10_May/artifacts/build_runs/**/items_*.json
-02_Architect_v10_May/artifacts/build_runs/**/pre_*.json
-02_Architect_v10_May/artifacts/build_runs/**/post_*.json
-02_Architect_v10_May/artifacts/build_runs/**/sql_*.json
-02_Architect_v10_May/artifacts/build_runs/**/fabric_*.json
-02_Architect_v10_May/artifacts/build_runs/**/v10_*.json
-02_Architect_v10_May/artifacts/build_runs/**/build_v10_full_results_*.json
-02_Architect_v10_May/artifacts/build_runs/**/delete_targets_manifest.json
-02_Architect_v10_May/artifacts/build_runs/**/protected_items_manifest.json
-02_Architect_v10_May/tools/__pycache__/
+Enterprise_SupplyChain_Dev_architect/artifacts/build_runs/**/items_*.json
+Enterprise_SupplyChain_Dev_architect/artifacts/build_runs/**/pre_*.json
+Enterprise_SupplyChain_Dev_architect/artifacts/build_runs/**/post_*.json
+Enterprise_SupplyChain_Dev_architect/artifacts/build_runs/**/sql_*.json
+Enterprise_SupplyChain_Dev_architect/artifacts/build_runs/**/fabric_*.json
+Enterprise_SupplyChain_Dev_architect/artifacts/build_runs/**/v10_*.json
+Enterprise_SupplyChain_Dev_architect/artifacts/build_runs/**/build_v10_full_results_*.json
+Enterprise_SupplyChain_Dev_architect/artifacts/build_runs/**/delete_targets_manifest.json
+Enterprise_SupplyChain_Dev_architect/artifacts/build_runs/**/protected_items_manifest.json
+Enterprise_SupplyChain_Dev_architect/tools/__pycache__/
 
 # === Bob alignment — keep scripts/README/RESULTS, ignore run logs + backup snapshots ===
-02_Architect_v10_May/artifacts/bob_alignment_*/run_logs/
-02_Architect_v10_May/artifacts/bob_alignment_*/backup/
+Enterprise_SupplyChain_Dev_architect/artifacts/bob_alignment_*/run_logs/
+Enterprise_SupplyChain_Dev_architect/artifacts/bob_alignment_*/backup/
 
 # === Work folder info ===
-02_Architect_v10_May/.work-folder-info
+Enterprise_SupplyChain_Dev_architect/.work-folder-info
 CLAUDE.md
 lineage_explorer/.streamlit/secrets.toml
 
 # Fabric stubs
-02_Architect_v10_May/.stubs/
-02_Architect_v10_May/.vfsmeta/
-02_Architect_v10_May/.vfscache/
+Enterprise_SupplyChain_Dev_architect/.stubs/
+Enterprise_SupplyChain_Dev_architect/.vfsmeta/
+Enterprise_SupplyChain_Dev_architect/.vfscache/

@@ -80,7 +80,7 @@ Once Bob confirms write permission + AuditLog DDL:
 - `Meta.usp_LogRun` extends to also UPDATE `EnterpriseData-Dev.ETL_Framework.DW_Developer.TableDictionary` (Modified, RowCount, LastAudit) per asset
 - INSERT row to `EnterpriseData-Dev.ETL_Framework.DW_Developer.AuditLog` on error/completion
 
-Tracking: `02_Architect_v10_May/projects/forecast/_open_questions_for_bob.md` Q1.
+Tracking: `Enterprise_SupplyChain_Dev_architect/projects/forecast/_open_questions_for_bob.md` Q1.
 
 ### D8 — MERGE/extend strategy for `MasterData_DW.DimDate/DimItemMaster` (PENDING Bob Q2)
 
@@ -114,7 +114,7 @@ Bob's hub does NOT have `SupplyChain_Warehouse`. Bob's email implies one should 
 
 ## Implementation
 
-Artifacts: `02_Architect_v10_May/artifacts/bob_alignment_2026-05-10/`
+Artifacts: `Enterprise_SupplyChain_Dev_architect/artifacts/bob_alignment_2026-05-10/`
 - `README.md` — execution plan with 13 steps
 - `generate_scripts.py` — Python generator (read existing DDL → transform → write)
 - `sql_scripts/01..12.sql` + `13_update_pipeline_sql_refs.md`
@@ -137,7 +137,7 @@ Execution status:
 
 - Bob's reply email 2026-05-09 (in `email_to_bob_ankit_2026-05-05.md` thread)
 - Bob's workspace scan: `_external_refs/enterprisedata-dev-docs/` (cloned 2026-05-10, gitignored)
-- Bob's DOCX: `02_Architect_v10_May/SQL Server Data Warehouse Standards.docx` (local-only, gitignored)
+- Bob's DOCX: `Enterprise_SupplyChain_Dev_architect/SQL Server Data Warehouse Standards.docx` (local-only, gitignored)
 - ADR-003 — Bob Standards Compliance Audit (2026-05-04, status Resolved — superseded for casing only)
 - ADR-005 — Enterprise Promote Pathway (v2 update concurrent with this ADR)
 - Memory: `project_workspace_topology.md` (2 workspaces, not 3)

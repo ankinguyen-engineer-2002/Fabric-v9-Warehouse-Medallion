@@ -12,8 +12,8 @@ Verified local evidence:
 
 - `01_Architect_v9_April/01_sc_forecast/README.md` documents four temporary `_edw` objects and marks two sources as `Ready`, two as `Not Ready`.
 - `01_Architect_v9_April/01_sc_forecast/docs/operations/edw_source_swap.md` documents the EDW source swap and rollback path.
-- `02_Architect_v10_May/detail_clone_v9_forecast/20260501_093155/sql/06_sp_registry.csv` confirms the live v9 registry still points four objects to `_edw`.
-- `02_Architect_v10_May/detail_clone_v9_forecast/20260501_093155/pipeline_stored_procedures.csv` confirms `pl_sc_master` still starts with `bronze.usp_refresh_edw_tables`.
+- `Enterprise_SupplyChain_Dev_architect/detail_clone_v9_forecast/20260501_093155/sql/06_sp_registry.csv` confirms the live v9 registry still points four objects to `_edw`.
+- `Enterprise_SupplyChain_Dev_architect/detail_clone_v9_forecast/20260501_093155/pipeline_stored_procedures.csv` confirms `pl_sc_master` still starts with `bronze.usp_refresh_edw_tables`.
 
 Platform context:
 
@@ -166,10 +166,10 @@ Khi Bob team confirm data completeness cho từng bảng:
 
 Detailed implementation rules are maintained in:
 
-- `02_Architect_v10_May/30_runbook/15_v10_edw_supplement_exit_strategy.md`
-- `02_Architect_v10_May/20_proposals/12_v10_object_classification_mapping.md`
-- `02_Architect_v10_May/30_runbook/14_v10_step_by_step_implementation_runbook.md`
-- `02_Architect_v10_May/30_runbook/16_v10_readiness_scorecard_and_v9_cleanup.md`
+- `Enterprise_SupplyChain_Dev_architect/30_runbook/15_v10_edw_supplement_exit_strategy.md`
+- `Enterprise_SupplyChain_Dev_architect/20_proposals/12_v10_object_classification_mapping.md`
+- `Enterprise_SupplyChain_Dev_architect/30_runbook/14_v10_step_by_step_implementation_runbook.md`
+- `Enterprise_SupplyChain_Dev_architect/30_runbook/16_v10_readiness_scorecard_and_v9_cleanup.md`
 
 ## References
 

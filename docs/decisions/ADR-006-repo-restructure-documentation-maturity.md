@@ -32,12 +32,12 @@ Ap 4 nhom thay doi de Truc B tu ~60% len ~85% (Senior level cho documentation re
 
 ### 1. Folder taxonomy phan tang (thay vi flat 16 numbered docs)
 
-Hien trang: 16 file `01_..._md` den `16_..._md` flat trong `02_Architect_v10_May/`.
+Hien trang: 16 file `01_..._md` den `16_..._md` flat trong `Enterprise_SupplyChain_Dev_architect/`.
 
 Target:
 
 ```text
-02_Architect_v10_May/
+Enterprise_SupplyChain_Dev_architect/
 |-- 00_overview/
 |   |-- 01_super_plan_medallion_refactor.md
 |   |-- 02_architecture_blueprint_mermaid.md
@@ -100,14 +100,14 @@ Output van commit (Aric muon luu evidence trail). Khong gitignore.
 Them:
 
 ```text
-02_Architect_v10_May/.vfscache/
+Enterprise_SupplyChain_Dev_architect/.vfscache/
 ```
 
 (`.vfsmeta/` va `.stubs/` da co roi.)
 
 ### 4. Navigation index
 
-Tao moi `02_Architect_v10_May/INDEX.md` — single entry point liet ke 16 docs
+Tao moi `Enterprise_SupplyChain_Dev_architect/INDEX.md` — single entry point liet ke 16 docs
 theo group + 1-line abstract moi doc. Do phai doc README 38KB.
 
 ### 5. Repo naming honesty (DEFERRED)
@@ -135,8 +135,8 @@ Negative / Risks:
   grep `](.*\.md)` va `](mermaid/.*)` sau restructure, fix tat ca.
 - Mermaid file duong dan trong `02_architecture_blueprint_mermaid.md` reference
   `mermaid/*.mmd` → doi thanh `../diagrams/*.mmd` sau khi rename folder.
-- ADR-001..005 hien tai reference `02_Architect_v10_May/XX_*.md` → can update
-  paths thanh `02_Architect_v10_May/<group>/XX_*.md`.
+- ADR-001..005 hien tai reference `Enterprise_SupplyChain_Dev_architect/XX_*.md` → can update
+  paths thanh `Enterprise_SupplyChain_Dev_architect/<group>/XX_*.md`.
 
 ## Implementation Plan
 
@@ -164,7 +164,7 @@ session vs Path A 1-2 session. Path B co the lam sau khi unblock IT.
 
 Rejected. Giu so `01-16` de git history `git log --follow` van track duoc.
 
-### Flatten them — gop ADR vao `02_Architect_v10_May/`
+### Flatten them — gop ADR vao `Enterprise_SupplyChain_Dev_architect/`
 
 Rejected. ADR thuoc ve repo-level decisions, khong thuoc ve mot version cu
 the. Giu `docs/decisions/` o root dung convention.
