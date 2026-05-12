@@ -27,16 +27,27 @@ Của 31 EDW sources cần cho 30 KPIs inventory_health, **24 đã có trên Ent
 
 ---
 
-## Prereq — connect to EDW
+## Prereq — EDW + Lakehouse endpoints (CONFIRMED via existing forecast dataflows)
 
-Dataflow Gen2 cần kết nối EDW (legacy SQL Server). Theo memory `reference_fabric_connections.md`:
+Verified 2026-05-12 by inspecting `df_brz_SalesHistory_AFI_InvoiceDetail` definition (commit `f2b8248f` artifacts trong `_dataflow_templates/`):
 
-- **Server (TBD)** — gating: lookup từ existing dataflow `df_brz_SalesHistory_AFI_InvoiceDetail` trong workspace để clone connection string
-- **Database (TBD)** — likely `ASHLEY_EDW_DEV` hoặc `ASHLEY_EDW` (per ADRs nhắc tới)
-- **Auth** — Service Principal (cùng SPN dùng bởi pipelines hiện tại) hoặc Entra user delegate
-- **Privacy level** — Organizational (Lakehouse target ở cùng tenant)
+| Endpoint | Value |
+|----------|-------|
+| **EDW Server** | `ashley-edw.database.windows.net` |
+| **EDW Database** | `ASHLEY_EDW` |
+| **EDW Connection ID** | `{"ClusterId":"e6436dba-643f-44c3-ad6f-51a8cbc45b81","DatasourceId":"179c470b-1f8c-4a73-82b6-5206a4a5a5cc"}` (reuse) |
+| **Lakehouse target** | `SupplyChain_Lakehouse` (ID `62a3081e-4093-4f46-856c-f50aa58732fa`) |
+| **Lakehouse Connection ID** | `{"ClusterId":"e6436dba-643f-44c3-ad6f-51a8cbc45b81","DatasourceId":"1a64c7b8-2c7a-445a-bd7f-ca0fc0b98e9b"}` (reuse) |
+| **Workspace ID** | `c8d9fc83-18b6-4e1d-8264-0b49eed36fe0` |
+| **Query pattern** | `Sql.Database(...) + Value.NativeQuery(...)` SQL passthrough |
+| **Destination pattern** | `Lakehouse.Contents([CreateNavigationProperties = false, EnableFolding = false, HierarchicalNavigation = null])` |
+| **Staging** | `[Kind = "FastCopy"]` |
+| **Schedule pattern** | Daily 05:00 SE Asia Standard Time (existing forecast dataflows) |
+| **Table naming convention** | Snake_case + prefix `brz_` (vd `brz_saleshistory_afi__invoicedetail_ver2`) — but `inventory_health` will use PascalCase `dbo.<TableName>` per Aric design |
 
-**Action**: anh open Fabric workspace `Enterprise SupplyChain-Dev` → Dataflows → mở 1 dataflow existing (vd `df_brz_SalesHistory_AFI_InvoiceDetail`) → copy connection string + auth profile để reuse.
+**Auth reuse**: connectionId của forecast dataflows đã work, không cần setup mới. Khi tạo dataflow inventory_health, chọn "Existing connection" → pick `ashley-edw.database.windows.net;ASHLEY_EDW`.
+
+**Reference templates**: full M code + metadata của `df_brz_SalesHistory_AFI_InvoiceDetail` saved tại `_dataflow_templates/` (mashup.pq, queryMetadata.json, .schedules, .platform). Copy and adapt cho 5 dataflows inventory_health.
 
 ---
 
@@ -48,7 +59,7 @@ Dataflow Gen2 cần kết nối EDW (legacy SQL Server). Theo memory `reference_
 
 ```m
 let
-    Source = Sql.Database("<EDW_SERVER>", "<EDW_DATABASE>",
+    Source = Sql.Database("ashley-edw.database.windows.net", "ASHLEY_EDW",
         [Query="
             SELECT *
             FROM Wholesale_ProductSourcing_AFI.PoDetail
@@ -77,7 +88,7 @@ FROM Wholesale_ProductSourcing_AFI.PoDetail
 
 ```m
 let
-    Source = Sql.Database("<EDW_SERVER>", "<EDW_DATABASE>",
+    Source = Sql.Database("ashley-edw.database.windows.net", "ASHLEY_EDW",
         [Query="
             SELECT *
             FROM Wholesale_ProductSourcing_AFI.PoMaster
@@ -105,7 +116,7 @@ Priority dataflow = **P0** (lấy ưu tiên cao nhất giữa 2 entries) — hol
 
 ```m
 let
-    Source = Sql.Database("<EDW_SERVER>", "<EDW_DATABASE>",
+    Source = Sql.Database("ashley-edw.database.windows.net", "ASHLEY_EDW",
         [Query="
             SELECT
                 ITNBR,        -- Item number (PK)
@@ -133,7 +144,7 @@ in
 
 ```m
 let
-    Source = Sql.Database("<EDW_SERVER>", "<EDW_DATABASE>",
+    Source = Sql.Database("ashley-edw.database.windows.net", "ASHLEY_EDW",
         [Query="
             SELECT
                 ITNBR, BLDIV, WHSEC,  -- Composite key (Item × Division × Warehouse)
@@ -161,7 +172,7 @@ in
 
 ```m
 let
-    Source = Sql.Database("<EDW_SERVER>", "<EDW_DATABASE>",
+    Source = Sql.Database("ashley-edw.database.windows.net", "ASHLEY_EDW",
         [Query="
             SELECT *
             FROM DemandFulfilmentCommonContain_Logility.ItemStatus
@@ -237,11 +248,11 @@ Per source:
 
 | # | Item | Owner | Status |
 |---|------|-------|--------|
-| 1 | Confirm EDW server + database name | Cherry / Aric | Pending |
-| 2 | Confirm `PoMaster` upstream tên thực tế | Cherry | Pending |
-| 3 | Confirm Logility schema exists + tên | Robert | Pending P2 |
-| 4 | Verify ITBEXT + ITEMBL EDW có data (không phải dead toàn upstream) | Aric (test query) | Pending |
-| 5 | Setup auth — reuse SPN từ existing dataflow | Aric | Pending |
+| 1 | ~~Confirm EDW server + database name~~ | — | ✅ Resolved 2026-05-12: `ashley-edw.database.windows.net` / `ASHLEY_EDW` (extracted from `df_brz_*` definitions) |
+| 2 | Confirm `PoMaster` upstream tên thực tế (POMAST / PoHeader / PurchaseOrderMaster) | Cherry | Pending |
+| 3 | Confirm Logility schema exists + tên (`DemandFulfilmentCommonContain_Logility` vs `Logility_Stage`) | Robert | Pending P2 |
+| 4 | Verify ITBEXT (CRHLD/DLHLD/TOHLD/ATPQT) + ITEMBL.PHYOH có data trên EDW (không dead toàn upstream) | Aric (test query) | Pending — first dataflow run sẽ confirm |
+| 5 | ~~Setup auth — reuse SPN từ existing dataflow~~ | — | ✅ Resolved 2026-05-12: reuse `ashley-edw.database.windows.net;ASHLEY_EDW` connectionId từ existing dataflows |
 
 ---
 
