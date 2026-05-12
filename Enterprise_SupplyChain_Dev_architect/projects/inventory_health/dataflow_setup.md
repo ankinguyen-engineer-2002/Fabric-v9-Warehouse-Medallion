@@ -6,17 +6,24 @@
 
 Của 31 EDW sources cần cho 30 KPIs inventory_health, **24 đã có trên Enterprise_Lakehouse** (13 Mapped + 11 Renamed) → dùng shortcut trực tiếp.
 
-**7 sources cần Dataflow Gen2** kéo từ EDW lên `SupplyChain_Lakehouse.dbo.*`:
+**6 bảng/cột cần Dataflow Gen2** kéo từ EDW lên `SupplyChain_Lakehouse.dbo.*`:
 
-| # | Priority | Source EDW | Target Lakehouse | Reason | KPIs ảnh hưởng |
-|---|----------|-----------|------------------|--------|----------------|
-| 1 | **P0** | `Wholesale_ProductSourcing_AFI.PoDetail` | `dbo.PoDetail` | Schema có 53 cols nhưng 0 rows (dead) | #2, #3, #4, #15, #17 |
-| 2 | **P0** | `Wholesale_ProductSourcing_AFI.PoMaster` | `dbo.PoMaster` | Không có trên lake — confirm tên upstream | #2, #3, #17 |
-| 3 | **P1** | `ItemMaster_AFI.ITBEXT` (cols CRHLD/DLHLD/TOHLD/ATPQT) | `dbo.ITBEXT_Reloaded` | Cột tồn tại nhưng = 0 toàn 3.39M rows | #20e, #27, #23b |
-| 4 | **P1** | `ItemMaster_AFI.ITEMBL` (col PHYOH) | `dbo.ITEMBL_PHYOH_Reloaded` | Cột PHYOH = 0 toàn 3.40M rows | #1 fallback |
-| 5 | **P2** | `DemandFulfilmentCommonContain_Logility.ItemStatus` | `dbo.Logility_ItemStatus` | Logility raw chưa load (conditional — chờ Robert chốt cần past tracking) | #17, #18, #20a past |
-| 6 | _Optional_ | (Reload ITBEXT + ITEMBL nếu EDW không có data → workaround đã dùng MOMAST/ATPSUM) | — | — | — |
-| 7 | _Phase 2_ | `SS vs Capacity Projections.xlsx` (Excel file) | — | Out of scope phase 1 | #14, #29 |
+| # | Source EDW | Lý do cần kéo | Priority | KPIs ảnh hưởng |
+|---|-----------|--------------|----------|----------------|
+| 1 | `Wholesale_ProductSourcing_AFI.PoDetail` | Schema có trên Enterprise_Lakehouse nhưng **0 rows** trong dev — cần kéo full data | **P0** | #2, #3, #4, #15, #17 |
+| 2 | `Wholesale_ProductSourcing_AFI.PoMaster` | **Không có trên lake** — cần kéo mới (confirm tên upstream: POMAST / PoHeader / PurchaseOrderMaster) | **P0** | #2, #3, #17 |
+| 3 | `ItemMaster_AFI.ITBEXT` (cột CRHLD, DLHLD, TOHLD) | 3 cột hold = 0 toàn 3.39M rows — kéo lại với mapping cột đầy đủ nếu EDW có data thật | **P0** | #20e, #27 |
+| 4 | `ItemMaster_AFI.ITEMBL` (cột PHYOH) | Cột = 0 toàn 3.40M rows — kéo lại nếu EDW có data (workaround MOHTQ đã có) | **P1** | #1 fallback |
+| 5 | `ItemMaster_AFI.ITBEXT` (cột ATPQT) | Cột = 0 toàn 3.39M rows — kéo lại nếu EDW có data (workaround ATPSUM.APAT01 đã có) | **P1** | #23b fallback |
+| 6 | `DemandFulfilmentCommonContain_Logility.ItemStatus` | Logility raw chưa load — kéo nếu Robert chốt cần past tracking cho Inactive/SLOB/Lifecycle | **P2 conditional** | #17, #18, #20a past |
+
+**Tổng: 3 P0 (cấp bách) + 2 P1 (có workaround) + 1 P2 (conditional)** = **6 logical entries · 5 physical dataflows** (ITBEXT entries #3 + #5 gộp vào 1 dataflow vì cùng table)
+
+**Trong đó**:
+- **2 bảng load full mới hoặc reload toàn bảng**: PoDetail, PoMaster (+ Logility.ItemStatus nếu cần)
+- **3 cột chết** trong 2 bảng đã có (ITEMBL, ITBEXT): cần xác nhận với DE US — nếu EDW có data thật thì kéo lại, nếu EDW cũng = 0 thì là cột deprecate, không cần kéo
+
+**Out of scope** (không thuộc dataflow này): file Excel `SS vs Capacity Projections.xlsx` của WH team — phase 2 mới xử lý.
 
 ---
 
@@ -90,9 +97,11 @@ in
 
 ---
 
-### P1-3 · `dbo.ITBEXT_Reloaded` (Item hold flags — CRHLD/DLHLD/TOHLD + ATPQT)
+### P0-3 + P1-5 · `dbo.ITBEXT_Reloaded` (Hold flags P0 + ATPQT P1 — gộp 1 dataflow)
 
-Phương án: reload toàn bảng ITBEXT với mapping đầy đủ. Nếu EDW có data nhưng cột dead = 0 trên lake hiện tại, dataflow này thay thế.
+Phương án: reload toàn bảng ITBEXT với mapping đầy đủ. **1 dataflow physical** phục vụ 2 logical entries (#3 P0 cho hold cols, #5 P1 cho ATPQT) vì cùng table.
+
+Priority dataflow = **P0** (lấy ưu tiên cao nhất giữa 2 entries) — hold cols không có workaround thay thế phù hợp.
 
 ```m
 let
@@ -120,7 +129,7 @@ in
 
 ---
 
-### P1-4 · `dbo.ITEMBL_PHYOH_Reloaded` (Physical on-hand quantity)
+### P1-4 · `dbo.ITEMBL_PHYOH_Reloaded` (Physical on-hand quantity — workaround MOHTQ đã có)
 
 ```m
 let
@@ -146,7 +155,7 @@ in
 
 ---
 
-### P2-5 · `dbo.Logility_ItemStatus` (past lifecycle tracking)
+### P2-6 · `dbo.Logility_ItemStatus` (past lifecycle tracking — conditional)
 
 ⚠️ **Conditional** — chỉ load nếu Robert (Demand Planning lead) confirm cần past tracking. Hiện tại workaround dùng `DimItemMaster.AFIItemStatus` (current state only).
 

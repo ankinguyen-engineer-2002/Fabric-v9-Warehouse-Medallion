@@ -6,7 +6,7 @@
 
 Logical Bronze = OneLake shortcuts in `Enterprise_Lakehouse` aggregator pointing to `EnterpriseData-Dev` (hub) source data. Zero storage cost, no duplication.
 
-Exception: **7 tables** need Dataflow Gen2 pull from EDW into `SupplyChain_Lakehouse.dbo.*` because hub source is missing or dead-column. Full setup guide: [dataflow_setup.md](dataflow_setup.md).
+Exception: **6 logical entries (5 physical dataflows)** pull EDW data into `SupplyChain_Lakehouse.dbo.*` because hub source is missing or dead-column. Full setup guide: [dataflow_setup.md](dataflow_setup.md).
 
 ## Source mapping summary (from `InventoryHealth_Source_KPI_Mapping.xlsx`)
 
@@ -14,10 +14,10 @@ Exception: **7 tables** need Dataflow Gen2 pull from EDW into `SupplyChain_Lakeh
 |--------|------:|--------|
 | Mapped (trùng tên xi) | 13 | Direct shortcut from `Enterprise_Lakehouse` |
 | Renamed (cột y chang) | 11 | Map alias in Silver view |
-| Schema có / data thiếu | 4 | **Dataflow reload** to `SupplyChain_Lakehouse.dbo.*` (P1) |
-| Chưa có | 2 | **Dataflow load mới** to `SupplyChain_Lakehouse.dbo.*` (P0) |
-| Out of scope | 1 | Phase 2 (Excel file) |
-| **Total** | **31** | **7 dataflows needed** |
+| Schema có / data thiếu | 4 | **Dataflow reload** to `SupplyChain_Lakehouse.dbo.*` |
+| Chưa có | 2 | **Dataflow load mới** to `SupplyChain_Lakehouse.dbo.*` |
+| Out of scope | 1 | Phase 2 (Excel `SS vs Capacity Projections.xlsx`) |
+| **Total** | **31** | **6 logical / 5 physical dataflows** (3 P0 + 2 P1 + 1 P2) |
 
 ## Candidate sources (TBD — verify with Bob/Cherry)
 
