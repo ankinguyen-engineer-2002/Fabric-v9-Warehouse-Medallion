@@ -52,6 +52,27 @@ For each của 4 dataflow mới (#2-5):
 
 ETA: ~30s per dataflow = ~2 phút total cho 4 dataflows.
 
+## Bug fix iteration (2026-05-12, after Aric's first test)
+
+Aric tested 4 dataflows → 3 lỗi `Invalid object name`:
+- `ItemMaster_AFI.ITBEXT` → not found on ASHLEY_EDW
+- `ItemMaster_AFI.ITEMBL` → not found on ASHLEY_EDW
+- `DemandFulfilmentCommonContain_Logility.ItemStatus` → not found
+
+**Root cause discovered**: BRD spreadsheet's `ItemMaster_AFI.*` paths refer to **Lakehouse mirror schema**, not raw EDW SQL Server schemas. ASHLEY_EDW has different actual schema names (raw EDW). The Lakehouse layer (mirrored via Databricks UC sync per memory) presents the cleaner `ItemMaster_AFI.*` namespace.
+
+**Fix applied** (via REST API `updateDefinition`):
+
+| Dataflow | Old source | New source | Status |
+|----------|-----------|-----------|--------|
+| `df_brz_ITBEXT_Reloaded` | `ashley-edw / ASHLEY_EDW.ItemMaster_AFI.ITBEXT` | `Lakehouse SQL endpoint / Enterprise_Lakehouse.ItemMaster_AFI.ITBEXT` | ✅ Updated · Aric Save+Refresh |
+| `df_brz_ITEMBL_PHYOH_Reloaded` | `ashley-edw / ASHLEY_EDW.ItemMaster_AFI.ITEMBL` | `Lakehouse SQL endpoint / Enterprise_Lakehouse.ItemMaster_AFI.ITEMBL` | ✅ Updated · Aric Save+Refresh |
+| `df_brz_Logility_ItemStatus` | `ashley-edw / Logility.ItemStatus` | ⚠️ Not on Lakehouse (P2 conditional, chờ Robert) | Keep as placeholder |
+
+**Important consequence**: ITBEXT + ITEMBL bây giờ kéo từ Lakehouse mirror (live data từ EDW via Databricks sync). Nếu Lakehouse cũng có 0 ở cột PHYOH/CRHLD/DLHLD/TOHLD/ATPQT thì workaround đã document (MOHTQ, ATPSUM, ExtendedOrder, Item_ENV) vẫn cần dùng — dataflow chỉ là confirm/reload chứ không fix dead columns.
+
+**Utility cleanup**: `df_explore_edw_schemas` (discovery dataflow tạo để find correct schemas) — deleted sau khi xác nhận.
+
 ## Why API refresh không work (Microsoft limitation)
 
 Workaround paths trong tương lai (theo Microsoft docs):
