@@ -76,7 +76,8 @@ Enterprise_SupplyChain_Dev_architect/.work-folder-info
 CLAUDE.md
 lineage_explorer/.streamlit/secrets.toml
 
-# Fabric stubs
-Enterprise_SupplyChain_Dev_architect/.stubs/
-Enterprise_SupplyChain_Dev_architect/.vfsmeta/
-Enterprise_SupplyChain_Dev_architect/.vfscache/
+# Fabric stubs (VS Code Fabric extension cache — appears in any synced workspace folder)
+**/.stubs/
+**/.vfsmeta/
+**/.vfscache/
+**/.work-folder-info

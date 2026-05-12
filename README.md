@@ -18,21 +18,11 @@
 
 ## What this repo is
 
-A **2-workspace enterprise data architecture** for Ashley Furniture's Supply Chain value stream on Microsoft Fabric. Implements the **hub-and-spoke pattern** Bob Horton's enterprise team established:
+A **2-workspace enterprise data architecture** for Ashley Furniture's Supply Chain value stream on Microsoft Fabric. Implements the **hub-and-spoke pattern** Bob Horton's enterprise team established — hub `EnterpriseData-Dev` (US) hosts Bronze + shared Silver + ETL control plane; value stream `Enterprise SupplyChain-Dev` (VN) hosts SC-specific Silver + Gold + semantic + reports, with cross-workspace OneLake shortcuts and (pending) cross-DB writebacks.
 
-```
-🇺🇸 EnterpriseData-Dev (HUB)            🇻🇳 Enterprise SupplyChain-Dev (VALUE STREAM)
-   ┌──────────────────────────┐            ┌──────────────────────────┐
-   │ Bronze raw + Silver      │            │ Bronze view (shortcut    │
-   │ shared cross-team:       │ shortcut │ from hub) + Silver       │
-   │ • SalesHistory_AFI       │ ───────▶ │ SC-specific + Gold +     │
-   │ • MasterData_DW          │            │ semantic + reports       │
-   │ • SupplyChain_Warehouse  │ ◀───────  │                          │
-   │ (NEW — VN team builds)   │ cross-DB │                          │
-   │ • ETL_Framework          │  write   │                          │
-   └──────────────────────────┘            └──────────────────────────┘
-   Bob/Rakesh team owns                    Aric + Cherry (VN SC) team owns
-```
+<p align="center">
+  <img src="Enterprise_Data_architect/diagrams/cross_workspace_architecture.png" alt="Cross-workspace architecture — hub + value-stream" width="780"/>
+</p>
 
 This repo documents the **VN team's contribution** to that architecture.
 
@@ -190,17 +180,23 @@ Open questions: [`Enterprise_SupplyChain_Dev_architect/projects/forecast/_open_q
 
 ## Live infrastructure snapshot — VN team
 
+> Numbers re-queried from live Fabric workspace 2026-05-12 via pyodbc (token = `az account get-access-token`). Source script: `/tmp/v10_count_objects.py` pattern in `Enterprise_SupplyChain_Dev_architect/tools/`.
+
 | Item | Value |
 |------|-------|
 | Workspace | `Enterprise SupplyChain-Dev` (`c8d9fc83-18b6-4e1d-8264-0b49eed36fe0`) |
-| Processing WH | `SupplyChain_Processing_Warehouse` (`c0262cef-...`) |
-| Gold WH | `SupplyChain_Gold_Warehouse` (`98e2a911-...`) |
-| Total objects | 103 (45 tables + 30 views + 18 SPs + 3 functions + 7 pipelines) |
-| Total rows | ~423M (337M Processing + 84M Gold) |
-| Pipeline | `pl_sc_master` 30m34s end-to-end (verified 2026-05-10) |
-| Semantic model | `sc_forecast_control_tower` (`f06a2361-...`) — Direct Lake, 35 DAX measures |
-| Lineage edges | 60 (auto-built) |
-| DQ rules | 54 |
+| Processing WH | `SupplyChain_Processing_Warehouse` (`c0262cef-...`) — 93 objects: 45 tables · 27 views · 18 SPs · 3 functions |
+| Gold WH | `SupplyChain_Gold_Warehouse` (`98e2a911-...`) — 14 objects: 7 tables (2 Fact + 5 Dim) · 7 views |
+| Total SQL objects | **107** (across 2 warehouses) + 7 v10 pipelines |
+| Total rows | **423,007,384** (~339M Processing + ~84M Gold) |
+| Last full successful run | `pl_sc_master` 2026-05-04 12:50 UTC, 36m21s (2026-05-10 09:19 run ended `partial`) |
+| Semantic model | `sc_forecast_control_tower` (`f06a2361-...`) — Direct Lake, ~35 DAX measures |
+| Registry assets (active) | 33 (4 LogicalBronze + 4 Staging + 10 ReferenceMaster + 8 DomainSilver + 7 Gold) |
+| Lineage edges | 60 (53 direct + 7 semantic) |
+| DQ rules | **30 active** (17 completeness + 13 row_count) / 54 total — 24 freshness+uniqueness deactivated |
+| Source contracts | 674 (52 source feeds) |
+| Reconciliation rules | 6 (scaffolded) |
+| TableDictionary rows | 33 (Bob-compatible 69-col schema) |
 
 ---
 
@@ -211,4 +207,4 @@ Open questions: [`Enterprise_SupplyChain_Dev_architect/projects/forecast/_open_q
 - **All ADRs**: [`docs/decisions/`](docs/decisions/)
 - **Live lineage UI**: https://sc-lineage.streamlit.app/
 
-_Last updated: 2026-05-10 (post Bob alignment + cross-WS restructure)_
+_Last verified: 2026-05-12 (live Fabric re-query — object counts, row counts, DQ rule status)_

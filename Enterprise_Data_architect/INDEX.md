@@ -30,14 +30,15 @@
 - [Storage inventory per WH](projects/storage_inventory/) — Wholesale, Retail, MasterData, Distribution, Quality, Centralized
 - [Orchestration patterns](projects/orchestration/) — pipeline DAG, ForEach metadata, ADF integration
 
-## diagrams/ — Bob hub architecture
-- (TBD — high-level Bob hub Mermaid)
+## diagrams/ — Cross-workspace architecture
+- [`cross_workspace_flow.md`](diagrams/cross_workspace_flow.md) — 4 Mermaid diagrams (end-to-end architecture, daily orchestration sequence, decision tree, ownership matrix)
+- [`cross_workspace_architecture.png`](diagrams/cross_workspace_architecture.png) — rendered hub + value-stream PNG used as hero image in repo root README
 
 ## artifacts/ — Raw scan derivatives
-- (TBD — extracted CSVs, JSON dumps if needed)
+- (Empty — raw scan source lives at `_external_refs/enterprisedata-dev-docs/`, gitignored. Synthesized outputs land in `projects/etl_framework/SYNTHESIS.md`.)
 
 ## tools/ — Analysis scripts
-- (TBD)
+- (Empty — scan scripts live in `_external_refs/enterprisedata-dev-docs/scripts/`. VN-specific analysis lives in sister folder `../Enterprise_SupplyChain_Dev_architect/tools/`.)
 
 ---
 

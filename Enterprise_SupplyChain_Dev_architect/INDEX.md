@@ -47,7 +47,8 @@ Single entry point cho 16 docs theo 4 nhom chuc nang. Restructure per ADR-006.
 
 ## diagrams/ — Mermaid (rename tu mermaid/)
 
-22 file `.mmd` + `render_check/` SVG outputs. Xem [`diagrams/README.md`](diagrams/README.md).
+24 file `.mmd` (10 super_plan + 5 detail 20-24 + 5 template 30-34 + 2 presentation + 1 README + 1 cross_workspace_flow) +
+`render_check/` 23 SVG + 2 PNG. Xem [`diagrams/README.md`](diagrams/README.md).
 
 ## tools/ — Analysis scripts
 

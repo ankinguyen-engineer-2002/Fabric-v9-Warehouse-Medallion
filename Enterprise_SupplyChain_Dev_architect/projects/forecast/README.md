@@ -1,6 +1,6 @@
 # forecast — Forecast Accuracy Mart
 
-> **Status:** LIVE · **Gold schema:** `ForecastAccuracy_DW` · **Last scan:** 2026-05-10 (post Bob alignment, ADR-008)
+> **Status:** LIVE · **Gold schema:** `ForecastAccuracy_DW` · **Last verified:** 2026-05-12 (live Fabric re-query)
 
 ## What
 
@@ -14,39 +14,41 @@ End-to-end Forecast Accuracy analytics mart on Microsoft Fabric. Combines actual
 | Processing WH | `c0262cef-b8a7-495f-bccc-53b098c7948c` |
 | Gold WH | `98e2a911-5af9-442e-9cc8-5d8dadb8b762` |
 | SQL Endpoint | `7woj2wroypauvkpn72b56t46ju-qp6ntsfwdaou5atebne65u3p4a.datawarehouse.fabric.microsoft.com` |
-| Schemas | 6 (Staging_Wrk, ReferenceMaster_Enh, SalesHistory_Enh, ForecastHistory_Enh, OpenOrderHistory_Enh, Meta) |
-| Total tables | 52 (45 Processing + 7 Gold) |
-| Total views | 30 (23 Processing + 7 Gold + 4 Meta utility views — formerly 35; vw_TableDictionary became real `Meta.TableDictionary` table) |
-| Total SPs / functions | 21 (17 SPs + 3 functions in Meta + 1 SP in Staging_Wrk) |
-| Registry assets | 33 |
-| Lineage edges | 60 |
-| DQ rules | 54 |
-| DAG waves | 3 (Wave 0 / Wave 1 / Wave 2) |
-| Pipelines | 7 |
+| Schemas | 6 in Processing (Staging_Wrk, ReferenceMaster_Enh, SalesHistory_Enh, ForecastHistory_Enh, OpenOrderHistory_Enh, Meta) + 1 in Gold (ForecastAccuracy_DW) |
+| Total tables | **52** (45 Processing: 22 data + 23 Meta; 7 Gold: 2 Fact + 5 Dim) |
+| Total views | **34** (27 Processing: 23 data + 4 Meta; 7 Gold) |
+| Total SPs / functions | **21** (18 SPs: 17 Meta + 1 Staging_Wrk; 3 Meta functions) |
+| Registry assets (active) | **33** (4 LogicalBronze + 4 Staging + 10 ReferenceMaster + 8 DomainSilver + 7 Gold) |
+| Lineage edges | **60** (53 direct + 7 semantic) |
+| DQ rules | **30 active** (17 completeness + 13 row_count) / 54 total (12 freshness + 12 uniqueness deactivated) |
+| Source contracts | 674 across 52 source feeds |
+| Reconciliation rules | 6 (scaffolded) |
+| DAG waves | 3 (Wave 0 / Wave 1 / Wave 2 — 8 entries in SilverDagWaveRuntime) |
+| Pipelines | 7 v10 pipelines (pl_sc_master, pl_sc_mart, pl_sc_staging, pl_sc_silver, pl_sc_silver_wave, pl_sc_gold, pl_dq_check) |
 | Semantic model | `sc_forecast_control_tower` (`f06a2361-15fd-4f91-9d37-941fefe62aaf`) |
-| Naming convention | Bob-aligned per ADR-008: `_Enh`/`_Wrk` (lowercase casing), `v_*` view prefix, `_DW` ALL CAPS for Gold |
-| Control plane (Bob-pattern) | `Meta.TableDictionary` (table, 33 rows, ~60% cell fill) + `Meta.TableDictionary_UpdateLog` (event log) + `Meta.AuditLog` (audit trail) |
+| Naming convention | Bob-aligned per ADR-008: `_Enh`/`_Wrk` (PascalCase casing), `v_*` view prefix, `_DW` ALL CAPS for Gold |
+| Control plane (Bob-pattern) | `Meta.TableDictionary` (table, 33 rows, 69 cols ≈ 60% cell fill) + `Meta.TableDictionary_UpdateLog` (event log) + `Meta.AuditLog` (10-col superset of Bob's 4-col) |
 
-## Live row counts
+## Live row counts (2026-05-12)
 
-### Processing WH (Silver)
+### Processing WH (Silver) — 339,034,150 rows
 
-| Schema | Total rows |
-|--------|-----------:|
-| `Staging_Wrk` | 156,120,911 |
-| `ReferenceMaster_Enh` | 637,360 |
-| `SalesHistory_Enh` | 136,442,343 |
-| `ForecastHistory_Enh` | 44,454,578 |
-| `OpenOrderHistory_Enh` | 269,015 |
+| Schema | Rows | Tables |
+|--------|-----:|-------:|
+| `Staging_Wrk` | 156,641,390 | 4 |
+| `ReferenceMaster_Enh` | 637,360 | 10 |
+| `SalesHistory_Enh` | 137,045,519 | 4 |
+| `ForecastHistory_Enh` | 44,460,412 | 2 |
+| `OpenOrderHistory_Enh` | 249,469 | 2 |
 
-### Gold WH (`ForecastAccuracy_DW`)
+### Gold WH (`ForecastAccuracy_DW`) — 83,973,234 rows
 
-| Type | Rows |
-|------|-----:|
-| Fact (2 tables) | 83,506,809 |
-| Dim (5 tables) | 437,536 |
+| Type | Rows | Tables |
+|------|-----:|-------:|
+| Fact (FactForecastActual 47.1M + FactForecastKpi 36.4M) | 83,536,698 | 2 |
+| Dim (DimCalendar 21.5K · DimCustomerGrouping 35.6K · DimProduct 379K · DimWarehouse 55 · DimForecastHorizon 8) | 436,536 | 5 |
 
-**Grand total:** ~421M rows across both warehouses.
+**Grand total: 423,007,384 rows** across both warehouses.
 
 ## Quick links
 
@@ -61,16 +63,18 @@ End-to-end Forecast Accuracy analytics mart on Microsoft Fabric. Combines actual
 | Lineage | [60_lineage.md](60_lineage.md) |
 | ETL DDL | [etl/](etl/) |
 
-## Known operational state
+## Known operational state (live 2026-05-12)
 
 | Item | Status |
 |------|--------|
 | Pipeline schedule | Manual trigger (daily 2AM target — pending IT enable) |
-| Last full successful run | 2026-05-04 (Bob Standards rebuild verification); 2026-05-10 Bob alignment refactor (schema casing + view prefix + TableDictionary table) |
-| Full runtime | ~31 minutes |
-| Alerting | BLOCKED — Mail.Send / Teams permissions not granted |
-| CI/CD | BLOCKED — Azure DevOps access not granted |
+| Last full successful run | `pl_sc_master` 2026-05-04 12:50 UTC, **2181s (~36m)** |
+| Most recent run | 2026-05-10 09:19 UTC, **1801s (~30m), status = `partial`** (some assets failed — investigation needed) |
+| Pre-Bob-rebuild full pass | 2026-05-02 03:54→04:25 UTC, ~31m (memory baseline) |
+| Alerting | BLOCKED — Mail.Send / Teams permissions not granted (Q4 with Bob) |
+| CI/CD | BLOCKED — Azure DevOps access not granted (Q4) |
 | Schedule trigger auto-deploy | BLOCKED — IT permission required |
+| DQ rule deactivation | 24 rules (12 freshness + 12 uniqueness) currently inactive; needs review |
 
 ## Bob alignment (2026-05-10) — what changed
 
