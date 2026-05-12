@@ -250,11 +250,12 @@ def build_dag_data():
             tier = schema_tier[schema]
             return f"slv{slv_waves.get(tbl, 0)}" if tier == "slv" else tier
 
-        # Name-based fallback
+        # Name-based fallback (case-insensitive — handles both legacy _ENH/_WRK and Bob-aligned _Enh/_Wrk)
         if "Edw" in name: return "stg"
-        if schema.endswith("_ENH"): return f"slv{slv_waves.get(tbl, 0)}"
-        if schema.endswith("_WRK"): return "stg"
-        if schema.endswith("_DW"): return "gld"
+        schema_lower = schema.lower()
+        if schema_lower.endswith("_enh"): return f"slv{slv_waves.get(tbl, 0)}"
+        if schema_lower.endswith("_wrk"): return "stg"
+        if schema_lower.endswith("_dw"): return "gld"
         return "other"
 
     for row in rows:
@@ -362,7 +363,7 @@ with tab2:
 # ══ TAB 3: View Definitions ══
 with tab3:
     st.header("👁️ View Definitions")
-    st.caption("SQL source code of all ETL views (ReferenceMaster_ENH / Domain_ENH / ForecastAccuracy_DW)")
+    st.caption("SQL source code of all ETL views (ReferenceMaster_Enh / Domain_Enh / ForecastAccuracy_DW)")
     views = load_csv("views.csv")
     if views:
         schemas = sorted(set(v.get("schema", "") for v in views))

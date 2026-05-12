@@ -70,6 +70,7 @@ Enterprise_SupplyChain_Dev_architect/tools/__pycache__/
 # === Bob alignment — keep scripts/README/RESULTS, ignore run logs + backup snapshots ===
 Enterprise_SupplyChain_Dev_architect/artifacts/bob_alignment_*/run_logs/
 Enterprise_SupplyChain_Dev_architect/artifacts/bob_alignment_*/backup/
+Enterprise_SupplyChain_Dev_architect/artifacts/bob_alignment_*/*_fix_*/
 
 # === Work folder info ===
 Enterprise_SupplyChain_Dev_architect/.work-folder-info

@@ -15,7 +15,8 @@ SERVER = "7woj2wroypauvkpn72b56t46ju-qp6ntsfwdaou5atebne65u3p4a.datawarehouse.fa
 DB = "SupplyChain_Processing_Warehouse"
 
 OLD_SCHEMAS = {"Staging", "ReferenceMaster", "SalesHistory", "ForecastHistory", "OpenOrderHistory", "ForecastAccuracy"}
-NEW_SCHEMAS = {"Staging_WRK", "ReferenceMaster_ENH", "SalesHistory_ENH", "ForecastHistory_ENH", "OpenOrderHistory_ENH", "Meta"}
+# Bob-aligned PascalCase per ADR-008 (2026-05-10): _Enh / _Wrk (was _ENH / _WRK pre-rebuild)
+NEW_SCHEMAS = {"Staging_Wrk", "ReferenceMaster_Enh", "SalesHistory_Enh", "ForecastHistory_Enh", "OpenOrderHistory_Enh", "Meta"}
 
 
 def get_token_struct() -> bytes:
@@ -138,18 +139,18 @@ def check_schemas(cur):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CHECK 2 — Table scan (_ENH and _WRK schemas)
+# CHECK 2 — Table scan (_Enh and _Wrk schemas)
 # ─────────────────────────────────────────────────────────────────────────────
 def check_tables(cur):
     print("\n" + "=" * 70)
-    print("CHECK 2 — Table Scan (_ENH and _WRK schemas)")
+    print("CHECK 2 — Table Scan (_Enh and _Wrk schemas)")
     print("=" * 70)
 
     tables = fetchall(cur, """
         SELECT s.name AS schema_name, t.name AS table_name
         FROM sys.tables t
         JOIN sys.schemas s ON s.schema_id = t.schema_id
-        WHERE s.name LIKE '%_ENH' OR s.name LIKE '%_WRK'
+        WHERE LOWER(s.name) LIKE '%[_]enh' OR LOWER(s.name) LIKE '%[_]wrk'
         ORDER BY s.name, t.name
     """)
 
@@ -176,27 +177,27 @@ def check_tables(cur):
                 "col_count": f"{e}",
             })
 
-    print_table(results, f"Tables in _ENH/_WRK schemas ({len(results)} total)")
+    print_table(results, f"Tables in _Enh/_Wrk schemas ({len(results)} total)")
     snake_flagged = [r for r in results if r["has_snake_case"] == "True"]
     if snake_flagged:
         print(f"\n  [FLAG] Tables with snake_case columns: {[(r['schema'], r['table']) for r in snake_flagged]}")
     else:
-        print("\n  [OK] No snake_case columns detected in _ENH/_WRK tables.")
+        print("\n  [OK] No snake_case columns detected in _Enh/_Wrk tables.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# CHECK 3 — View validation (_ENH and _WRK schemas)
+# CHECK 3 — View validation (_Enh and _Wrk schemas)
 # ─────────────────────────────────────────────────────────────────────────────
 def check_views(cur):
     print("\n" + "=" * 70)
-    print("CHECK 3 — View Validation (_ENH and _WRK schemas)")
+    print("CHECK 3 — View Validation (_Enh and _Wrk schemas)")
     print("=" * 70)
 
     views = fetchall(cur, """
         SELECT s.name AS schema_name, v.name AS view_name
         FROM sys.views v
         JOIN sys.schemas s ON s.schema_id = v.schema_id
-        WHERE s.name LIKE '%_ENH' OR s.name LIKE '%_WRK'
+        WHERE LOWER(s.name) LIKE '%[_]enh' OR LOWER(s.name) LIKE '%[_]wrk'
         ORDER BY s.name, v.name
     """)
 
@@ -226,7 +227,7 @@ def check_views(cur):
                 "col_3": "",
             })
 
-    print_table(results, f"Views in _ENH/_WRK schemas ({len(results)} total)")
+    print_table(results, f"Views in _Enh/_Wrk schemas ({len(results)} total)")
     errors = [r for r in results if r["status"].startswith("ERROR")]
     if errors:
         print(f"\n  [FLAG] {len(errors)} view(s) with errors: {[r['view'] for r in errors]}")
@@ -418,13 +419,13 @@ def check_sp_functions(cur):
 
     # Verify usp_RefreshEdwTables
     target_sp = next(
-        (p for p in sps if p["schema_name"] == "Staging_WRK" and p["proc_name"] == "usp_RefreshEdwTables"),
+        (p for p in sps if p["schema_name"] == "Staging_Wrk" and p["proc_name"] == "usp_RefreshEdwTables"),
         None
     )
     if target_sp:
-        print("\n  [OK] Staging_WRK.usp_RefreshEdwTables exists.")
+        print("\n  [OK] Staging_Wrk.usp_RefreshEdwTables exists.")
     else:
-        print("\n  [FLAG] Staging_WRK.usp_RefreshEdwTables NOT FOUND.")
+        print("\n  [FLAG] Staging_Wrk.usp_RefreshEdwTables NOT FOUND.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
