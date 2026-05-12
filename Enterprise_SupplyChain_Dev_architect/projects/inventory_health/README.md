@@ -35,6 +35,7 @@ End-to-end Inventory Health analytics mart on Microsoft Fabric. Will combine on-
 | ETL DDL | [etl/](etl/) |
 | Open questions for Bob | [_open_questions_for_bob.md](_open_questions_for_bob.md) |
 | **Source × KPI mapping** | [InventoryHealth_Source_KPI_Mapping.xlsx](InventoryHealth_Source_KPI_Mapping.xlsx) |
+| **Dataflow Gen2 setup guide** | [dataflow_setup.md](dataflow_setup.md) |
 
 ## Source × KPI mapping (input artifact)
 
