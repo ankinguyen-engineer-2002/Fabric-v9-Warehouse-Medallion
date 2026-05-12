@@ -2,14 +2,15 @@
 
 > **Status:** Draft — to be folded into next email round once scoping clearer.
 
-## Q1 — Source data location
+## Q1 — Source data location *(scoped via internal mapping 2026-05-12)*
 
-Is current inventory data (on-hand snapshots, movements) already available in hub workspace `EnterpriseData-Dev`?
+**Partially resolved** — see `InventoryHealth_Source_KPI_Mapping.xlsx` sheet `EDW_vs_Lakehouse` (46 rows): source EDW tables already mapped to Lakehouse equivalents (`Mapped` / `Renamed` / `Missing` status).
 
-- `Source_Data.SupplyChain_Enh_1.InventorySnapshotDaily` — does this exist?
-- If not, can it be added to the planned `EnterpriseData-Dev.SupplyChain_Warehouse` (per Q3 from forecast email round)?
+Still pending Bob:
+- Confirm whether the Lakehouse sources are in `Source_Data.SupplyChain_Enh_1.*` shortcut form OR require EDW supplement (Staging_Wrk pattern same as forecast)
+- For `Missing` rows in the spreadsheet — does hub have them or do we add via shortcut/supplement?
 
-Tag: source-discovery · Blocker until answered.
+Tag: source-discovery · Partially scoped, still needs Bob confirmation per-row for `Missing` items.
 
 ## Q2 — Shared Dims promote pattern
 

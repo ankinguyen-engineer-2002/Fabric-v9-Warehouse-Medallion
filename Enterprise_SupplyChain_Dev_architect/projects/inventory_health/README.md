@@ -34,6 +34,25 @@ End-to-end Inventory Health analytics mart on Microsoft Fabric. Will combine on-
 | Lineage | [60_lineage.md](60_lineage.md) |
 | ETL DDL | [etl/](etl/) |
 | Open questions for Bob | [_open_questions_for_bob.md](_open_questions_for_bob.md) |
+| **Source × KPI mapping** | [InventoryHealth_Source_KPI_Mapping.xlsx](InventoryHealth_Source_KPI_Mapping.xlsx) |
+
+## Source × KPI mapping (input artifact)
+
+`InventoryHealth_Source_KPI_Mapping.xlsx` — pre-build analysis sheet, 5 tabs:
+
+| Sheet | Rows | Purpose |
+|-------|-----:|---------|
+| `README` | 17 | Mục đích + cách đọc file |
+| `EDW_vs_Lakehouse` | 46 | EDW source ↔ Lakehouse mapping (Mapped / Renamed / Missing status) |
+| `Source_to_KPI` | 25 | Mỗi source → list KPI nó phục vụ + vai trò (Dim trục dọc / Fact đa năng) |
+| `KPI_to_Source` | 35 | **35 KPIs** with source list per KPI (e.g., KPI #1 "On Hand Quantity" ← ITEMBL.MOHTQ + ITMRVA.cost + ...) |
+| `Source_Classification` | 15 | Phân loại source theo độ tái sử dụng, identify candidates to consolidate |
+
+**Use during build**:
+- Phase 1 scoping → reference `KPI_to_Source` để gen `Meta.AssetRegistry` rows
+- Phase 2 Bronze → reference `EDW_vs_Lakehouse` để confirm shortcut vs EDW supplement decision per source
+- Phase 3 Silver schema design → reference `Source_Classification` để identify which sources go where
+- Phase 5 pipeline registration → KPI count (35) drives Fact + Dim count in Gold
 
 ## Build phases (planned)
 
