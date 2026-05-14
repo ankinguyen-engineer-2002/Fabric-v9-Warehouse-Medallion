@@ -36,14 +36,20 @@ jobs:
           FABRIC_SERVER: ${{ secrets.FABRIC_SERVER }}
         run: |
           python << 'EOF'
-          import pyodbc, struct, csv, os, json
+          import pyodbc, struct, csv, os, json, sys
           from urllib.request import Request, urlopen
 
-          # Get token via Service Principal
           tenant = os.environ["AZURE_TENANT_ID"]
           client_id = os.environ["AZURE_CLIENT_ID"]
           client_secret = os.environ["AZURE_CLIENT_SECRET"]
           server = os.environ["FABRIC_SERVER"]
+
+          # v10 architecture: 2 warehouses in workspace Enterprise_SupplyChain-Dev
+          #   Silver = SupplyChain_Processing_Warehouse (id c0262cef-...)
+          #   Gold   = SupplyChain_Gold_Warehouse        (id 98e2a911-...)
+          # Both share the same SQL endpoint (FABRIC_SERVER); only DATABASE= differs.
+          SILVER_WH = "SupplyChain_Processing_Warehouse"
+          GOLD_WH   = "SupplyChain_Gold_Warehouse"
 
           token_url = f"https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
           data = f"grant_type=client_credentials&client_id={client_id}&client_secret={client_secret}&scope=https://database.windows.net/.default"
@@ -53,11 +59,14 @@ jobs:
           token_bytes = token.encode("UTF-16-LE")
           token_struct = struct.pack(f"<I{len(token_bytes)}s", len(token_bytes), token_bytes)
 
-          conn = pyodbc.connect(
-              f"DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={server};"
-              f"DATABASE=SupplyChain_Processing_Warehouse;Encrypt=yes;TrustServerCertificate=no;",
-              attrs_before={1256: token_struct})
-          cursor = conn.cursor()
+          def connect(database):
+              return pyodbc.connect(
+                  f"DRIVER={{ODBC Driver 18 for SQL Server}};SERVER={server};"
+                  f"DATABASE={database};Encrypt=yes;TrustServerCertificate=no;",
+                  attrs_before={1256: token_struct})
+
+          conn_silver = connect(SILVER_WH)
+          cursor = conn_silver.cursor()
 
           data_dir = "lineage_explorer/data"
 
@@ -100,22 +109,41 @@ jobs:
                   row = list(r)
                   w.writerow(row)
 
-          # Export views (v10: from sys.sql_modules via cross-DB)
-          cursor.execute("""
-              SELECT s.name AS [schema], v.name AS view_name,
-                  LEFT(m.definition, 4000) AS definition
+          # Export views from BOTH warehouses (full definition, no truncation).
+          # Requires VIEW DEFINITION on each WH for the SP — otherwise sys.sql_modules.definition
+          # returns NULL silently. We detect that case and KEEP the existing views.csv instead
+          # of overwriting it with empty rows.
+          views_sql = """
+              SELECT s.name AS [schema], v.name AS view_name, m.definition
               FROM sys.views v
               JOIN sys.schemas s ON v.schema_id = s.schema_id
               JOIN sys.sql_modules m ON v.object_id = m.object_id
-              WHERE s.name NOT IN ('sys','queryinsights')
+              WHERE s.name NOT IN ('sys','queryinsights','INFORMATION_SCHEMA')
               ORDER BY s.name, v.name
-          """)
-          cols = [d[0] for d in cursor.description]
-          rows = cursor.fetchall()
-          with open(f"{data_dir}/views.csv", "w", newline="") as f:
-              w = csv.writer(f)
-              w.writerow(cols)
-              w.writerows(rows)
+          """
+          all_view_rows = []
+          for wh_name, conn in [(SILVER_WH, conn_silver), (GOLD_WH, connect(GOLD_WH))]:
+              cur = conn.cursor()
+              cur.execute(views_sql)
+              fetched = cur.fetchall()
+              non_empty = [r for r in fetched if r[2] and str(r[2]).strip()]
+              print(f"[views] {wh_name}: fetched={len(fetched)}, non_empty_def={len(non_empty)}")
+              for r in fetched:
+                  all_view_rows.append((wh_name, r[0], r[1], r[2] or ""))
+
+          total_non_empty = sum(1 for r in all_view_rows if r[3].strip())
+          if total_non_empty == 0 and all_view_rows:
+              print("[views] WARNING: all definitions empty — SP likely missing VIEW DEFINITION grant.")
+              print("[views] Keeping existing views.csv to avoid clobbering good data.")
+              print("[views] To fix: connect as warehouse admin and run:")
+              print(f"[views]   GRANT VIEW DEFINITION ON DATABASE::{SILVER_WH} TO [<SP-name>];")
+              print(f"[views]   GRANT VIEW DEFINITION ON DATABASE::{GOLD_WH}   TO [<SP-name>];")
+          else:
+              with open(f"{data_dir}/views.csv", "w", newline="") as f:
+                  w = csv.writer(f)
+                  w.writerow(["warehouse","schema","view_name","definition"])
+                  w.writerows(all_view_rows)
+              print(f"[views] wrote {len(all_view_rows)} rows to views.csv")
 
           # Export run history (v10: Meta.RunLog)
           cursor.execute("""
@@ -132,7 +160,7 @@ jobs:
               w.writerow(cols)
               w.writerows(rows)
 
-          conn.close()
+          conn_silver.close()
           print("CSVs exported successfully")
           EOF
 

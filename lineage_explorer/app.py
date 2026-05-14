@@ -363,14 +363,25 @@ with tab2:
 # ══ TAB 3: View Definitions ══
 with tab3:
     st.header("👁️ View Definitions")
-    st.caption("SQL source code of all ETL views (ReferenceMaster_Enh / Domain_Enh / ForecastAccuracy_DW)")
+    st.caption("SQL source code of all ETL views across Silver (SupplyChain_Processing_Warehouse) and Gold (SupplyChain_Gold_Warehouse)")
     views = load_csv("views.csv")
     if views:
+        warehouses = sorted(set(v.get("warehouse", "") for v in views if v.get("warehouse")))
         schemas = sorted(set(v.get("schema", "") for v in views))
-        selected_schema = st.selectbox("Filter by schema", ["All"] + schemas)
-        filtered = views if selected_schema == "All" else [v for v in views if v.get("schema") == selected_schema]
+        col_wh, col_sc = st.columns(2)
+        with col_wh:
+            wh_options = ["All"] + warehouses if warehouses else ["All"]
+            selected_wh = st.selectbox("Filter by warehouse", wh_options)
+        with col_sc:
+            selected_schema = st.selectbox("Filter by schema", ["All"] + schemas)
+        filtered = views
+        if selected_wh != "All":
+            filtered = [v for v in filtered if v.get("warehouse") == selected_wh]
+        if selected_schema != "All":
+            filtered = [v for v in filtered if v.get("schema") == selected_schema]
         for v in filtered:
-            with st.expander(f"📝 {v.get('schema','')}.{v.get('view_name','')}", expanded=False):
+            wh_prefix = f"[{v.get('warehouse','')}] " if v.get("warehouse") else ""
+            with st.expander(f"📝 {wh_prefix}{v.get('schema','')}.{v.get('view_name','')}", expanded=False):
                 st.code(v.get("definition", ""), language="sql")
         st.info(f"Total: {len(filtered)} views")
 
