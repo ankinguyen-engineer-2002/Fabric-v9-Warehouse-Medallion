@@ -291,60 +291,67 @@ html_path = Path(__file__).parent / "templates" / "lineage.html"
 
 @st.cache_data(ttl=60)
 def build_node_mart_lookup() -> dict:
-    """Build node→mart mapping from registry. Used by classify_mart for bare table names."""
-    registry = load_csv("registry.csv")
+    """Build {bare_table_name: target_schema} from both lineage and registry.
+    lineage.csv provides schema for every DAG node (most complete source).
+    registry.csv is a secondary fallback.
+    """
     lookup = {}
-    for r in registry:
+    # Primary: lineage.csv (every target node has target_schema)
+    for e in load_csv("lineage.csv"):
+        tbl = (e.get("target_table") or "").strip()
+        schema = (e.get("target_schema") or "").strip()
+        if tbl and schema:
+            lookup[tbl] = schema
+    # Secondary: registry.csv (catches assets without inbound edges)
+    for r in load_csv("registry.csv"):
         tbl = (r.get("target_table") or "").strip()
-        proj = (r.get("project") or "").strip()
-        if tbl and proj:
-            if proj == "supplychain":
-                lookup[tbl] = "forecast"
-            elif proj == "inventory_health":
-                lookup[tbl] = "inventory_health"
-            elif proj == "SC_ForecastAccuracy":
-                lookup[tbl] = "forecast"
-            else:
-                lookup[tbl] = "shared"
+        schema = (r.get("target_schema") or "").strip()
+        if tbl and schema and tbl not in lookup:
+            lookup[tbl] = schema
     return lookup
 
 
-def classify_mart(node_id: str) -> str:
-    """Map a node ID to its owning mart (project bucket).
-    Priority:
-      (1) Bronze + Staging + Refmaster schemas → 'shared' (cross-mart resources)
-      (2) Mart-specific schema patterns
-      (3) Registry lookup by bare name (for internal Silver/Gold tables)
-    """
-    nid = node_id or ""
-    # (1) Shared schemas — used by all marts, never filter out
-    if any(k in nid for k in [
+def _classify_by_schema(schema_or_nid: str) -> str:
+    """Schema string → mart bucket. Pure pattern match, no I/O."""
+    s = schema_or_nid or ""
+    # Shared (Bronze sources + RefMaster + Staging bridge)
+    if any(k in s for k in [
         "Enterprise_Lakehouse", "SupplyChain_Lakehouse",
         "ReferenceMaster_Enh", "Staging_Wrk",
     ]):
         return "shared"
-    # (2) Mart-specific schema-prefix patterns
-    if any(k in nid for k in [
+    # Forecast project schemas
+    if any(k in s for k in [
         "SalesHistory_Enh", "ForecastHistory_Enh", "OpenOrderHistory_Enh",
         "ForecastAccuracy_DW", "sc_forecast_control_tower",
     ]):
         return "forecast"
-    if any(k in nid for k in [
+    # Inventory Health schemas
+    if any(k in s for k in [
         "InventoryHistory_Enh", "InventoryHealth_DW", "sc_inventory_health_control_tower",
     ]):
         return "inventory_health"
-    # (3) Bare table name → registry lookup
+    return "other"
+
+
+def classify_mart(node_id: str) -> str:
+    """Map a node ID to its owning mart.
+    Strategy:
+      (1) If node_id contains a schema prefix → classify by that schema.
+      (2) Else bare name → look up target_schema in registry, classify by it.
+      (3) Fallback → 'other'.
+    """
+    nid = node_id or ""
+    # Direct schema pattern match (works for both prefixed and the bare cases where schema name is in the string)
+    primary = _classify_by_schema(nid)
+    if primary != "other":
+        return primary
+    # Bare name fallback — look up its schema in registry
     bare = nid.split(".")[-1] if "." in nid else nid
     lookup = build_node_mart_lookup()
-    if bare in lookup:
-        # Special: RefMaster tables in registry are still 'shared' for cross-mart access
-        registry = load_csv("registry.csv")
-        for r in registry:
-            if (r.get("target_table") or "").strip() == bare:
-                if (r.get("layer") or "").strip() == "ReferenceMaster":
-                    return "shared"
-                break
-        return lookup[bare]
+    schema = lookup.get(bare, "")
+    if schema:
+        return _classify_by_schema(schema)
     return "other"
 
 
