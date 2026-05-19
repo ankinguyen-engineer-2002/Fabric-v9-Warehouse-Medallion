@@ -289,11 +289,112 @@ def build_dag_data():
 
 html_path = Path(__file__).parent / "templates" / "lineage.html"
 
+@st.cache_data(ttl=60)
+def build_node_mart_lookup() -> dict:
+    """Build node→mart mapping from registry. Used by classify_mart for bare table names."""
+    registry = load_csv("registry.csv")
+    lookup = {}
+    for r in registry:
+        tbl = (r.get("target_table") or "").strip()
+        proj = (r.get("project") or "").strip()
+        if tbl and proj:
+            if proj == "supplychain":
+                lookup[tbl] = "forecast"
+            elif proj == "inventory_health":
+                lookup[tbl] = "inventory_health"
+            elif proj == "SC_ForecastAccuracy":
+                lookup[tbl] = "forecast"
+            else:
+                lookup[tbl] = "shared"
+    return lookup
+
+
+def classify_mart(node_id: str) -> str:
+    """Map a node ID to its owning mart (project bucket).
+    Priority:
+      (1) Bronze + Staging + Refmaster schemas → 'shared' (cross-mart resources)
+      (2) Mart-specific schema patterns
+      (3) Registry lookup by bare name (for internal Silver/Gold tables)
+    """
+    nid = node_id or ""
+    # (1) Shared schemas — used by all marts, never filter out
+    if any(k in nid for k in [
+        "Enterprise_Lakehouse", "SupplyChain_Lakehouse",
+        "ReferenceMaster_Enh", "Staging_Wrk",
+    ]):
+        return "shared"
+    # (2) Mart-specific schema-prefix patterns
+    if any(k in nid for k in [
+        "SalesHistory_Enh", "ForecastHistory_Enh", "OpenOrderHistory_Enh",
+        "ForecastAccuracy_DW", "sc_forecast_control_tower",
+    ]):
+        return "forecast"
+    if any(k in nid for k in [
+        "InventoryHistory_Enh", "InventoryHealth_DW", "sc_inventory_health_control_tower",
+    ]):
+        return "inventory_health"
+    # (3) Bare table name → registry lookup
+    bare = nid.split(".")[-1] if "." in nid else nid
+    lookup = build_node_mart_lookup()
+    if bare in lookup:
+        # Special: RefMaster tables in registry are still 'shared' for cross-mart access
+        registry = load_csv("registry.csv")
+        for r in registry:
+            if (r.get("target_table") or "").strip() == bare:
+                if (r.get("layer") or "").strip() == "ReferenceMaster":
+                    return "shared"
+                break
+        return lookup[bare]
+    return "other"
+
+
+def filter_dag_by_mart(dag_data: dict, mart: str) -> dict:
+    """Filter DAG nodes and edges to only those belonging to the given mart.
+    'all' = no filter. 'shared' includes bronze sources used by every mart.
+    """
+    if mart == "all":
+        return dag_data
+    nodes = dag_data.get("nodes", [])
+    edges = dag_data.get("edges", [])
+    # Keep nodes where mart matches OR shared (bronze / refmaster surface in every mart view)
+    keep_ids = set()
+    for n in nodes:
+        nid = n.get("id", "")
+        node_mart = classify_mart(nid)
+        if node_mart == mart or node_mart == "shared":
+            keep_ids.add(nid)
+    # Also keep shared sources that connect to selected mart targets via edges
+    for e in edges:
+        if e.get("target") in keep_ids and e.get("source") not in keep_ids:
+            # only keep upstream source if it's shared (avoid pulling in other marts)
+            if classify_mart(e.get("source", "")) == "shared":
+                keep_ids.add(e.get("source"))
+    filtered_nodes = [n for n in nodes if n.get("id") in keep_ids]
+    filtered_edges = [e for e in edges if e.get("source") in keep_ids and e.get("target") in keep_ids]
+    return {"nodes": filtered_nodes, "edges": filtered_edges}
+
+
 tab1, tab2, tab3 = st.tabs(["📊 Table Lineage DAG", "🔄 ETL Flow by Table", "👁️ View Definitions"])
 
 # ══ TAB 1: DAG ══
 with tab1:
+    # Mart filter (project bucket)
+    mart_col, _, _ = st.columns([2, 4, 2])
+    with mart_col:
+        mart_filter = st.selectbox(
+            "🎯 Filter by Mart",
+            options=["all", "forecast", "inventory_health"],
+            format_func=lambda m: {
+                "all": "All marts (everything)",
+                "forecast": "Forecast Accuracy (supplychain)",
+                "inventory_health": "Inventory Health",
+            }[m],
+            key="mart_filter_selectbox",
+        )
     dag_data = build_dag_data()
+    if mart_filter != "all":
+        dag_data = filter_dag_by_mart(dag_data, mart_filter)
+    st.caption(f"Showing {len(dag_data.get('nodes', []))} nodes · {len(dag_data.get('edges', []))} edges")
     html_content = html_path.read_text(encoding="utf-8")
     if dag_data and dag_data["nodes"]:
         html_content = html_content.replace("window.__LINEAGE_API_DATA__ = null;", f"window.__LINEAGE_API_DATA__ = {json.dumps(dag_data)};")
