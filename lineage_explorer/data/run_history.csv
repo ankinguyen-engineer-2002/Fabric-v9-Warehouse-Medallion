@@ -1,4 +1,7 @@
 sp_name,status,rows_affected,duration_seconds,start_time,load_type
+OpenOrderHistory_Enh.OpenOrderLineLevel,success,153477,7,2026-05-19 23:59:25.020000,overwrite
+ForecastHistory_Enh.ForecastDemandMonthly,success,138004165,80,2026-05-19 23:59:24.896667,overwrite
+SalesHistory_Enh.InvoiceDetailLineLevel,success,126877958,38,2026-05-19 23:59:24.803333,overwrite
 InventoryHistory_Enh.SafetyStockHelper,success,122553904,180,2026-05-19 17:29:55.460000,overwrite
 ForecastHistory_Enh.NaiveForecastMonthly,success,176276,8,2026-05-19 17:29:08.433333,overwrite
 InventoryHistory_Enh.ManufacturingOrderSnapshotDaily,success,252692,3,2026-05-19 17:23:51.043333,datekey
@@ -46,6 +49,3 @@ OpenOrderHistory_Enh.OpenOrderMonthly,success,68040,4,2026-05-19 13:58:22.886667
 InventoryHistory_Enh.InventorySnapshotWeekly,success,64357577,216,2026-05-19 13:57:22.843333,overwrite
 SalesHistory_Enh.ActualDemandWeekly,success,603088,70,2026-05-19 13:56:05.350000,overwrite
 InventoryHistory_Enh.LogilityItemStatusSnapshotWeekly,success,100227,3,2026-05-19 13:54:48.040000,datekey
-OpenOrderHistory_Enh.OpenOrderMonthly,success,68040,10,2026-05-19 13:54:47.763333,overwrite
-InventoryHistory_Enh.HoldingTransferSnapshotDaily,success,837,3,2026-05-19 13:54:46.153333,datekey
-SalesHistory_Enh.InvoiceWeekly,success,15497831,144,2026-05-19 13:54:46.046667,overwrite
