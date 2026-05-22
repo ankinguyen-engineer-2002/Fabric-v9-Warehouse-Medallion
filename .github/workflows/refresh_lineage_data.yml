@@ -87,18 +87,21 @@ jobs:
                   ts, tt = split_name(r[1])
                   w.writerow([i, ss, st, ts, tt, r[2], r[1]])
 
-          # Export registry with physical names
+          # Export registry with physical names + authoritative wave_number from SilverDagWaveRuntime
           cursor.execute("""
-              SELECT physical_schema + '.' + physical_object AS sp_name,
-                  legacy_view_name AS view_name,
-                  physical_schema AS target_schema,
-                  physical_object AS target_table,
-                  canonical_layer AS layer,
-                  load_type, frequency,
-                  CASE WHEN source_objects IS NOT NULL THEN 1 ELSE 0 END AS execution_order,
-                  depends_on, source_objects, is_active
-              FROM Meta.AssetRegistry WHERE is_active = 1
-              ORDER BY canonical_layer, physical_schema, physical_object
+              SELECT ar.physical_schema + '.' + ar.physical_object AS sp_name,
+                  ar.legacy_view_name AS view_name,
+                  ar.physical_schema AS target_schema,
+                  ar.physical_object AS target_table,
+                  ar.canonical_layer AS layer,
+                  ar.load_type, ar.frequency,
+                  CASE WHEN ar.source_objects IS NOT NULL THEN 1 ELSE 0 END AS execution_order,
+                  ar.depends_on, ar.source_objects, ar.is_active,
+                  sdw.wave_number AS wave
+              FROM Meta.AssetRegistry ar
+              LEFT JOIN Meta.SilverDagWaveRuntime sdw ON sdw.asset_id = ar.asset_id
+              WHERE ar.is_active = 1
+              ORDER BY ar.canonical_layer, ar.physical_schema, ar.physical_object
           """)
           cols = [d[0] for d in cursor.description]
           rows = cursor.fetchall()

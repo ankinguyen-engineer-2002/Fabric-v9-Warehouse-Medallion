@@ -166,36 +166,49 @@ def build_dag_data():
     # Build set of Silver table names for dependency matching
     slv_table_set = set(r.get("target_table", "") for r in slv_regs)
 
-    # Wave 0: no Silver dependencies in depends_on
-    for r in slv_regs:
-        deps = r.get("depends_on", "") or ""
-        if not deps or deps in ("nan", "None"):
-            slv_waves[r.get("target_table", "")] = 0
-        else:
+    def parse_deps(deps_raw):
+        """Parse depends_on: tries JSON first, falls back to comma-separated string."""
+        if not deps_raw or deps_raw in ("nan", "None"):
+            return []
+        deps_raw = deps_raw.strip()
+        if deps_raw.startswith("["):
             try:
-                dep_list = json.loads(deps)
-                # Check if any dependency is a Silver table (by physical name match)
-                has_slv_dep = any(d.split(".")[-1] in slv_table_set for d in dep_list)
-                if not has_slv_dep:
-                    slv_waves[r.get("target_table", "")] = 0
-            except:
-                slv_waves[r.get("target_table", "")] = 0
+                return json.loads(deps_raw)
+            except Exception:
+                pass
+        return [d.strip() for d in deps_raw.split(",") if d.strip()]
 
-    # Wave 1..N: iterative assignment
-    for wave in range(1, 30):
-        newly_assigned = {}
-        for r in slv_regs:
-            tbl = r.get("target_table", "")
-            if tbl in slv_waves: continue
-            deps = r.get("depends_on", "") or ""
+    # Primary: read authoritative wave_number from registry (sourced Meta.SilverDagWaveRuntime).
+    # Fallback (only when wave column missing/empty): topo-sort from depends_on.
+    for r in slv_regs:
+        wave_raw = (r.get("wave") or "").strip()
+        if wave_raw and wave_raw not in ("nan", "None"):
             try:
-                dep_list = json.loads(deps)
+                slv_waves[r.get("target_table", "")] = int(float(wave_raw))
+            except Exception:
+                pass
+
+    # Fallback topo-sort for any unassigned silvers
+    unassigned = [r for r in slv_regs if r.get("target_table", "") not in slv_waves]
+    if unassigned:
+        # Wave 0: no Silver dependencies in depends_on
+        for r in unassigned:
+            dep_list = parse_deps(r.get("depends_on", "") or "")
+            has_slv_dep = any(d.split(".")[-1] in slv_table_set for d in dep_list)
+            if not has_slv_dep:
+                slv_waves[r.get("target_table", "")] = 0
+        # Wave 1..N: iterative
+        for wave in range(1, 30):
+            newly_assigned = {}
+            for r in unassigned:
+                tbl = r.get("target_table", "")
+                if tbl in slv_waves: continue
+                dep_list = parse_deps(r.get("depends_on", "") or "")
                 dep_tables = [d.split(".")[-1] for d in dep_list if d.split(".")[-1] in slv_table_set]
                 if dep_tables and all(dt in slv_waves for dt in dep_tables):
                     newly_assigned[tbl] = wave
-            except: pass
-        if not newly_assigned: break
-        slv_waves.update(newly_assigned)
+            if not newly_assigned: break
+            slv_waves.update(newly_assigned)
 
     # Build reverse lookup: snake_case node ID → PascalCase registry key
     # e.g. slv_actual_demand_monthly → ActualDemandMonthly
