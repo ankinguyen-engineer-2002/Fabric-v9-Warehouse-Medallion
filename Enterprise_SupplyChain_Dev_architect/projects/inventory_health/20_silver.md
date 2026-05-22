@@ -1,15 +1,23 @@
 # 20 — Silver Layer
 
-> **Status (updated 2026-05-19):** CODE-AUTHORED + source-path migration applied. 1 NEW in ReferenceMaster_Enh + 24 NEW in InventoryHistory_Enh. Naming: PascalCase, view prefix `v_*`, all per ADR-008 Bob alignment. **3 source switches** post-Dhivya load: `v_PurchaseOrder` LEFT JOIN → EL.PoMaster; `v_LogilityItemStatus` FROM → EL.Logility + new dedupe heuristic; `v_LogilityItemStatusSnapshotWeekly` SourceSystem updated.
+> **Status (updated 2026-05-22):** LIVE + dead-asset cleanup pass applied (post-lineage audit).
+>
+> **2026-05-22 cleanup**:
+> - **DROPPED 2 view-only Silvers** tagged orphan in Option B refactor 2026-05-21:
+>   - `v_MovementHistory` (KPI #26 Obsolete Ratio served via `LastInvoiceHelper` no-movement check; KPI #30 not in Phase 1)
+>   - `v_ForecastCurrent` (KPI #7 Forecast Demand Qty served via `ForecastSnapshotWeekly` history)
+> - **DEACTIVATED Phase 2** `LogilityItemStatusSnapshotWeekly` (is_active=0) — KPI #17/#18/#20a past-tracking conditional pending Robert sign-off; current item status path via `DimItemMaster.AFIItemStatus`.
+>
+> **2026-05-19 source switches** (preserved): `v_PurchaseOrder` LEFT JOIN → EL.PoMaster; `v_LogilityItemStatus` FROM → EL.Logility + new dedupe heuristic; `v_LogilityItemStatusSnapshotWeekly` SourceSystem updated.
 
 ## Schemas
 
-| Schema | Layer | New for inventory_health? | Count |
+| Schema | Layer | New for inventory_health? | Active count |
 |---|---|---|---:|
 | `ReferenceMaster_Enh` | ReferenceMaster | +1 NEW (Vendor) | 1 |
-| `InventoryHistory_Enh` | DomainSilver | NEW SCHEMA | 24 |
+| `InventoryHistory_Enh` | DomainSilver | NEW SCHEMA | 22 active (was 24; -2 dropped 2026-05-22) |
 
-Total: 25 new Silver assets.
+Total: 23 active Silver assets (was 25 pre-cleanup).
 
 ## §A. ReferenceMaster_Enh — 1 NEW
 
@@ -42,9 +50,9 @@ REUSED from existing ReferenceMaster_Enh (do NOT recreate):
 | `LogilityItemStatus` | `v_LogilityItemStatus` | overwrite (weekly) | PK: composite | EL.SupplyChain_Enh.DemandFulfillmentCommonContainer_Logility (38.36M, switched 2026-05-19) | **A3** RESOLVED + **D1** dedupe (9,128 grain-conflict groups handled by demand-bearing prefer heuristic) |
 | `HoldingTransfer` | `v_HoldingTransfer` | overwrite (daily) | PK: (TransferNumber,ItemSku) | TFRDTL + TFRHDR | — |
 | `AtpWeekEnding` | `v_AtpWeekEnding` | overwrite (daily) | PK: (ItemSku,WarehouseCode,WeekNumber) | ATPSUM (UNPIVOT APAT01-43) | **H2** |
-| `MovementHistory` | `v_MovementHistory` | incremental | wm: TransactionDate · PK: composite | IMHIST + DimDate | — |
+| ~~`MovementHistory`~~ | ~~`v_MovementHistory`~~ | **DROPPED 2026-05-22** (orphan; KPI #26 via LastInvoiceHelper) | — | — | — |
 | `AllocatedDemandCandidate` | `v_AllocatedDemandCandidate` | overwrite (daily) | PK: (OrderNumber,OrderLine) | OpenOrderDetail + OpenOrderHeader | **H1** (Robert pending) |
-| `ForecastCurrent` | `v_ForecastCurrent` | overwrite (daily) | PK: (ItemSku,WarehouseCode,FiscalMonthYear) | DemandForecast (channel SUM) | **B2** |
+| ~~`ForecastCurrent`~~ | ~~`v_ForecastCurrent`~~ | **DROPPED 2026-05-22** (orphan; KPI #7 via ForecastSnapshotWeekly) | — | — | B2 fix preserved in git |
 
 ## §D. InventoryHistory_Enh — Tier 2 snapshot history (2 views, incremental)
 
@@ -71,7 +79,7 @@ Grain: `(ItemSku, WarehouseCode, AsOfDate)` where AsOfDate = InventoryCurrent.Sn
 | `PurchaseOrderSnapshotDaily` | `v_PurchaseOrderSnapshotDaily` | SnapshotDate | daily 04:00 | depends on PurchaseOrder |
 | `ManufacturingOrderSnapshotDaily` | `v_ManufacturingOrderSnapshotDaily` | SnapshotDate | daily 04:00 | depends on ManufacturingOrder |
 | `HoldingTransferSnapshotDaily` | `v_HoldingTransferSnapshotDaily` | SnapshotDate | daily 04:00 | depends on HoldingTransfer |
-| `LogilityItemStatusSnapshotWeekly` | `v_LogilityItemStatusSnapshotWeekly` | WeekEndingDate | weekly Sat 06:00 | depends on LogilityItemStatus |
+| `LogilityItemStatusSnapshotWeekly` ⏸ | `v_LogilityItemStatusSnapshotWeekly` | WeekEndingDate | weekly Sat 06:00 | **DEACTIVATED 2026-05-22** (Phase 2 conditional — KPI #17/#18/#20a past-tracking pending Robert) — depends on LogilityItemStatus |
 
 ## DAG (Silver) — wave computation
 

@@ -1,10 +1,15 @@
 # Open Questions — inventory_health mart
 
-> **Status (updated 2026-05-19):** 3 Robert sign-offs ⏳ + ~~4 DE US loads~~ → 3 done (Dhivya 2026-05-18) + 1 workaround OK (deploy-unblocking) + 1 Bob architecture Q.
+> **Status (updated 2026-05-22):** 3 Robert sign-offs ⏳ (H1/H5/M3) + 1 NEW Robert Phase 2 ask ⏳ (Logility past-tracking) + 1 Bob architecture Q ⏳ (cross-mart dim reuse) + ~~4 DE US loads~~ → 3 done + 1 workaround OK + 1 deferred Phase 2.
+>
+> **2026-05-22 cleanup** (post-lineage audit on Streamlit):
+> - **DROPPED 3 dead assets** — `DimRuleVersion` (Gold over-engineering — Aric decision), `v_MovementHistory` + `v_ForecastCurrent` (Silver views tagged orphan in Option B refactor 2026-05-21; never wired into Fact)
+> - **DEACTIVATED 1 Phase 2** — `LogilityItemStatusSnapshotWeekly` (is_active=0; awaits Robert sign-off below as Q5)
+> - **Phase 1 KPI coverage maintained**: 26/30 (no KPI lost — dead assets had 0 downstream consumers)
 
 ---
 
-## §A. Robert sign-offs (3 questions, CRITICAL PATH)
+## §A. Robert sign-offs (3 critical + 1 new Phase 2)
 
 Email draft ready in `_source_v1/05_NEXT_STEPS.md` Section "Track D". Send to Robert, cc team lead.
 
@@ -36,6 +41,25 @@ Options:
 - **(B) Rewrite 52W** — rebuild CogsRollingHelper at weekly grain (Saturday week-ending), add FiscalWeekYear join column, accept ~30 min extra ETL time
 
 **Where in v10**: [etl/gold_views.sql:v_CogsRollingHelper](etl/gold_views.sql) + [semantic/Measures_DAX.dax](semantic/Measures_DAX.dax) + [semantic/SemanticModel.tmdl](semantic/SemanticModel.tmdl) — all marked `M3 FIX`.
+
+### Q5 — NEW 2026-05-22: Logility past-status tracking (Phase 2 conditional)
+
+Per Excel `Source_to_KPI` sheet: `DemandFulfilmentCommonContain_Logility.ItemStatus` serves **3 Phase 2 KPIs**:
+- **#17** Inactive Item Logic (past-tracking part — current served via `DimItemMaster.AFIItemStatus`)
+- **#18** SLOB (past-status part)
+- **#20a** Lifecycle Status (past tracking)
+
+**Decision made 2026-05-22 (post-lineage audit)**: deactivated `LogilityItemStatusSnapshotWeekly` (is_active=0) because:
+1. 0 Gold view / DAX measure / FK relationship consumes it (orphan)
+2. 38M base rows weekly snapshot = significant compute
+3. Phase 1 KPI #17/#18/#20a current-state path via `DimItemMaster.AFIItemStatus` works fine
+4. Excel note: "P2 conditional, chờ Robert chốt past tracking có cần"
+
+**Question for Robert**: Do we need item-status PAST tracking (week-by-week historical) for KPI #17/#18/#20a in Phase 2, OR is current-state status sufficient?
+- **(A)** YES, need past tracking → reactivate `LogilityItemStatusSnapshotWeekly` + wire into Fact via new RuleVersion/SnapshotDate join
+- **(B)** NO, current-state sufficient → drop the Phase 2 scaffold entirely (clean repo)
+
+**Where in v10**: [etl/silver_views.sql:v_LogilityItemStatus](etl/silver_views.sql) + [etl/silver_views.sql:v_LogilityItemStatusSnapshotWeekly](etl/silver_views.sql) — both annotated `[PHASE 2 DEACTIVATED 2026-05-22]`.
 
 ---
 

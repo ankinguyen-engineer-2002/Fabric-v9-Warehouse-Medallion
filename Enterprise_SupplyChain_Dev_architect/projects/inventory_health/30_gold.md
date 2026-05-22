@@ -1,6 +1,8 @@
 # 30 — Gold Layer
 
-> **Status:** CODE-AUTHORED. 8 NEW assets in `InventoryHealth_DW` (Gold WH). Self-contained schema matching deliverable v1 TMDL semantic model.
+> **Status (updated 2026-05-22):** LIVE post-cleanup. 7 active assets in `InventoryHealth_DW` (Gold WH). Self-contained schema for TMDL semantic model.
+>
+> **2026-05-22 change**: Dropped `DimRuleVersion` (over-engineering — Aric decision: when BRD updates, create new semantic model version `sc_inventory_health_control_tower_v2` rather than versioning via dim). Removed RuleVersionKey column from both Fact views + 2 TMDL relationships + 1 DAX measure simplified.
 
 ## Schema
 
@@ -8,26 +10,24 @@
 
 Pattern: cross-DB CTAS via `pl_sc_gold` pipeline (registry-driven). Each Gold view reads Silver physical tables via 3-part name `[SupplyChain_Processing_Warehouse].[<schema>].[<table>]`.
 
-## Star schema (matches deliverable v1)
+## Star schema (post-cleanup 2026-05-22)
 
 ```
                   DimDate ────┐
                   DimItem ────┤
               DimWarehouse ───┼── FactInventoryHealthSnapshot
-                DimVendor ────┤        │
-            DimRuleVersion ───┘        │
+                DimVendor ────┘        │
                                        │
                                        └─→ CogsRollingHelper (hidden, JOIN at view-time)
 
                   DimDate ────┐
                   DimItem ────┼── FactInventoryRiskForward
-              DimWarehouse ───┤
-            DimRuleVersion ───┘
+              DimWarehouse ───┘
 ```
 
-## Assets (8 total)
+## Assets (7 total after cleanup, was 8)
 
-### Dims (5)
+### Dims (4)
 
 | Asset | View | Source | Notes |
 |---|---|---|---|
@@ -35,7 +35,7 @@ Pattern: cross-DB CTAS via `pl_sc_gold` pipeline (registry-driven). Each Gold vi
 | `DimItem` | `v_DimItem` | `InventoryHistory_Enh.ItemMasterExt` + LifecycleStatus computed | LifecycleStatus = Active/Inactive/New/Discontinued |
 | `DimWarehouse` | `v_DimWarehouse` | `InventoryHistory_Enh.WarehouseExt` | Includes B3 fix flags |
 | `DimVendor` | `v_DimVendor` | `ReferenceMaster_Enh.Vendor` (NEW master) | 2-col Phase 1 (VendorNumber, VendorName) |
-| `DimRuleVersion` | `v_DimRuleVersion` | manual seed | 1 row Phase 1: BRD v1 rule snapshot |
+| ~~`DimRuleVersion`~~ | ~~`v_DimRuleVersion`~~ | **DROPPED 2026-05-22** — versioning via new semantic model when BRD changes |
 
 ### Helper (1, hidden from semantic model)
 

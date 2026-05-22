@@ -1,6 +1,6 @@
 -- Live VIEW dump from SupplyChain_Gold_Warehouse
 -- Generated 2026-05-22 via OBJECT_DEFINITION
--- 15 views
+-- 14 views
 
 -- ============================================================
 -- ForecastAccuracy_DW.v_DimCalendar
@@ -699,26 +699,6 @@ SELECT
     CAST(im.StatusCodeChangeDate   AS DATE)           AS StatusCodeChangeDate,
     CAST(im.UnavailableFlag        AS BIT)            AS UnavailableFlag
 FROM _ItemMasterExt im
-GO
-
--- ============================================================
--- InventoryHealth_DW.v_DimRuleVersion
--- ============================================================
--- ---- InventoryHealth_DW.v_DimRuleVersion ----
--- Manual seed Phase 1 = 1 row (BRD v1 rule snapshot).
--- Add new rows when business rules change; FactInventoryHealthSnapshot.RuleVersionKey FKs here.
-CREATE VIEW InventoryHealth_DW.v_DimRuleVersion AS
-SELECT
-    CAST(1                                                  AS BIGINT)        AS RuleVersionKey,
-    CAST('InventoryHealth_BRD_v1'                           AS VARCHAR(100))  AS RuleName,
-    CAST('2026-01-01'                                       AS DATE)          AS EffectiveStartDate,
-    CAST(NULL                                               AS DATE)          AS EffectiveEndDate,
-    CAST(
-        'BRD v1 ruleset: Inactive=AfiStatus IN (D,R) AND OnHand+OnOrder=0; '
-      + 'SLOB=AfiStatus<>N AND LastInvoice<AsOf-17W; '
-      + 'Classification thresholds 0.5/1.5/17/52/104; '
-      + 'AWD=13W forward forecast / 13 fallback 13W historical / 13; ATP=Week2'
-        AS VARCHAR(500))                                                       AS RuleDescription
 GO
 
 -- ============================================================

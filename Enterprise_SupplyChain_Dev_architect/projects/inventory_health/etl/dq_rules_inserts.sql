@@ -52,12 +52,10 @@ INSERT INTO Meta.DQRule (
 ('HoldingTransfer.TransferNumber completeness', 'DomainSilver', 'InventoryHistory_Enh', 'HoldingTransfer',        'completeness', 'TransferNumber', 'CRITICAL', 100.0, 1),
 -- AtpWeekEnding
 ('AtpWeekEnding.WeekNumber not null',           'DomainSilver', 'InventoryHistory_Enh', 'AtpWeekEnding',          'completeness', 'WeekNumber',    'CRITICAL', 100.0, 1),
--- MovementHistory (incremental)
-('MovementHistory.TransactionDate completeness','DomainSilver', 'InventoryHistory_Enh', 'MovementHistory',        'completeness', 'TransactionDate', 'CRITICAL', 100.0, 1),
+-- DROPPED 2026-05-22: MovementHistory rule (asset removed — KPI #26 via LastInvoiceHelper)
 -- AllocatedDemandCandidate (H1 fix — Robert sign-off pending)
 ('AllocatedDemandCandidate row_count > 0',      'DomainSilver', 'InventoryHistory_Enh', 'AllocatedDemandCandidate', 'row_count',  NULL,            'WARNING',  1,     1),
--- ForecastCurrent (B2 fix)
-('ForecastCurrent.FiscalMonthYear completeness','DomainSilver', 'InventoryHistory_Enh', 'ForecastCurrent',        'completeness', 'FiscalMonthYear', 'CRITICAL', 100.0, 1),
+-- DROPPED 2026-05-22: ForecastCurrent rule (asset removed — KPI #7 via ForecastSnapshotWeekly)
 -- InventorySnapshotWeekly (BLOCKED on ItemBalance) — disabled until source confirmed
 ('InvSnapshotWeekly.SnapshotDate completeness', 'DomainSilver', 'InventoryHistory_Enh', 'InventorySnapshotWeekly','completeness', 'SnapshotDate',  'CRITICAL', 100.0, 0),
 -- ForecastSnapshotWeekly
@@ -72,7 +70,7 @@ INSERT INTO Meta.DQRule (
     check_type, column_name, severity, threshold, is_active
 ) VALUES
 ('DimVendor.VendorNumber completeness',                'Gold', 'InventoryHealth_DW', 'DimVendor',                  'completeness', 'VendorNumber', 'CRITICAL', 100.0, 1),
-('DimRuleVersion row_count = 1 (Phase 1)',             'Gold', 'InventoryHealth_DW', 'DimRuleVersion',             'row_count',    NULL,           'WARNING',  1,     1),
+-- DROPPED 2026-05-22: DimRuleVersion rule (dim removed)
 ('CogsRollingHelper.FiscalMonthYear completeness',     'Gold', 'InventoryHealth_DW', 'CogsRollingHelper',          'completeness', 'FiscalMonthYear', 'CRITICAL', 100.0, 1),
 ('FactInventoryHealthSnapshot row_count > 0',          'Gold', 'InventoryHealth_DW', 'FactInventoryHealthSnapshot','row_count',    NULL,           'CRITICAL', 1,     0),  -- enable post-deploy
 ('FactInventoryHealthSnapshot.ItemSku completeness',   'Gold', 'InventoryHealth_DW', 'FactInventoryHealthSnapshot','completeness', 'ItemSku',      'CRITICAL', 100.0, 0),

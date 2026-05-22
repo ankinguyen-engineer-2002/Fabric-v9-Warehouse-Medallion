@@ -83,7 +83,7 @@ Phase 1 scope: 26 of 30 KPIs from BRD v1 (rest are Phase 2 — storage cube phys
 | 9 | M4 SLOB NULL guard | [gold_views.sql:v_FactInventoryHealthSnapshot](etl/gold_views.sql) | n/a (defensive) |
 | 10 | M5 AWD COUNTROWS SUMMARIZE | [semantic/Measures_DAX.dax](semantic/Measures_DAX.dax) verbatim | n/a (math) |
 | 11 | B1 PoDetail Enterprise source | [silver_views.sql:v_PurchaseOrder](etl/silver_views.sql) | n/a (data switch) |
-| 12 | B2 DemandForecast source | [silver_views.sql:v_ForecastCurrent](etl/silver_views.sql) | n/a |
+| 12 | B2 DemandForecast source | ~~v_ForecastCurrent~~ **DROPPED 2026-05-22 (orphan in Option B refactor; KPI #7 served via ForecastSnapshotWeekly history). B2 fix preserved in git history.** | n/a |
 | 13 | B3 Warehouse exclusion flags | [silver_views.sql:v_WarehouseExt](etl/silver_views.sql) + v_InventoryCurrent + v_PurchaseOrder | n/a |
 | 14 | M3 doc trail | inline comments in views + TMDL/DAX | n/a |
 
@@ -91,8 +91,8 @@ Phase 1 scope: 26 of 30 KPIs from BRD v1 (rest are Phase 2 — storage cube phys
 
 | Aspect | Deliverable v1 | v10 (this folder) |
 |---|---|---|
-| Silver schema | `silver` (lowercase, flat 35 tables) | `InventoryHistory_Enh` (24 tables) + `ReferenceMaster_Enh.Vendor` (NEW) |
-| Gold schema | `gold` (lowercase, flat 8 tables) | `InventoryHealth_DW` (8 tables, all self-contained) |
+| Silver schema | `silver` (lowercase, flat 35 tables) | `InventoryHistory_Enh` (**22 active tables post-2026-05-22 cleanup**: was 24, -2 dropped MovementHistory + ForecastCurrent, -1 deactivated LogilityItemStatusSnapshotWeekly) + `ReferenceMaster_Enh.Vendor` (NEW) |
+| Gold schema | `gold` (lowercase, flat 8 tables) | `InventoryHealth_DW` (**7 active tables post-2026-05-22**: was 8, -1 dropped DimRuleVersion) |
 | Warehouse refs | `SupplyChain Processing Warehouse` (space) | `SupplyChain_Processing_Warehouse` (underscore) |
 | Load orchestration | 14 custom `usp_Build_*` procs + 1 `usp_RefreshAll` | 1 generic `Meta.usp_GenericLoad` + 34 views + 33 registry rows |
 | Control plane | None | Full `Meta.*` integration (registry + DQ + lineage + audit) |

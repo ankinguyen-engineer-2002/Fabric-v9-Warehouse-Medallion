@@ -138,24 +138,17 @@ INSERT INTO Meta.AssetRegistry (
  '["Enterprise_Lakehouse.Wholesale_Purchasing_AFI.ATPSUM"]', NULL,
  'daily', '0 2 * * *', 1, 'WarehouseTransform'),
 
-('InventoryHistory_Enh.MovementHistory', 'inventory_health', 'DomainSilver',
- @ws, @wh_proc, 'InventoryHistory_Enh', 'MovementHistory',
- -- 2026-05-20: load_type swapped incremental → overwrite (last_watermark_value was '2026-11-10' future-date bug → 0 rows returned; full overwrite of 11.6M rows takes 19s).
- 'InventoryHistory_Enh.v_MovementHistory', 'overwrite', NULL, 'TransactionDateKey,ItemSku,WarehouseCode,TCode', NULL,
- '["Enterprise_Lakehouse.Manufacturing_Inventory_AFI.IMHIST","Enterprise_Lakehouse.MasterData_DW.DimDate"]', NULL,
- 'daily', '0 2 * * *', 1, 'WarehouseTransform'),
+-- DROPPED 2026-05-22: MovementHistory ── tagged orphan in Option B refactor 2026-05-21,
+-- never wired into Fact (KPI #26 served via LastInvoiceHelper; KPI #30 not in Phase 1)
 
 ('InventoryHistory_Enh.AllocatedDemandCandidate', 'inventory_health', 'DomainSilver',
  @ws, @wh_proc, 'InventoryHistory_Enh', 'AllocatedDemandCandidate',
  'InventoryHistory_Enh.v_AllocatedDemandCandidate', 'overwrite', NULL, 'OrderNumber,OrderLine', NULL,
  '["Enterprise_Lakehouse.CustomerOrders_AFI.OpenOrderDetail","Enterprise_Lakehouse.CustomerOrders_AFI.OpenOrderHeader"]', NULL,
- 'daily', '0 2 * * *', 1, 'WarehouseTransform'),
-
-('InventoryHistory_Enh.ForecastCurrent', 'inventory_health', 'DomainSilver',
- @ws, @wh_proc, 'InventoryHistory_Enh', 'ForecastCurrent',
- 'InventoryHistory_Enh.v_ForecastCurrent', 'overwrite', NULL, 'ItemSku,WarehouseCode,FiscalMonthYear', NULL,
- '["Enterprise_Lakehouse.Wholesale_DemandPlanning_AFI.DemandForecast"]', NULL,
  'daily', '0 2 * * *', 1, 'WarehouseTransform');
+
+-- DROPPED 2026-05-22: ForecastCurrent ── tagged orphan in Option B refactor 2026-05-21,
+-- never wired into Fact (KPI #7 served via ForecastSnapshotWeekly history)
 
 
 -- ── Tier 2 snapshot history (2 assets, incremental) ──────────
@@ -256,8 +249,13 @@ INSERT INTO Meta.AssetRegistry (
  'weekly', '0 6 * * 6', 0, 'WarehouseTransform');
 
 
+-- NOTE 2026-05-22: LogilityItemStatusSnapshotWeekly above kept with is_active=0
+-- (Phase 2 conditional — KPI #17/#18/#20a past-tracking, awaiting Robert sign-off).
+
 -- ============================================================
--- §3. Gold layer — InventoryHealth_DW (5 assets)
+-- §3. Gold layer — InventoryHealth_DW (4 Dim + 1 Helper + 2 Fact = 7 assets)
+-- 2026-05-22: dropped DimRuleVersion (over-engineering — versioning via new
+--             semantic model when BRD changes, not via versioned dim).
 -- ============================================================
 
 INSERT INTO Meta.AssetRegistry (
@@ -291,11 +289,7 @@ INSERT INTO Meta.AssetRegistry (
  '["ReferenceMaster_Enh.Vendor"]', 'ReferenceMaster_Enh.Vendor',
  'monthly', '0 3 1 * *', 1, 'GoldPublish'),
 
-('InventoryHealth_DW.DimRuleVersion', 'inventory_health', 'Gold',
- @ws, @wh_gold, 'InventoryHealth_DW', 'DimRuleVersion',
- 'InventoryHealth_DW.v_DimRuleVersion', 'overwrite', 'RuleVersionKey',
- '["manual"]', NULL,
- 'monthly', '0 3 1 * *', 1, 'GoldPublish'),
+-- DROPPED 2026-05-22: DimRuleVersion ── versioning via new semantic model instead of dim
 
 ('InventoryHealth_DW.CogsRollingHelper', 'inventory_health', 'Gold',
  @ws, @wh_gold, 'InventoryHealth_DW', 'CogsRollingHelper',

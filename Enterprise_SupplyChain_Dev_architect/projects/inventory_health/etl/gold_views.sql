@@ -13,15 +13,17 @@
 --   M3 Cogs52W → Cogs52M rename (Robert sign-off pending re: keep 52M or rewrite weekly)
 --   M4 SLOB NULL guard on LastInvoiceDate
 -- ============================================================
--- 8 NEW views (Gold artifacts for inventory_health mart — self-contained schema):
+-- 7 NEW views (Gold artifacts for inventory_health mart — self-contained schema):
 --   1. InventoryHealth_DW.v_DimDate                  — derived from ReferenceMaster_Enh.Calendar
 --   2. InventoryHealth_DW.v_DimItem                  — derived from InventoryHistory_Enh.ItemMasterExt
 --   3. InventoryHealth_DW.v_DimWarehouse             — derived from InventoryHistory_Enh.WarehouseExt
 --   4. InventoryHealth_DW.v_DimVendor                — derived from ReferenceMaster_Enh.Vendor
---   5. InventoryHealth_DW.v_DimRuleVersion           — manual seed (BRD v1 rule snapshot)
---   6. InventoryHealth_DW.v_CogsRollingHelper        — 52M + 12M rolling COGS (H4 + M3)
---   7. InventoryHealth_DW.v_FactInventoryHealthSnapshot
---   8. InventoryHealth_DW.v_FactInventoryRiskForward (H5)
+--   5. InventoryHealth_DW.v_CogsRollingHelper        — 52M + 12M rolling COGS (H4 + M3)
+--   6. InventoryHealth_DW.v_FactInventoryHealthSnapshot
+--   7. InventoryHealth_DW.v_FactInventoryRiskForward (H5)
+-- DROPPED 2026-05-22: DimRuleVersion (over-engineering — Aric decision). When BRD updates,
+-- create new semantic model version instead of versioning via dim. RuleVersionKey column
+-- removed from both Fact views; semantic model TMDL relationships removed.
 -- DESIGN NOTE: Per deliverable v1, the TMDL semantic model expects all 7 user-facing
 -- tables (5 Dims + 2 Facts) under InventoryHealth_DW. We DO NOT bind DirectLake to
 -- ForecastAccuracy_DW dims because their column schemas differ from the deliverable's
@@ -124,25 +126,6 @@ SELECT
     CAST(v.VendorName    AS VARCHAR(200))  AS VendorName
 FROM [SupplyChain_Processing_Warehouse].[ReferenceMaster_Enh].[Vendor] v
 WHERE v.VendorNumber IS NOT NULL
-
-GO
-
-
--- ---- InventoryHealth_DW.v_DimRuleVersion ----
--- Manual seed Phase 1 = 1 row (BRD v1 rule snapshot).
--- Add new rows when business rules change; FactInventoryHealthSnapshot.RuleVersionKey FKs here.
-CREATE VIEW InventoryHealth_DW.v_DimRuleVersion AS
-SELECT
-    CAST(1                                                  AS BIGINT)        AS RuleVersionKey,
-    CAST('InventoryHealth_BRD_v1'                           AS VARCHAR(100))  AS RuleName,
-    CAST('2026-01-01'                                       AS DATE)          AS EffectiveStartDate,
-    CAST(NULL                                               AS DATE)          AS EffectiveEndDate,
-    CAST(
-        'BRD v1 ruleset: Inactive=AfiStatus IN (D,R) AND OnHand+OnOrder=0; '
-      + 'SLOB=AfiStatus<>N AND LastInvoice<AsOf-17W; '
-      + 'Classification thresholds 0.5/1.5/17/52/104; '
-      + 'AWD=13W forward forecast / 13 fallback 13W historical / 13; ATP=Week2'
-        AS VARCHAR(500))                                                       AS RuleDescription
 
 GO
 
@@ -319,7 +302,6 @@ SELECT
               THEN 1 ELSE 0 END AS BIT)        AS IsLatestSnapshot,
     CAST(b.SourceSystem      AS VARCHAR(64))   AS SourceSystem,
     CAST(b.SourceTable       AS VARCHAR(128))  AS SourceTable,
-    CAST(1                   AS BIGINT)        AS RuleVersionKey,
 
     -- Base supply qty
     CAST(ISNULL(b.OnHandQty, 0)                          AS DECIMAL(18,4)) AS OnHandQty,
@@ -531,8 +513,7 @@ SELECT
                           CAST(SYSUTCDATETIME() AS DATE))
               )
               THEN 1 ELSE 0 END AS BIT)                                 AS WeekFourFlag,
-    CAST(dim.FobArcPrice                         AS DECIMAL(18,4))      AS FobArcPrice,
-    CAST(1                                       AS BIGINT)             AS RuleVersionKey
+    CAST(dim.FobArcPrice                         AS DECIMAL(18,4))      AS FobArcPrice
 FROM latest_plan lp
 LEFT JOIN [SupplyChain_Gold_Warehouse].[ForecastAccuracy_DW].[DimCalendar] d
        ON d.[Date] = lp.WeekEndingDate

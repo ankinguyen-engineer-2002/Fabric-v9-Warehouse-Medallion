@@ -37,15 +37,18 @@ Based on forecast's ~31 min for ~420M rows and similar data volume:
 `Meta.usp_ComputeSilverWaves` reads `depends_on` from registry rows. Expected DAG for inventory_health:
 
 ```
-Wave 0: ItemMasterExt, WarehouseExt, Vendor (RefMaster),
-        CostCurrent, InventoryCurrent, SupplyPlan, SalesShipment,
-        PurchaseOrder, ManufacturingOrder, LogilityItemStatus, HoldingTransfer,
-        AtpWeekEnding, MovementHistory, AllocatedDemandCandidate, ForecastCurrent
-Wave 1: InventorySnapshotWeekly, ForecastSnapshotWeekly
-Wave 2: AwdHelper, LastInvoiceHelper, MovementFlagHelper, SafetyStockHelper
-Wave 3: PurchaseOrderSnapshotDaily, ManufacturingOrderSnapshotDaily,
-        HoldingTransferSnapshotDaily, LogilityItemStatusSnapshotWeekly
+Wave 0 (3 active post-cleanup): ForecastSnapshotWeekly, ItemBalanceHistorical, SalesShipment
+Wave 1 (8 active): AwdHelper, HoldingTransferSnapshotDaily, InventorySnapshotWeekly,
+        LastInvoiceHelper, LogilityItemStatusSnapshotWeekly ⏸ (deactivated 2026-05-22),
+        ManufacturingOrderSnapshotDaily, MovementFlagHelper, PurchaseOrderSnapshotDaily
+Wave 2 (1 active): SafetyStockHelper
 ```
+
+**2026-05-22 cleanup**:
+- DROPPED `MovementHistory`, `ForecastCurrent` (Wave 0, view-only, orphan)
+- DEACTIVATED `LogilityItemStatusSnapshotWeekly` (Wave 1, Phase 2 conditional — pl_sc_master skips when is_active=0)
+
+(Authoritative wave assignments from `Meta.SilverDagWaveRuntime` — see live snapshot.)
 
 ## Smart skip + scheduling
 

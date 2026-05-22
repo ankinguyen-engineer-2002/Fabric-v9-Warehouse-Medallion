@@ -13,8 +13,12 @@
 /// To deploy:
 ///   1. Open Power BI Desktop → "New report" → "Direct Lake on OneLake"
 ///   2. Point to workspace > SupplyChain_Gold_Warehouse
-///   3. Select 8 tables: DimDate, DimItem, DimWarehouse, DimVendor, DimRuleVersion,
+///   3. Select 7 tables: DimDate, DimItem, DimWarehouse, DimVendor,
 ///      CogsRollingHelper (hidden), FactInventoryHealthSnapshot, FactInventoryRiskForward
+///   NOTE 2026-05-22: DimRuleVersion removed (over-engineering). When BRD updates,
+///      create a NEW semantic model version (sc_inventory_health_control_tower_v2)
+///      rather than versioning via dim. Side-by-side comparison via Power BI app
+///      package multi-model selection if ever needed.
 ///   4. Apply this TMDL via Tabular Editor (or use as reference and define manually)
 
 model InventoryHealth
@@ -216,33 +220,8 @@ table DimVendor
 
 
 /// ═══════════════════════════════════════════════════════
-/// TABLE: DimRuleVersion
+/// DimRuleVersion DROPPED 2026-05-22 — see header NOTE
 /// ═══════════════════════════════════════════════════════
-table DimRuleVersion
-    lineageTag: dim-rule-version
-
-    column RuleVersionKey
-        dataType: int64
-        isKey
-        summarizeBy: none
-
-    column RuleName
-        dataType: string
-
-    column EffectiveStartDate
-        dataType: dateTime
-
-    column EffectiveEndDate
-        dataType: dateTime
-
-    column RuleDescription
-        dataType: string
-
-    partition DimRuleVersion-prt = entity
-        mode: directLake
-        source = entity
-            entityName: DimRuleVersion
-            schemaName: InventoryHealth_DW
 
 
 /// ═══════════════════════════════════════════════════════
@@ -423,9 +402,7 @@ table FactInventoryHealthSnapshot
         formatString: 0.0000
         summarizeBy: sum
 
-    column RuleVersionKey
-        dataType: int64
-        summarizeBy: none
+    // RuleVersionKey column DROPPED 2026-05-22 (DimRuleVersion removed)
 
     partition FactInventoryHealthSnapshot-prt = entity
         mode: directLake
@@ -545,9 +522,7 @@ table FactInventoryRiskForward
         formatString: $#,##0.00
         summarizeBy: average
 
-    column RuleVersionKey
-        dataType: int64
-        summarizeBy: none
+    // RuleVersionKey column DROPPED 2026-05-22 (DimRuleVersion removed)
 
     partition FactInventoryRiskForward-prt = entity
         mode: directLake
@@ -595,12 +570,4 @@ relationship DimVendor_to_DimItem
     toColumn:   DimVendor.VendorNumber
     crossFilteringBehavior: oneDirection
 
-relationship DimRuleVersion_to_FactHealth
-    fromColumn: FactInventoryHealthSnapshot.RuleVersionKey
-    toColumn:   DimRuleVersion.RuleVersionKey
-    crossFilteringBehavior: oneDirection
-
-relationship DimRuleVersion_to_FactRisk
-    fromColumn: FactInventoryRiskForward.RuleVersionKey
-    toColumn:   DimRuleVersion.RuleVersionKey
-    crossFilteringBehavior: oneDirection
+// DimRuleVersion_to_FactHealth + DimRuleVersion_to_FactRisk relationships DROPPED 2026-05-22

@@ -338,7 +338,11 @@ WHERE FITEM IS NOT NULL AND FITWH IS NOT NULL
 GO
 
 
--- ---- InventoryHistory_Enh.v_LogilityItemStatus ----
+-- ---- InventoryHistory_Enh.v_LogilityItemStatus ----  [PHASE 2 DEACTIVATED 2026-05-22]
+-- Reason: KPI #17 Inactive / #18 SLOB / #20a Lifecycle past-tracking are Phase 2
+-- conditional KPIs (Excel: "P2 conditional, chờ Robert"). Current status served via
+-- DimItemMaster.AFIItemStatus (Phase 1 path). View kept for Phase 2 reactivation;
+-- the downstream materialization LogilityItemStatusSnapshotWeekly is_active=0.
 -- A3 RESOLVED 2026-05-19: Dhivya promoted to Enterprise.SupplyChain_Enh.DemandFulfillmentCommonContainer_Logility (38.36M rows, 53 cols, types match SC_LH).
 -- D1 FIX 2026-05-19: source has 9,128 GRAIN-CONFLICT groups (NOT true dups) at (Item,Whse,WeekEnding) — 47/53 cols identical, 6 metrics differ.
 --   Pattern: 1 row has actual data, 1 row has zero-placeholder metrics. StatusChngDate IDENTICAL across dup group → old ORDER BY was non-deterministic.
@@ -489,36 +493,12 @@ WHERE b.BaseWeekEndingDate IS NOT NULL
 GO
 
 
--- ---- InventoryHistory_Enh.v_MovementHistory ----
--- IMHIST + DimDate. v10 incremental on TransactionDate (watermark in registry).
--- FIX 2026-05-19: TRNDT là AS/400 CYYMMDD decimal format (e.g. 1260217 = 2026-02-17, C=1 means 21st century).
---   Direct CAST(decimal AS date) fails in Fabric DW. Convert via integer math + DATEFROMPARTS.
-CREATE VIEW InventoryHistory_Enh.v_MovementHistory AS
-SELECT
-    CAST(TRIM(im.ITNBR)            AS VARCHAR(50))    AS ItemSku,
-    CAST(TRIM(im.HOUSE)            AS VARCHAR(50))    AS WarehouseCode,
-    CAST(im.TRNDT                  AS DECIMAL(18,0))  AS TransactionDateKey,
-    CAST(d.FiscalDate              AS DATE)           AS TransactionDate,
-    CAST(TRIM(im.TCODE)            AS VARCHAR(10))    AS TCode,
-    CAST(im.TRQTY                  AS DECIMAL(18,4))  AS TransactionQty,
-    CAST(im.PRQOH                  AS DECIMAL(18,4))  AS PriorOnHandQty,
-    CAST(im.NUQOH                  AS DECIMAL(18,4))  AS NewOnHandQty,
-    CAST(TRIM(im.VNDNR)            AS VARCHAR(50))    AS VendorNumber,
-    CAST('Manufacturing_Inventory_AFI'  AS VARCHAR(64))  AS SourceSystem,
-    CAST('IMHIST'                       AS VARCHAR(128)) AS SourceTable
-FROM [Enterprise_Lakehouse].[Manufacturing_Inventory_AFI].[IMHIST] im
-LEFT JOIN [Enterprise_Lakehouse].[MasterData_DW].[DimDate] d
-       ON d.DateID = TRY_CAST(
-            DATEFROMPARTS(
-                1900 + 100 * (TRY_CAST(im.TRNDT AS INT) / 1000000) + ((TRY_CAST(im.TRNDT AS INT) % 1000000) / 10000),
-                (TRY_CAST(im.TRNDT AS INT) % 10000) / 100,
-                TRY_CAST(im.TRNDT AS INT) % 100
-            ) AS DATE
-          )
-WHERE im.ITNBR IS NOT NULL AND im.HOUSE IS NOT NULL
-  AND TRIM(im.ITNBR) <> '' AND TRIM(im.HOUSE) <> ''
-
-GO
+-- ---- InventoryHistory_Enh.v_MovementHistory ---- [DROPPED 2026-05-22]
+-- Reason: Tagged orphan in Option B inline refactor 2026-05-21 + watermark bug
+-- (future-date 2026-11-10 → 0 rows loaded). KPI #26 Obsolete Ratio served via
+-- LastInvoiceHelper (no-movement check); KPI #30 Total Commitment not wired in Phase 1.
+-- To restore for Phase 2: see git history pre-2026-05-22 for full CREATE VIEW definition
+-- sourcing Enterprise_Lakehouse.Manufacturing_Inventory_AFI.IMHIST via CYYMMDD date conv.
 
 
 -- ---- InventoryHistory_Enh.v_AllocatedDemandCandidate ----
@@ -555,28 +535,13 @@ WHERE CAST(d.ItemAllocationFlag AS DECIMAL(18,4)) = 2
 GO
 
 
--- ---- InventoryHistory_Enh.v_ForecastCurrent ----
--- B2 FIX (2026-05-17): switched source SupplyForecast (stale 2yr) → DemandForecast (fresh, 12.27M rows).
--- Channel SUM across DfcCustomerGroups + dfcFCSTTypeCode + dfcMgmtCode.
-CREATE VIEW InventoryHistory_Enh.v_ForecastCurrent AS
-SELECT
-    CAST(TRIM(dfcItem)                AS VARCHAR(50))   AS ItemSku,
-    CAST(TRIM(dfcWarehouse)           AS VARCHAR(50))   AS WarehouseCode,
-    CAST(dfcFiscalMonth               AS INT)           AS FiscalMonthYear,
-    CAST(SUM(CAST(dfcResultantForecast AS DECIMAL(18,4))) AS DECIMAL(18,4)) AS ForecastQty,
-    CAST(SUM(CAST(dfcPromotionalLift   AS DECIMAL(18,4))) AS DECIMAL(18,4)) AS PromoLiftQty,
-    CAST(SUM(CAST(dfcForcedForecast    AS DECIMAL(18,4))) AS DECIMAL(18,4)) AS ForcedForecastQty,
-    CAST(SUM(CAST(dfcOrderFutureQty    AS DECIMAL(18,4))) AS DECIMAL(18,4)) AS OrderFutureQty,
-    CAST(MAX(dfcSnapshot)             AS DATE)          AS SourceSnapshotDate,
-    CAST('Wholesale_DemandPlanning_AFI'    AS VARCHAR(64))  AS SourceSystem,
-    CAST('DemandForecast(channel SUM)'     AS VARCHAR(128)) AS SourceTable
-FROM [Enterprise_Lakehouse].[Wholesale_DemandPlanning_AFI].[DemandForecast]
-WHERE dfcItem IS NOT NULL AND dfcWarehouse IS NOT NULL
-  AND TRIM(dfcItem) <> '' AND TRIM(dfcWarehouse) <> ''
-GROUP BY
-    TRIM(dfcItem),
-    TRIM(dfcWarehouse),
-    CAST(dfcFiscalMonth AS INT)
+-- ---- InventoryHistory_Enh.v_ForecastCurrent ---- [DROPPED 2026-05-22]
+-- Reason: Tagged orphan in Option B inline refactor 2026-05-21. KPI #7 Forecast
+-- Demand Qty served via ForecastSnapshotWeekly (history) + DAX aggregations; the
+-- "current overlay" path via SupplyForecast/DemandForecast was scaffolded but never
+-- wired into FactInventoryHealthSnapshot or DAX measures.
+-- To restore for Phase 2 current overlay: see git history pre-2026-05-22 for full
+-- CREATE VIEW sourcing Enterprise_Lakehouse.Wholesale_DemandPlanning_AFI.DemandForecast.
 
 GO
 
@@ -907,7 +872,10 @@ FROM InventoryHistory_Enh.HoldingTransfer
 GO
 
 
--- ---- InventoryHistory_Enh.v_LogilityItemStatusSnapshotWeekly ----
+-- ---- InventoryHistory_Enh.v_LogilityItemStatusSnapshotWeekly ----  [PHASE 2 DEACTIVATED 2026-05-22]
+-- Reason: Materialization has 0 downstream consumer (no Gold view, no DAX measure,
+-- no FK relationship). KPI #17/#18/#20a past-tracking is Phase 2 conditional pending
+-- Robert sign-off. Asset Registry is_active=0 → pl_sc_master skips this load.
 -- WEEKLY — Saturday only (cron '0 6 * * 6' in registry).
 -- Captures latest WeekEndingDate snapshot per (ItemSku, WarehouseCode).
 CREATE VIEW InventoryHistory_Enh.v_LogilityItemStatusSnapshotWeekly AS

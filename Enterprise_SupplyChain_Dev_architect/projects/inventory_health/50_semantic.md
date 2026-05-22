@@ -1,18 +1,20 @@
 # 50 — Semantic Model
 
-> **Status:** TMDL + DAX measures authored. Schema rewritten from `gold` → `InventoryHealth_DW`. DirectLake binding pointing to `SupplyChain_Gold_Warehouse.InventoryHealth_DW`.
+> **Status (updated 2026-05-22):** LIVE post-cleanup. TMDL + DAX measures simplified. Schema = `InventoryHealth_DW`. DirectLake binding pointing to `SupplyChain_Gold_Warehouse.InventoryHealth_DW`.
+>
+> **2026-05-22 change**: Removed `DimRuleVersion` table + 2 relationships + simplified `Active Rule Version` DAX measure (hardcoded "InventoryHealth_BRD_v1"). Versioning approach: when BRD updates → create new semantic model `sc_inventory_health_control_tower_v2` rather than versioning via dim. RuleVersionKey columns also removed from both Fact tables.
 
 ## Model
 
 | Item | Value |
 |---|---|
-| Model name | `InventoryHealth` |
+| Model name | `sc_inventory_health_control_tower` |
 | Workspace | `SupplyChain Dev` (`c8d9fc83-...`) |
 | Mode | Direct Lake on OneLake |
 | Source warehouse | `SupplyChain_Gold_Warehouse` (`98e2a911-...`) |
 | Source schema | `InventoryHealth_DW` |
 | Culture | en-US |
-| User-facing tables | 7 (5 Dims + 2 Facts) |
+| User-facing tables | **6** (4 Dims + 2 Facts) — was 7 pre-cleanup |
 | Hidden tables | 1 (`CogsRollingHelper`) |
 | Measures | 30 DAX |
 
@@ -24,12 +26,12 @@
 | `DimItem` | `InventoryHealth_DW.DimItem` | Item dim + LifecycleStatus |
 | `DimWarehouse` | `InventoryHealth_DW.DimWarehouse` | Warehouse dim + B3 flags |
 | `DimVendor` | `InventoryHealth_DW.DimVendor` | Vendor dim (Phase 1: 2 cols) |
-| `DimRuleVersion` | `InventoryHealth_DW.DimRuleVersion` | Rule version slicer |
+| ~~`DimRuleVersion`~~ | ~~`InventoryHealth_DW.DimRuleVersion`~~ | **REMOVED 2026-05-22** — versioning via new model when BRD changes |
 | `CogsRollingHelper` | `InventoryHealth_DW.CogsRollingHelper` | Hidden — joined to FactInventoryHealthSnapshot internally |
 | `FactInventoryHealthSnapshot` | `InventoryHealth_DW.FactInventoryHealthSnapshot` | Primary fact (current + weekly snapshots) |
 | `FactInventoryRiskForward` | `InventoryHealth_DW.FactInventoryRiskForward` | Forward-looking fact (Week 1-4) |
 
-## Relationships (9, defined in TMDL)
+## Relationships (7 active, was 9 pre-cleanup)
 
 ```
 DimDate.DateKey            → FactInventoryHealthSnapshot.DateKey
@@ -39,8 +41,8 @@ DimItem.ItemSku            → FactInventoryRiskForward.ItemSku
 DimWarehouse.WarehouseCode → FactInventoryHealthSnapshot.WarehouseCode
 DimWarehouse.WarehouseCode → FactInventoryRiskForward.WarehouseCode
 DimVendor.VendorNumber     → DimItem.PrimaryVendorNumber  (snowflake)
-DimRuleVersion.RuleVersionKey → FactInventoryHealthSnapshot.RuleVersionKey
-DimRuleVersion.RuleVersionKey → FactInventoryRiskForward.RuleVersionKey
+// DimRuleVersion → FactInventoryHealthSnapshot   [REMOVED 2026-05-22]
+// DimRuleVersion → FactInventoryRiskForward      [REMOVED 2026-05-22]
 ```
 
 ## DAX measures (30 total — see [semantic/Measures_DAX.dax](semantic/Measures_DAX.dax))
