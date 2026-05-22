@@ -323,18 +323,28 @@ html_path = Path(__file__).parent / "templates" / "lineage.html"
 
 @st.cache_data(ttl=60)
 def build_node_mart_lookup() -> dict:
-    """Build {bare_table_name: target_schema} from both lineage and registry.
-    lineage.csv provides schema for every DAG node (most complete source).
-    registry.csv is a secondary fallback.
+    """Build {bare_table_name: schema} from both lineage and registry.
+    Indexes BOTH source_table AND target_table from every lineage edge — critical
+    for view-only Silvers (ItemMasterExt, SupplyPlan, AtpWeekEnding, etc.) that
+    appear only as edge sources and are NEVER edge targets (they're unregistered
+    views, no source_objects → no inbound edge). Without source-side indexing,
+    these nodes classify as "other" and get filtered out by mart selector,
+    making downstream Gold tables (DimItem, FactInventoryRiskForward) appear
+    orphan with no visible edges.
     """
     lookup = {}
-    # Primary: lineage.csv (every target node has target_schema)
     for e in load_csv("lineage.csv"):
+        # Index TARGET (every edge has a target — primary registered asset)
         tbl = (e.get("target_table") or "").strip()
         schema = (e.get("target_schema") or "").strip()
-        if tbl and schema:
+        if tbl and schema and tbl not in lookup:
             lookup[tbl] = schema
-    # Secondary: registry.csv (catches assets without inbound edges)
+        # Index SOURCE (catches view-only Silvers that appear only as sources)
+        src_tbl = (e.get("source_table") or "").strip()
+        src_schema = (e.get("source_schema") or "").strip()
+        if src_tbl and src_schema and src_tbl not in lookup:
+            lookup[src_tbl] = src_schema
+    # Secondary: registry.csv (catches assets with no edges at all)
     for r in load_csv("registry.csv"):
         tbl = (r.get("target_table") or "").strip()
         schema = (r.get("target_schema") or "").strip()
