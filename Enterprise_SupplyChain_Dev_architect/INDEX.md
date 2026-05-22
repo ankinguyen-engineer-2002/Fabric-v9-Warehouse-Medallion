@@ -38,6 +38,13 @@ Single entry point cho 16 docs theo 4 nhom chuc nang. Restructure per ADR-006.
 | 15 | [15_v10_edw_supplement_exit_strategy.md](30_runbook/15_v10_edw_supplement_exit_strategy.md) | v10 EDW Supplement Exit Strategy |
 | 16 | [16_v10_readiness_scorecard_and_v9_cleanup.md](30_runbook/16_v10_readiness_scorecard_and_v9_cleanup.md) | v10 Readiness Scorecard And v9 Cleanup Candidate List |
 
+## projects/ — Project-specific mart implementations
+
+| Project | Status | Gold schema | Tables (Silver+Gold) | Notes |
+|---|---|---|---:|---|
+| [forecast](projects/forecast/) | LIVE (2026-05-12) | `ForecastAccuracy_DW` | 8 + 7 | 463M Silver rows + 254M Gold rows; sc_forecast_control_tower semantic model deployed |
+| [inventory_health](projects/inventory_health/) | **LIVE (2026-05-19)** | `InventoryHealth_DW` | 13 + 8 | **1.04B Silver rows + 607M Gold rows** (FactInventoryHealthSnapshot 603M / 415 daily snapshots since 2021-03); sc_inventory_health_control_tower semantic model deployed; Bronze DQ rules `expected_zero` + `expected_dup_ratio_max` active |
+
 ## artifacts/ — Outputs khong phai docs
 
 - `artifacts/bob_standards_rebuild/` — Bob Standards rebuild scripts (`src/`) + outputs (`output/`: column_mapping.csv, ctas_tables.sql, gold_columns.json, processing_columns.json, row_counts.json)

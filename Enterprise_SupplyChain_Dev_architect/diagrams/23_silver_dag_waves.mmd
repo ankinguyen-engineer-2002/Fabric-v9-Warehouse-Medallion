@@ -25,10 +25,25 @@ flowchart LR
         NFM["ForecastHistory_ENH.NaiveForecastMonthly<br/>2M rows"]
     end
 
-    subgraph GOLD["Gold — ForecastAccuracy_DW (Star Schema)"]
-        FFA["FactForecastActual<br/>47M rows"]
-        FFK["FactForecastKpi<br/>36M rows"]
-        DIM["DimCalendar | DimCustomerGrouping<br/>DimWarehouse | DimProduct<br/>DimForecastHorizon"]
+    subgraph W0_IH["Wave 0 — inventory_health (3 base, parallel) — NEW 2026-05-19"]
+        IH_BASE["ForecastSnapshotWeekly (153M)<br/>ItemBalanceHistorical (49M)<br/>SalesShipment (127M)"]
+    end
+
+    subgraph W1_IH["Wave 1 — inventory_health (8 assets, depends on Wave 0)"]
+        IH_HELPERS["4 Helpers: AwdHelper (9.5M) · LastInvoiceHelper (35M)<br/>MovementFlagHelper (11M) · InventorySnapshotWeekly (603M)<br/>4 SnapshotDaily: PurchaseOrderSnapshotDaily (17M)<br/>ManufacturingOrderSnapshotDaily (243K) · HoldingTransferSnapshotDaily (861)<br/>LogilityItemStatusSnapshotWeekly (100K)"]
+    end
+
+    subgraph W2_IH["Wave 2 — inventory_health (1 asset, depends on Wave 1)"]
+        IH_W2["SafetyStockHelper (34M)"]
+    end
+
+    subgraph GOLD["Gold — Star Schemas"]
+        FFA["ForecastAccuracy_DW.FactForecastActual<br/>47M rows"]
+        FFK["ForecastAccuracy_DW.FactForecastKpi<br/>36M rows"]
+        DIM["ForecastAccuracy_DW Dims:<br/>DimCalendar | DimCustomerGrouping<br/>DimWarehouse | DimProduct | DimForecastHorizon"]
+        IHF1["InventoryHealth_DW.FactInventoryHealthSnapshot<br/>603M rows (415 daily snapshots) ⭐ NEW"]
+        IHF2["InventoryHealth_DW.FactInventoryRiskForward<br/>3.88M rows ⭐ NEW"]
+        IHD["InventoryHealth_DW Dims:<br/>DimDate | DimItem | DimWarehouse<br/>DimVendor | DimRuleVersion + CogsRollingHelper (hidden)"]
     end
 
     STG_ID --> IDL
@@ -55,3 +70,14 @@ flowchart LR
     FDM --> FFK
     NFM --> FFK
     REF --> DIM
+
+    %% Inventory Health flow
+    REF --> IH_BASE
+    IH_BASE --> IH_HELPERS
+    IH_HELPERS --> IH_W2
+    IH_BASE --> IHF1
+    IH_HELPERS --> IHF1
+    IH_W2 --> IHF1
+    IH_BASE --> IHF2
+    IH_BASE --> IHD
+    REF --> IHD

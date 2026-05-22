@@ -132,7 +132,8 @@ flowchart LR
 | Naming alignment | ✅ Done | Schema casing + view prefix + control plane match Bob's pattern (ADR-008) |
 | Control plane (TableDictionary + UpdateLog + AuditLog + procs) | ✅ Done | Cloned 65-col schema, ported procs, `usp_LogRun v2` chains |
 | Pipeline orchestration (7 pipelines, DAG waves) | ✅ Done | 30m34s end-to-end run verified 2026-05-10 |
-| Gold + semantic model | ✅ Live | `sc_forecast_control_tower` Direct Lake, 35 DAX measures |
+| Gold + semantic model | ✅ Live | `sc_forecast_control_tower` + `sc_inventory_health_control_tower` (2026-05-19) — Direct Lake on Gold WH |
+| **2nd mart: inventory_health** | ✅ Live (2026-05-19) | InventoryHealth_DW: FactInventoryHealthSnapshot (**603M rows / 415 daily snapshots since 2021-03**) + FactInventoryRiskForward (3.88M) + 5 Dim + 1 Helper |
 | Cross-DB sync to hub `ETL_Framework` | ⏳ Pending | Need Bob Q1 — write permission + AuditLog DDL |
 | `SupplyChain_Warehouse` creation in hub | ⏳ Pending | Need Bob Q3 — see [proposal](Enterprise_Data_architect/20_proposals/02_supply_chain_warehouse_proposal.md) |
 | Promote shared Silver (forecast) to hub | 🔄 Plan ready | Pending Q3 |
@@ -141,7 +142,9 @@ flowchart LR
 | Mail.Send admin consent | ⏳ Pending IT (Q4) | — |
 | Schedule trigger automation | ⏳ Blocked by IT | Manual trigger works |
 
-Open questions: [`Enterprise_SupplyChain_Dev_architect/projects/forecast/_open_questions_for_bob.md`](Enterprise_SupplyChain_Dev_architect/projects/forecast/_open_questions_for_bob.md)
+Open questions:
+- Forecast: [`Enterprise_SupplyChain_Dev_architect/projects/forecast/_open_questions_for_bob.md`](Enterprise_SupplyChain_Dev_architect/projects/forecast/_open_questions_for_bob.md)
+- Inventory Health: [`Enterprise_SupplyChain_Dev_architect/projects/inventory_health/_open_questions_for_bob.md`](Enterprise_SupplyChain_Dev_architect/projects/inventory_health/_open_questions_for_bob.md) (3 Robert sign-offs H1/H5/M3)
 
 ---
 
@@ -151,6 +154,7 @@ Open questions: [`Enterprise_SupplyChain_Dev_architect/projects/forecast/_open_q
 1. This README (5 min)
 2. [VN architect INDEX](Enterprise_SupplyChain_Dev_architect/INDEX.md) (10 min)
 3. [Forecast project README](Enterprise_SupplyChain_Dev_architect/projects/forecast/README.md) (10 min)
+4. [Inventory Health project README](Enterprise_SupplyChain_Dev_architect/projects/inventory_health/README.md) (10 min) — 2nd mart, deployed 2026-05-19
 
 ### For VN team member needing to understand Bob's hub
 1. [Bob hub workspace overview](Enterprise_Data_architect/00_overview/01_workspace_overview.md) (5 min)
@@ -180,23 +184,25 @@ Open questions: [`Enterprise_SupplyChain_Dev_architect/projects/forecast/_open_q
 
 ## Live infrastructure snapshot — VN team
 
-> Numbers re-queried from live Fabric workspace 2026-05-12 via pyodbc (token = `az account get-access-token`). Source script: `/tmp/v10_count_objects.py` pattern in `Enterprise_SupplyChain_Dev_architect/tools/`.
+> Numbers re-queried from live Fabric workspace 2026-05-22 (post-inventory_health deploy, post-concurrency fixes). Source: `python3 /tmp/wh_query.py` pattern with `az account get-access-token --resource https://database.windows.net/`.
 
 | Item | Value |
 |------|-------|
 | Workspace | `Enterprise SupplyChain-Dev` (`c8d9fc83-18b6-4e1d-8264-0b49eed36fe0`) |
-| Processing WH | `SupplyChain_Processing_Warehouse` (`c0262cef-...`) — 93 objects: 45 tables · 27 views · 18 SPs · 3 functions |
-| Gold WH | `SupplyChain_Gold_Warehouse` (`98e2a911-...`) — 14 objects: 7 tables (2 Fact + 5 Dim) · 7 views |
-| Total SQL objects | **107** (across 2 warehouses) + 7 v10 pipelines |
-| Total rows | **423,007,384** (~339M Processing + ~84M Gold) |
-| Last full successful run | `pl_sc_master` 2026-05-04 12:50 UTC, 36m21s (2026-05-10 09:19 run ended `partial`) |
-| Semantic model | `sc_forecast_control_tower` (`f06a2361-...`) — Direct Lake, ~35 DAX measures |
-| Registry assets (active) | 33 (4 LogicalBronze + 4 Staging + 10 ReferenceMaster + 8 DomainSilver + 7 Gold) |
-| Lineage edges | 60 (53 direct + 7 semantic) |
-| DQ rules | **30 active** (17 completeness + 13 row_count) / 54 total — 24 freshness+uniqueness deactivated |
-| Source contracts | 674 (52 source feeds) |
+| Processing WH | `SupplyChain_Processing_Warehouse` (`c0262cef-...`) — forecast (4 schemas) + **inventory_health (InventoryHistory_Enh, 24 tables + 25 views)** |
+| Gold WH | `SupplyChain_Gold_Warehouse` (`98e2a911-...`) — ForecastAccuracy_DW (7 tables + 7 views) + **InventoryHealth_DW (8 tables + 8 views)** |
+| v10 Gold total rows | **861M** (~254M forecast Gold + ~607M inventory_health Gold) |
+| v10 Silver materialized | **~1.50B** rows last successful run (463M forecast Silver + 1.04B inventory_health Silver) |
+| Forecast last run | `pl_sc_master` 2026-05-21 05:07 UTC, 48 min, 43/43 success |
+| Inventory Health last run | `pl_sc_master` 2026-05-21 09:32 UTC, 50 min, 20/21 success (1 transient race auto-resolved on retry) |
+| Semantic models | 2 — `sc_forecast_control_tower` (`f06a2361-...`) + **`sc_inventory_health_control_tower`** Direct Lake on Gold WH |
+| Registry assets (active) | **50** (29 forecast: 4 LogicalBronze + 10 RefMaster + 8 DomainSilver + 7 Gold; 21 inventory_health: 1 RefMaster + 12 DomainSilver + 8 Gold) |
+| Lineage edges | **105** (98 direct + 7 semantic) |
+| DQ rules (active) | **66 total** across both marts (incl. 6 Bronze observability `expected_zero` + `expected_dup_ratio_max`) — 36 DQ gate runs, all PASS |
+| Pipeline runs logged | 49 historic runs in Meta.PipelineRunLog, last activity 2026-05-21 09:32 UTC |
+| Source feeds | 52 (Meta.SourceFeed) |
 | Reconciliation rules | 6 (scaffolded) |
-| TableDictionary rows | 33 (Bob-compatible 69-col schema) |
+| TableDictionary rows | **59** (Bob-compatible 69-col schema, auto-populated by usp_GenericLoad — 405 audit log entries) |
 
 ---
 

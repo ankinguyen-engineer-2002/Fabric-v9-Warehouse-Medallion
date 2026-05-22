@@ -55,12 +55,20 @@ flowchart TB
                 OH1["OpenOrderLineLevel · 193K"]
                 OH2["OpenOrderMonthly · 80K"]
             end
-            subgraph META_BOX["Meta Control Plane · 20 tables · 5 views · 16 SPs · 3 fn"]
-                META1["AssetRegistryV10 · 28 assets"]
-                META2["DQRule · 54 rules | LineageEdge · 52"]
-                META3["SourceContract · 674 cols"]
-                META4["RunLog · SilverDagWaveRuntime · 8 waves"]
-                META5["usp_GenericLoad · 8 load patterns"]
+            subgraph IH_BOX["⭐ InventoryHistory_ENH (NEW 2026-05-19) · 13 base tables · 13 views · ~1.04B rows"]
+                IH2["InventorySnapshotWeekly · 603M"]
+                IH5["ForecastSnapshotWeekly · 153M | SalesShipment · 127M"]
+                IH6["ItemBalanceHistorical · 49M | LastInvoiceHelper · 35M"]
+                IH7["SafetyStockHelper · 34M | PurchaseOrderSnapshotDaily · 17M"]
+                IH8["MovementFlagHelper · 11M | AwdHelper · 9.5M"]
+                IH9["+ 4 smaller (Manufacturing/Holding/LogilityItemStatus SnapshotWeekly, PurchaseOrderSnapshotHistorical inactive)"]
+            end
+            subgraph META_BOX["Meta Control Plane · 24 tables · 3 views · 18+ SPs · 3 fn"]
+                META1["AssetRegistry · 50 active / 51 total (29 forecast + 21 inv_health)"]
+                META2["DQRule · 66 active | LineageEdge · 105 (98 direct + 7 semantic)"]
+                META3["SourceFeed · 52 | SourceContract · 674 cols | TableDictionary · 59 rows"]
+                META4["RunLog · SilverDagWaveRuntime · multi-mart waves (forecast 0-2, inv_health 0-2)"]
+                META5["usp_GenericLoad · 8 load patterns + usp_CheckDqSingle (Fabric DW refactored)"]
                 META6["ufn_cron_is_due · ufn_should_run · ufn_utc_to_cst"]
             end
         end
@@ -72,6 +80,14 @@ flowchart TB
                 FA3["DimCalendar · DimCustomerGrouping · DimWarehouse"]
                 FA4["DimProduct · DimForecastHorizon"]
                 FA5["7 cross-DB views · Direct Lake ready"]
+            end
+            subgraph IHG_BOX["⭐ InventoryHealth_DW (NEW 2026-05-19) · 8 tables · 8 views · ~607M rows"]
+                IHG1["FactInventoryHealthSnapshot · 603M rows (415 daily snapshots since 2021-03)"]
+                IHG2["FactInventoryRiskForward · 3.88M rows"]
+                IHG3["DimItem · 383K | DimVendor · 86.6K | DimDate · 21.5K"]
+                IHG4["DimWarehouse · 53 | DimRuleVersion · 1"]
+                IHG5["CogsRollingHelper · 3.18M (hidden, monthly rolling)"]
+                IHG6["8 cross-DB views · DirectLake via sc_inventory_health_control_tower"]
             end
         end
 
@@ -88,7 +104,7 @@ flowchart TB
 
         subgraph LEGACY["Legacy / Enterprise (not used by v10)"]
             direction LR
-            LEG1["SupplyChain_Warehouse<br/>v9 deleted · SCP_Core by Bob"]
+            LEG1["SupplyChain_Warehouse (v8/v9)<br/>dbo · 8 tables alive (Cherry upstream) · SCP_Core 13 tables (Cherry's Control Tower domain)"]
             LEG2["ETL_Framework"]
             LEG3["Temp_SCPWarehouse"]
             LEG4["80 Notebooks (v8)"]

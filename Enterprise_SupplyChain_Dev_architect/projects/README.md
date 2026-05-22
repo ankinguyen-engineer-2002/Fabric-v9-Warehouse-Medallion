@@ -11,7 +11,7 @@ Each project folder is a complete inventory: real table names, row counts, IDs, 
 | Folder | Mart | Gold Schema | Status | Last scan |
 |--------|------|-------------|--------|-----------|
 | [forecast/](forecast/README.md) | Forecast Accuracy | `ForecastAccuracy_DW` | **LIVE** | 2026-05-12 |
-| [inventory_health/](inventory_health/README.md) | Inventory Health | `InventoryHealth_DW` | Planned (skeleton 2026-05-12) | — |
+| [inventory_health/](inventory_health/README.md) | Inventory Health | `InventoryHealth_DW` | **LIVE** (deployed 2026-05-19; ~607M Gold + ~1.04B Silver rows verified 2026-05-22) | 2026-05-22 |
 
 ## Adding a new project
 
