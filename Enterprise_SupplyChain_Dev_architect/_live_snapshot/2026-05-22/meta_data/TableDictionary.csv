@@ -1,0 +1,335 @@
+ServerName,DatabaseName,SchemaName,TableName,ObjectType,PrimaryKey,AlternateKey,StorageType,RowSToreClusteredKey,AdditionalIndexes,DistributionKey,IndexType,SourceSystem,SourceServer,SourceDatabase,SourceObject,SourceObjectAlias,SourcePlatform,ReplicatedSource,ETLTool,PackageName,TFSPath,JobName,JobServer,RefreshRate,RefreshDescription,UpdateMethod,ExtractQuery,UpdateQuery,AdditionaNotes,InvalidCount,RowCount,CreateDate,Modified,CreatedBy,ModifiedBy,LastAudit,ErrorMsg,CreatedDate,Created,SourceObjectType,PartitionKey,ColumnStatsCount,ColumnCount,ColumnStatsLastUpdated,DeletedRows,DataLake,DataLakeFolder,DataLakeFolderArchive,ReplicatedSourceExpiryHours,ReplicatedSourceArchiveExpiryHours,StageDataLakeFolder,LastBatchStartDate,LibraryList,DateKey,DateRangeDays,OperationKey,PII,ValidKeyValues,SelectColumn,DataBricksClusterVersion,DataBricksNodeType,DataBricksClusterRange,v9_Layer,v9_ExecutionOrder,v9_DependsOn,v9_WatermarkColumn,v9_LastWatermarkValue,v9_IsActive
+EDW-Fabric,SupplyChain_Processing_Warehouse,ReferenceMaster_Enh,CustomerAccount,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,Enterprise SupplyChain-Dev,"[""Enterprise_Lakehouse.Customers.AccountMaster""]",,EnterpriseLakehouseShortcut,ReferenceMaster_ENH.vw_CustomerAccount,Fabric Pipeline,ReferenceMaster_ENH.CustomerAccount,,,,720,monthly,overwrite,"-- ---- ReferenceMaster_Enh.v_CustomerAccount ----
+CREATE VIEW ReferenceMaster_Enh.v_CustomerAccount AS SELECT * FROM Enterprise_Lakehouse.Customers.AccountMaster",EXEC Meta.usp_GenericLoad ReferenceMaster_ENH.CustomerAccount,,,35617,2026-05-02 02:14:05.260000,2026-05-02 02:14:05.260000,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-05-02 02:14:05.260000,,2026-05-02 02:14:05.260000,2026-05-02 02:14:05.260000,Table,,0,54,,,Enterprise SupplyChain-Dev,SupplyChain_Processing_Warehouse,,,,,2026-05-02 02:14:05.260000,,,,ReferenceMaster_ENH.CustomerAccount,,,,,,,ReferenceMaster,,,,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,MovementHistory,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,11664291,2026-05-18 23:18:28.720000,2026-05-18 23:18:28.720000,,,2026-05-18 23:18:28.720000,,,2026-05-18 23:18:28.720000,,,,,,,,,,,,,,,,,InventoryHistory_Enh.MovementHistory,,,,,,,,,,,,
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,SalesShipment,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,34625450,2026-05-18 23:19:33.680000,2026-05-18 23:19:33.680000,,,2026-05-18 23:19:33.680000,,,2026-05-18 23:19:33.680000,,,,,,,,,,,,,,,,,InventoryHistory_Enh.SalesShipment,,,,,,,,,,,,
+EDW-Fabric,SupplyChain_Gold_Warehouse,ForecastAccuracy_DW,DimForecastHorizon,Table,HorizonCode,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,SC_ForecastAccuracy,EDW-Fabric,SupplyChain DA,"[""ReferenceMaster_ENH.ForecastHorizon""]",,,ForecastAccuracy_DW.vw_DimForecastHorizon,Fabric Pipeline,ForecastAccuracy_DW.DimForecastHorizon,,,,24,daily,overwrite,"-- ---- ForecastAccuracy_DW.v_DimForecastHorizon ----
+
+CREATE   VIEW ForecastAccuracy_DW.v_DimForecastHorizon AS
+SELECT HorizonCode, [Rank], CAST(GETUTCDATE() AS DATETIME2(6)) AS LoadDT
+FROM SupplyChain_Processing_Warehouse.ReferenceMaster_Enh.ForecastHorizon",EXEC Meta.usp_GenericLoad ForecastAccuracy_DW.DimForecastHorizon,,,,2026-05-04 00:00:00,,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,,,2026-05-04 00:00:00,2026-05-04 00:00:00,Table,,0,3,,,SupplyChain DA,SupplyChain_Gold_Warehouse,,,,,,,,,ForecastAccuracy_DW.DimForecastHorizon,,,,,,,Gold,,,,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,CostCurrent,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,599276,2026-05-18 23:16:05.163333,2026-05-18 23:16:05.163333,,,2026-05-18 23:16:05.163333,,,2026-05-18 23:16:05.163333,,,,,,,,,,,,,,,,,InventoryHistory_Enh.CostCurrent,,,,,,,,,,,,
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,LogilityItemStatus,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,38347175,2026-05-18 23:17:38.393333,2026-05-18 23:17:38.393333,,,2026-05-18 23:17:38.393333,,,2026-05-18 23:17:38.393333,,,,,,,,,,,,,,,,,InventoryHistory_Enh.LogilityItemStatus,,,,,,,,,,,,
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,InventorySnapshotWeekly,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,15389175,2026-05-18 23:22:46.546667,2026-05-18 23:22:46.546667,,,2026-05-18 23:22:46.546667,,,2026-05-18 23:22:46.546667,,,,,,,,,,,,,,,,,InventoryHistory_Enh.InventorySnapshotWeekly,,,,,,,,,,,,
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,ManufacturingOrder,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,261177,2026-05-18 23:17:44.596667,2026-05-18 23:17:44.596667,,,2026-05-18 23:17:44.596667,,,2026-05-18 23:17:44.596667,,,,,,,,,,,,,,,,,InventoryHistory_Enh.ManufacturingOrder,,,,,,,,,,,,
+EDW-Fabric,SupplyChain_Processing_Warehouse,ReferenceMaster_Enh,ForecastCycle,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,Enterprise SupplyChain-Dev,"[""SupplyChain_Lakehouse.dbo.ref_forecast_cycle""]",,EnterpriseLakehouseShortcut,ReferenceMaster_ENH.vw_ForecastCycle,Fabric Pipeline,ReferenceMaster_ENH.ForecastCycle,,,,720,monthly,overwrite,"-- ---- ReferenceMaster_Enh.v_ForecastCycle ----
+CREATE VIEW ReferenceMaster_Enh.v_ForecastCycle AS SELECT * FROM SupplyChain_Lakehouse.dbo.ref_forecast_cycle",EXEC Meta.usp_GenericLoad ReferenceMaster_ENH.ForecastCycle,,,43,2026-05-02 02:14:29.743333,2026-05-02 02:14:29.743333,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-05-02 02:14:29.743333,,2026-05-02 02:14:29.743333,2026-05-02 02:14:29.743333,Table,,0,8,,,Enterprise SupplyChain-Dev,SupplyChain_Processing_Warehouse,,,,,2026-05-02 02:14:29.743333,,,,ReferenceMaster_ENH.ForecastCycle,,,,,,,ReferenceMaster,,,,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,ItemMasterExt,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,382321,2026-05-18 23:16:55.580000,2026-05-18 23:16:55.580000,,,2026-05-18 23:16:55.580000,,,2026-05-18 23:16:55.580000,,,,,,,,,,,,,,,,,InventoryHistory_Enh.ItemMasterExt,,,,,,,,,,,,
+EDW-Fabric,SupplyChain_Processing_Warehouse,ReferenceMaster_Enh,CustomerShippingLocation,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,Enterprise SupplyChain-Dev,"[""Enterprise_Lakehouse.Customers.ShippingLocations""]",,EnterpriseLakehouseShortcut,ReferenceMaster_ENH.vw_CustomerShippingLocation,Fabric Pipeline,ReferenceMaster_ENH.CustomerShippingLocation,,,,720,monthly,overwrite,"-- ---- ReferenceMaster_Enh.v_CustomerShippingLocation ----
+CREATE VIEW ReferenceMaster_Enh.v_CustomerShippingLocation AS SELECT * FROM Enterprise_Lakehouse.Customers.ShippingLocations",EXEC Meta.usp_GenericLoad ReferenceMaster_ENH.CustomerShippingLocation,,,127660,2026-05-02 02:14:26.860000,2026-05-02 02:14:26.860000,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-05-02 02:14:26.860000,,2026-05-02 02:14:26.860000,2026-05-02 02:14:26.860000,Table,,0,88,,,Enterprise SupplyChain-Dev,SupplyChain_Processing_Warehouse,,,,,2026-05-02 02:14:26.860000,,,,ReferenceMaster_ENH.CustomerShippingLocation,,,,,,,ReferenceMaster,,,,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,ReferenceMaster_Enh,Vendor,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,86620,2026-05-18 23:10:32.620000,2026-05-18 23:10:32.620000,,,2026-05-18 23:10:32.620000,,,2026-05-18 23:10:32.620000,,,,,,,,,,,,,,,,,ReferenceMaster_Enh.Vendor,,,,,,,,,,,,
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,ManufacturingOrderSnapshotDaily,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,261177,2026-05-18 23:21:02.253333,2026-05-18 23:21:02.253333,,,2026-05-18 23:21:02.253333,,,2026-05-18 23:21:02.253333,,,,,,,,,,,,,,,,,InventoryHistory_Enh.ManufacturingOrderSnapshotDaily,,,,,,,,,,,,
+EDW-Fabric,SupplyChain_Gold_Warehouse,ForecastAccuracy_DW,DimCalendar,Table,FSCMonthFirst,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,SC_ForecastAccuracy,EDW-Fabric,SupplyChain DA,"[""ReferenceMaster_ENH.Calendar""]",,,ForecastAccuracy_DW.vw_DimCalendar,Fabric Pipeline,ForecastAccuracy_DW.DimCalendar,,,,24,daily,overwrite,"-- 06_create_renamed_views_gold.sql
+-- 7 Gold views recreated with v_ prefix. 3-part-name refs to Processing schemas updated.
+-- Source: etl/gold_views.sql, transformed.
+
+-- ============================================================
+-- Gold Views — ForecastAccuracy_DW Serving Layer
+-- ============================================================
+-- Layer: Gold. Pattern: cross-DB 3-part name from Processing WH + CAST FLOAT + LoadDT.
+-- Source: SupplyChain_Gold_Warehouse
+-- Generated from live workspace scan (2026-05-06)
+-- ============================================================
+
+-- ---- ForecastAccuracy_DW.v_DimCalendar ----
+CREATE   VIEW ForecastAccuracy_DW.v_DimCalendar AS
+SELECT
+    -- Keys (existing + new)
+    CAL.SKDate                          AS DateSK,
+    CAL.MapicsDate                      AS MapicsDate,
+    CAL.Date                            AS [Date],
+    CAL.Datetime                        AS Datetime,
+    CAL.Calendar                        AS Calendar,
+
+    -- Calendar Day
+    CAL.CalendarDateName                AS CalendarDateName,
+    CAL.CalDateIndicatorNum             AS CalDateIndicatorNum,
+    CAL.CalDayOfWeekNum                 AS CalDayOfWeekNum,
+    CAL.CalDayOfWeekName                AS CalDayOfWeekName,
+    CAL.CalDayOfMonthNum                AS CalDayOfMonthNum,
+    CAL.CalDayOfYearNum                 AS CalDayOfYearNum,
+
+    -- Calendar Week
+    CAL.CalWeekNum                      AS CalWeekNum,
+    CAL.CalWeekIndicatorNum             AS CalW",EXEC Meta.usp_GenericLoad ForecastAccuracy_DW.DimCalendar,,,,2026-05-04 00:00:00,,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,,,2026-05-04 00:00:00,2026-05-04 00:00:00,Table,,0,75,,,SupplyChain DA,SupplyChain_Gold_Warehouse,,,,,,,,,ForecastAccuracy_DW.DimCalendar,,,,,,,Gold,,,,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,LastInvoiceHelper,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,8830326,2026-05-18 23:24:21.220000,2026-05-18 23:24:21.220000,,,2026-05-18 23:24:21.220000,,,2026-05-18 23:24:21.220000,,,,,,,,,,,,,,,,,InventoryHistory_Enh.LastInvoiceHelper,,,,,,,,,,,,
+EDW-Fabric,SupplyChain_Processing_Warehouse,Staging_Wrk,InvoiceHeaderEdw,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,Enterprise SupplyChain-Dev,"[""SupplyChain_Lakehouse.dbo.brz_saleshistory_afi__invoiceheader_ver2""]",,LegacyDataflowBridge,bronze.vw_brz_saleshistory_afi__invoiceheader,Fabric Pipeline,Staging_WRK.InvoiceHeaderEdw,,,,24,daily,overwrite,,EXEC Meta.usp_GenericLoad Staging_WRK.InvoiceHeaderEdw,"Temporary EDW/Dataflow supplement retained until Enterprise_Lakehouse coverage, grain, SLA, performance, dual-read validation, and Bob/Rakesh approval pass.
+[DROPPED 2026-05-20] EDW Exit — physical table dropped, kept for historical metadata.",,0,2026-04-30 19:06:21.040000,2026-04-30 19:06:21.040000,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-05-20 04:27:35.451839,,2026-04-30 19:06:21.040000,2026-04-30 19:06:21.040000,Table,,0,40,,,Enterprise SupplyChain-Dev,SupplyChain_Processing_Warehouse,,,,Staging_Wrk,2026-04-30 19:06:21.040000,,,,Staging_WRK.InvoiceHeaderEdw,,,,,,,Staging,,,,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,Staging_Wrk,ProductEdw,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,Enterprise SupplyChain-Dev,"[""SupplyChain_Lakehouse.dbo.ref_product_ver2""]",,LegacyDataflowBridge,bronze.vw_ref_product,Fabric Pipeline,Staging_WRK.ProductEdw,,,,720,monthly,overwrite,,EXEC Meta.usp_GenericLoad Staging_WRK.ProductEdw,"Temporary EDW/Dataflow supplement retained until Enterprise_Lakehouse coverage, grain, SLA, performance, dual-read validation, and Bob/Rakesh approval pass.
+[DROPPED 2026-05-20] EDW Exit — physical table dropped, kept for historical metadata.",,373326,2026-04-19 12:53:14.343333,2026-04-19 12:53:14.343333,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-05-20 04:27:35.451839,,2026-04-19 12:53:14.343333,2026-04-19 12:53:14.343333,Table,,0,89,,,Enterprise SupplyChain-Dev,SupplyChain_Processing_Warehouse,,,,Staging_Wrk,2026-04-19 12:53:14.343333,,,,Staging_WRK.ProductEdw,,,,,,,Staging,,,,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,Staging_Wrk,InvoiceDetailEdw,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,Enterprise SupplyChain-Dev,"[""SupplyChain_Lakehouse.dbo.brz_saleshistory_afi__invoicedetail_ver2""]",,LegacyDataflowBridge,bronze.vw_brz_saleshistory_afi__invoicedetail,Fabric Pipeline,Staging_WRK.InvoiceDetailEdw,,,,24,daily,overwrite,,EXEC Meta.usp_GenericLoad Staging_WRK.InvoiceDetailEdw,"Temporary EDW/Dataflow supplement retained until Enterprise_Lakehouse coverage, grain, SLA, performance, dual-read validation, and Bob/Rakesh approval pass.
+[DROPPED 2026-05-20] EDW Exit — physical table dropped, kept for historical metadata.",,88169954,2026-04-30 19:07:46.210000,2026-04-30 19:07:46.210000,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-05-20 04:27:35.451839,,2026-04-30 19:07:46.210000,2026-04-30 19:07:46.210000,Table,,0,80,,,Enterprise SupplyChain-Dev,SupplyChain_Processing_Warehouse,,,,Staging_Wrk,2026-04-30 19:07:46.210000,,,,Staging_WRK.InvoiceDetailEdw,,,,,,,Staging,,,,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,Staging_Wrk,DemandForecastSnapshotDailyEdw,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,Enterprise SupplyChain-Dev,"[""SupplyChain_Lakehouse.dbo.brz_supplychain_enh_1__demandforecastsnapshotdaily_ver2""]",,LegacyDataflowBridge,bronze.vw_brz_supplychain_enh_1__demandforecastsnapshotdaily,Fabric Pipeline,Staging_WRK.DemandForecastSnapshotDailyEdw,,,,24,daily,overwrite,,EXEC Meta.usp_GenericLoad Staging_WRK.DemandForecastSnapshotDailyEdw,"Temporary EDW/Dataflow supplement retained until Enterprise_Lakehouse coverage, grain, SLA, performance, dual-read validation, and Bob/Rakesh approval pass.
+[DROPPED 2026-05-20] EDW Exit — physical table dropped, kept for historical metadata.",,42406201,2026-04-30 19:07:06.703333,2026-04-30 19:07:06.703333,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-05-20 04:27:35.451839,,2026-04-30 19:07:06.703333,2026-04-30 19:07:06.703333,Table,,0,23,,,Enterprise SupplyChain-Dev,SupplyChain_Processing_Warehouse,,,,Staging_Wrk,2026-04-30 19:07:06.703333,,,,Staging_WRK.DemandForecastSnapshotDailyEdw,,,,,,,Staging,,,ts_snapshot,2026-04-18 00:00:00.000000,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,ItemBalanceHistorical,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,48968402,2026-05-19 01:44:33.346667,2026-05-19 01:44:33.346667,,,2026-05-19 01:44:33.346667,,,2026-05-19 01:44:33.346667,,,,,,,,,,,,,,,,,InventoryHistory_Enh.ItemBalanceHistorical,,,,,,,,,,,,
+EDW-Fabric,SupplyChain_Gold_Warehouse,ForecastAccuracy_DW,FactForecastKpi,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,Enterprise SupplyChain-Dev,"[""SalesHistory_ENH.ActualDemandMonthly"",""ForecastHistory_ENH.ForecastDemandMonthly"",""ForecastHistory_ENH.NaiveForecastMonthly"",""ReferenceMaster_ENH.ForecastHorizon""]",,GoldPublish,ForecastAccuracy_DW.vw_FactForecastKpi,Fabric Pipeline,ForecastAccuracy_DW.FactForecastKpi,,,,24,daily,overwrite,"-- ---- ForecastAccuracy_DW.v_FactForecastKpi ----
+CREATE   VIEW ForecastAccuracy_DW.v_FactForecastKpi AS
+WITH
+fc AS (
+    SELECT UPPER(TRIM(ItemSKU)) AS i, UPPER(TRIM(WarehouseCode)) AS w,
+        CAST(FSCMonthFirst AS DATE) AS mf, CAST(FSCMonthLast AS DATE) AS ml,
+        TRIM(HorizonCode) AS h, CAST(Snapshot AS DATE) AS ds,
+        CAST(SUM(QtyForecast) AS FLOAT) AS qf
+    FROM SupplyChain_Processing_Warehouse.ForecastHistory_Enh.ForecastDemandMonthly
+    WHERE HorizonCode IN ('Lag-0','Lag-1','Lag-2','Lag-3','Lag-4','>Lag-4')
+    GROUP BY UPPER(TRIM(ItemSKU)), UPPER(TRIM(WarehouseCode)),
+        CAST(FSCMonthFirst AS DATE), CAST(FSCMonthLast AS DATE),
+        TRIM(HorizonCode), CAST(Snapshot AS DATE)
+),
+act AS (
+    SELECT UPPER(TRIM(ItemSKU)) AS i, UPPER(TRIM(WarehouseCode)) AS w,
+        CAST(FSCMonthFirst AS DATE) AS mf, CAST(FSCMonthLast AS DATE) AS ml,
+        CAST(SUM(QtyDemand) AS FLOAT) AS qa
+    FROM SupplyChain_Processing_Warehouse.SalesHistory_Enh.ActualDemandMonthly
+    GROUP BY UPPER(TRIM(ItemSKU)), UPPER(TRIM(WarehouseCode)),
+        CAST(FSCMonthFirst AS DATE), CAST(FSCMonthLast AS DATE)
+),
+nv AS (
+    SELECT UPPER(TRIM(ItemSKU)) AS i, UPPER(TRIM(WarehouseCode)) AS w,
+        CAST(FSCMonthFirst AS DATE) AS mf, CAST(FSCMonthLast AS DATE) AS ml,
+        CAST(SUM(QtyDemand) AS FLOAT) AS qn
+    FROM SupplyChain_Processing_Warehouse.ForecastHistory_Enh.NaiveForecastMonthly
+    GROUP BY UPPER(TRIM(ItemSKU)), UPPER(TRIM(WarehouseCode)),
+        CAST(FSCMonthFirst A",EXEC Meta.usp_GenericLoad ForecastAccuracy_DW.FactForecastKpi,,,31270916,2026-04-30 19:25:30.133333,2026-04-30 19:25:30.133333,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-04-30 19:25:30.133333,,2026-04-30 19:25:30.133333,2026-04-30 19:25:30.133333,Table,,0,19,,,Enterprise SupplyChain-Dev,SupplyChain_Gold_Warehouse,,,,,2026-04-30 19:25:30.133333,,,,ForecastAccuracy_DW.FactForecastKpi,,,,,,,Gold,,"[""SalesHistory_ENH.ActualDemandMonthly"",""ForecastHistory_ENH.ForecastDemandMonthly"",""ForecastHistory_ENH.NaiveForecastMonthly""]",,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,PurchaseOrderSnapshotDaily,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,16771889,2026-05-18 23:28:13.610000,2026-05-18 23:28:13.610000,,,2026-05-18 23:28:13.610000,,,2026-05-18 23:28:13.610000,,,,,,,,,,,,,,,,,InventoryHistory_Enh.PurchaseOrderSnapshotDaily,,,,,,,,,,,,
+EDW-Fabric,Enterprise_Lakehouse,bronze,brz_wholesale_codis_afi__extorit,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,,,,EnterpriseLakehouseShortcut,Staging_WRK.vw_Extorit,Fabric Pipeline,Enterprise_Lakehouse.Wholesale_Codis_AFI.EXTORIT,,,,24,daily,overwrite,,EXEC Meta.usp_GenericLoad Enterprise_Lakehouse.Wholesale_Codis_AFI.EXTORIT,,,912132,2026-04-30 19:07:32.863333,2026-04-30 19:07:32.863333,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-04-30 19:07:32.863333,,2026-04-30 19:07:32.863333,2026-04-30 19:07:32.863333,,,0,,,,Enterprise SupplyChain-Dev,Enterprise_Lakehouse,,,,,2026-04-30 19:07:32.863333,,,,Enterprise_Lakehouse.Wholesale_Codis_AFI.EXTORIT,,,,,,,LogicalBronze,,,,,True
+EDW-Fabric,Enterprise_Lakehouse,bronze,brz_wholesale_codis_afi__codatan,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,,,,EnterpriseLakehouseShortcut,Staging_WRK.vw_Codatan,Fabric Pipeline,Enterprise_Lakehouse.Wholesale_Codis_AFI.codatan,,,,24,daily,overwrite,,EXEC Meta.usp_GenericLoad Enterprise_Lakehouse.Wholesale_Codis_AFI.codatan,,,918213,2026-04-30 19:06:42.743333,2026-04-30 19:06:42.743333,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-04-30 19:06:42.743333,,2026-04-30 19:06:42.743333,2026-04-30 19:06:42.743333,,,0,,,,Enterprise SupplyChain-Dev,Enterprise_Lakehouse,,,,,2026-04-30 19:06:42.743333,,,,Enterprise_Lakehouse.Wholesale_Codis_AFI.codatan,,,,,,,LogicalBronze,,,,,True
+EDW-Fabric,Enterprise_Lakehouse,bronze,brz_wholesale_codis_afi__comast,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,,,,EnterpriseLakehouseShortcut,Staging_WRK.vw_Comast,Fabric Pipeline,Enterprise_Lakehouse.Wholesale_Codis_AFI.COMAST,,,,24,daily,overwrite,,EXEC Meta.usp_GenericLoad Enterprise_Lakehouse.Wholesale_Codis_AFI.COMAST,,,219528,2026-04-30 19:06:24.293333,2026-04-30 19:06:24.293333,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-04-30 19:06:24.293333,,2026-04-30 19:06:24.293333,2026-04-30 19:06:24.293333,,,0,,,,Enterprise SupplyChain-Dev,Enterprise_Lakehouse,,,,,2026-04-30 19:06:24.293333,,,,Enterprise_Lakehouse.Wholesale_Codis_AFI.COMAST,,,,,,,LogicalBronze,,,,,True
+EDW-Fabric,Enterprise_Lakehouse,bronze,brz_wholesale_codis_afi__extord,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,,,,EnterpriseLakehouseShortcut,Staging_WRK.vw_Extord,Fabric Pipeline,Enterprise_Lakehouse.Wholesale_Codis_AFI.EXTORD,,,,24,daily,overwrite,,EXEC Meta.usp_GenericLoad Enterprise_Lakehouse.Wholesale_Codis_AFI.EXTORD,,,219505,2026-04-30 19:06:43.396667,2026-04-30 19:06:43.396667,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-04-30 19:06:43.396667,,2026-04-30 19:06:43.396667,2026-04-30 19:06:43.396667,,,0,,,,Enterprise SupplyChain-Dev,Enterprise_Lakehouse,,,,,2026-04-30 19:06:43.396667,,,,Enterprise_Lakehouse.Wholesale_Codis_AFI.EXTORD,,,,,,,LogicalBronze,,,,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,AllocatedDemandCandidate,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,900601,2026-05-18 23:15:14.420000,2026-05-18 23:15:14.420000,,,2026-05-18 23:15:14.420000,,,2026-05-18 23:15:14.420000,,,,,,,,,,,,,,,,,InventoryHistory_Enh.AllocatedDemandCandidate,,,,,,,,,,,,
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,InventoryCurrent,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,44824,2026-05-18 23:21:52.916667,2026-05-18 23:21:52.916667,,,2026-05-18 23:21:52.916667,,,2026-05-18 23:21:52.916667,,,,,,,,,,,,,,,,,InventoryHistory_Enh.InventoryCurrent,,,,,,,,,,,,
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,AtpWeekEnding,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,12761454,2026-05-18 23:15:56.496667,2026-05-18 23:15:56.496667,,,2026-05-18 23:15:56.496667,,,2026-05-18 23:15:56.496667,,,,,,,,,,,,,,,,,InventoryHistory_Enh.AtpWeekEnding,,,,,,,,,,,,
+EDW-Fabric,SupplyChain_Processing_Warehouse,ReferenceMaster_Enh,Calendar,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,Enterprise SupplyChain-Dev,"[""Enterprise_Lakehouse.MasterData_DW.DimDate""]",,EnterpriseLakehouseShortcut,ReferenceMaster_ENH.vw_Calendar,Fabric Pipeline,ReferenceMaster_ENH.Calendar,,,,720,monthly,overwrite,"-- ---- ReferenceMaster_Enh.v_Calendar ----
+CREATE   VIEW ReferenceMaster_Enh.v_Calendar AS
+SELECT
+    -- Keys (existing)
+    CAST(DateKey AS INT)                          AS SKDate,
+    CAST(MapicsDate AS INT)                       AS MapicsDate,
+    CAST(DateID AS DATE)                          AS Date,
+    CAST(DateTimeID AS DATE)                      AS Datetime,
+    CAST(CalendarDate AS DATE)                    AS Calendar,
+
+    -- Calendar Day (existing + 1 NEW)
+    TRIM(CalendarDateName)                        AS CalendarDateName,
+    CAST(CalendarDateIndicator AS INT)            AS CalDateIndicatorNum,        -- NEW
+    CAST(CalendarDayOfWeek AS INT)                AS CalDayOfWeekNum,
+    TRIM(CalendarDayOfWeekName)                   AS CalDayOfWeekName,
+    CAST(CalendarDayOfMonth AS INT)               AS CalDayOfMonthNum,
+    CAST(CalendarDayOfYear AS INT)                AS CalDayOfYearNum,
+
+    -- Calendar Week (existing + 2 NEW)
+    CAST(CalendarWeek AS INT)                     AS CalWeekNum,
+    CAST(CalendarWeekIndicator AS INT)            AS CalWeekIndicatorNum,        -- NEW
+    CAST(CalendarWeekYear AS INT)                 AS CalWeekYearNum,
+    TRIM(CalendarWeekYearName)                    AS CalWeekYearName,
+    CAST(CalendarWeekFirstDate AS DATE)           AS CalWeekFirst,
+    CAST(CalendarWeekLastDate AS DATE)            AS CalWeekLast,
+    CAST(CalendarWeekOfMonth AS INT)              AS CalWeekOfMonthNum,          -- NEW
+
+    -- Calendar Month (existing",EXEC Meta.usp_GenericLoad ReferenceMaster_ENH.Calendar,,,21551,2026-05-05 07:51:02.740000,2026-05-05 07:51:02.740000,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-05-05 07:51:02.740000,,2026-05-05 07:51:02.740000,2026-05-05 07:51:02.740000,Table,,0,75,,,Enterprise SupplyChain-Dev,SupplyChain_Processing_Warehouse,,,,,2026-05-05 07:51:02.740000,,,,ReferenceMaster_ENH.Calendar,,,,,,,ReferenceMaster,,,,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,ReferenceMaster_Enh,CustomerGrouping,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,Enterprise SupplyChain-Dev,"[""Enterprise_Lakehouse.Wholesale_ProductSourcing_AFI.CustomerGrouping""]",,EnterpriseLakehouseShortcut,ReferenceMaster_ENH.vw_CustomerGrouping,Fabric Pipeline,ReferenceMaster_ENH.CustomerGrouping,,,,720,monthly,overwrite,"-- ---- ReferenceMaster_Enh.v_CustomerGrouping ----
+CREATE VIEW ReferenceMaster_Enh.v_CustomerGrouping AS
+SELECT DISTINCT UPPER(TRIM(CustomerGroup)) AS CustomerGroupCode, TRIM(CustomerNumber) AS Customer
+FROM Enterprise_Lakehouse.Wholesale_ProductSourcing_AFI.CustomerGrouping WHERE CustomerGroup IS NOT NULL",EXEC Meta.usp_GenericLoad ReferenceMaster_ENH.CustomerGrouping,,,35617,2026-05-02 02:14:11.466667,2026-05-02 02:14:11.466667,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-05-02 02:14:11.466667,,2026-05-02 02:14:11.466667,2026-05-02 02:14:11.466667,Table,,0,3,,,Enterprise SupplyChain-Dev,SupplyChain_Processing_Warehouse,,,,,2026-05-02 02:14:11.466667,,,,ReferenceMaster_ENH.CustomerGrouping,,,,,,,ReferenceMaster,,,,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,SupplyPlan,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,3879820,2026-05-18 23:19:52.050000,2026-05-18 23:19:52.050000,,,2026-05-18 23:19:52.050000,,,2026-05-18 23:19:52.050000,,,,,,,,,,,,,,,,,InventoryHistory_Enh.SupplyPlan,,,,,,,,,,,,
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,SafetyStockHelper,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,16358007,2026-05-18 23:27:37.040000,2026-05-18 23:27:37.040000,,,2026-05-18 23:27:37.040000,,,2026-05-18 23:27:37.040000,,,,,,,,,,,,,,,,,InventoryHistory_Enh.SafetyStockHelper,,,,,,,,,,,,
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,AwdHelper,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,4486435,2026-05-18 23:23:28.440000,2026-05-18 23:23:28.440000,,,2026-05-18 23:23:28.440000,,,2026-05-18 23:23:28.440000,,,,,,,,,,,,,,,,,InventoryHistory_Enh.AwdHelper,,,,,,,,,,,,
+EDW-Fabric,SupplyChain_Gold_Warehouse,ForecastAccuracy_DW,DimWarehouse,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,SC_ForecastAccuracy,EDW-Fabric,SupplyChain DA,"[""ReferenceMaster_ENH.Warehouse""]",,,ForecastAccuracy_DW.vw_DimWarehouse,Fabric Pipeline,ForecastAccuracy_DW.DimWarehouse,,,,24,daily,overwrite,"-- ---- ForecastAccuracy_DW.v_DimWarehouse ----
+CREATE VIEW ForecastAccuracy_DW.v_DimWarehouse AS
+SELECT * FROM SupplyChain_Processing_Warehouse.ReferenceMaster_Enh.Warehouse",EXEC Meta.usp_GenericLoad ForecastAccuracy_DW.DimWarehouse,,,999,2026-05-10 06:43:25.670000,2026-05-10 06:43:25.670000,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-05-10 06:43:25.670000,,2026-05-10 06:43:25.670000,2026-05-10 06:43:25.670000,Table,,0,9,,,SupplyChain DA,SupplyChain_Gold_Warehouse,,,,,2026-05-10 06:43:25.670000,,,,ForecastAccuracy_DW.DimWarehouse,,,,,,,Gold,,,,,True
+EDW-Fabric,SupplyChain_Gold_Warehouse,ForecastAccuracy_DW,FactForecastActual,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,Enterprise SupplyChain-Dev,"[""SalesHistory_ENH.ActualDemandMonthly"",""ForecastHistory_ENH.ForecastDemandMonthly"",""ForecastHistory_ENH.NaiveForecastMonthly""]",,GoldPublish,ForecastAccuracy_DW.vw_FactForecastActual,Fabric Pipeline,ForecastAccuracy_DW.FactForecastActual,,,,24,daily,overwrite,"-- ---- ForecastAccuracy_DW.v_FactForecastActual ----
+CREATE VIEW ForecastAccuracy_DW.v_FactForecastActual AS
+SELECT ItemSKU, WarehouseCode, CustomerGroupCode, FSCMonthFirst, FSCMonthLast,
+    CAST('Actual demand' AS VARCHAR(20)) AS HorizonCode, StatusCode, VersionName, CAST(QtyDemand AS FLOAT) AS Qty,
+    CAST(GETUTCDATE() AS DATETIME2(6)) AS LoadDT
+FROM SupplyChain_Processing_Warehouse.SalesHistory_Enh.ActualDemandMonthly
+UNION ALL SELECT ItemSKU, WarehouseCode, CustomerGroupCode, FSCMonthFirst, FSCMonthLast,
+    HorizonCode, StatusCode, VersionCode, CAST(QtyForecast AS FLOAT),
+    CAST(GETUTCDATE() AS DATETIME2(6))
+FROM SupplyChain_Processing_Warehouse.ForecastHistory_Enh.ForecastDemandMonthly
+UNION ALL SELECT ItemSKU, WarehouseCode, CustomerGroupCode, FSCMonthFirst, FSCMonthLast,
+    CAST('Naive forecast' AS VARCHAR(20)), StatusCode, VersionName, CAST(QtyDemand AS FLOAT),
+    CAST(GETUTCDATE() AS DATETIME2(6))
+FROM SupplyChain_Processing_Warehouse.ForecastHistory_Enh.NaiveForecastMonthly",EXEC Meta.usp_GenericLoad ForecastAccuracy_DW.FactForecastActual,,,40550760,2026-04-30 19:25:09.790000,2026-04-30 19:25:09.790000,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-04-30 19:25:09.790000,,2026-04-30 19:25:09.790000,2026-04-30 19:25:09.790000,Table,,0,10,,,Enterprise SupplyChain-Dev,SupplyChain_Gold_Warehouse,,,,,2026-04-30 19:25:09.790000,,,,ForecastAccuracy_DW.FactForecastActual,,,,,,,Gold,,"[""SalesHistory_ENH.ActualDemandMonthly"",""ForecastHistory_ENH.ForecastDemandMonthly"",""ForecastHistory_ENH.NaiveForecastMonthly""]",,,True
+EDW-Fabric,SupplyChain_Gold_Warehouse,ForecastAccuracy_DW,DimCustomerGrouping,Table,CustomerGroupCode,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,SC_ForecastAccuracy,EDW-Fabric,SupplyChain DA,"[""ReferenceMaster_ENH.CustomerGrouping""]",,,ForecastAccuracy_DW.vw_DimCustomerGrouping,Fabric Pipeline,ForecastAccuracy_DW.DimCustomerGrouping,,,,24,daily,overwrite,"-- ---- ForecastAccuracy_DW.v_DimCustomerGrouping ----
+CREATE VIEW ForecastAccuracy_DW.v_DimCustomerGrouping AS
+SELECT DISTINCT CustomerGroupCode, Customer,
+    CAST(GETUTCDATE() AS DATETIME2(6)) AS LoadDT
+FROM SupplyChain_Processing_Warehouse.ReferenceMaster_Enh.CustomerGrouping
+WHERE CustomerGroupCode IS NOT NULL",EXEC Meta.usp_GenericLoad ForecastAccuracy_DW.DimCustomerGrouping,,,,2026-05-04 00:00:00,,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,,,2026-05-04 00:00:00,2026-05-04 00:00:00,Table,,0,3,,,SupplyChain DA,SupplyChain_Gold_Warehouse,,,,,,,,,ForecastAccuracy_DW.DimCustomerGrouping,,,,,,,Gold,,,,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,OpenOrderHistory_Enh,OpenOrderLineLevel,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,Enterprise SupplyChain-Dev,"[""Enterprise_Lakehouse.Wholesale_Codis_AFI.codatan"",""Enterprise_Lakehouse.Wholesale_Codis_AFI.COMAST"",""Enterprise_Lakehouse.Wholesale_Codis_AFI.EXTORD"",""Enterprise_Lakehouse.Wholesale_Codis_AFI.EXTORIT"",""ReferenceMaster_ENH.ItemMaster"",""ReferenceMaster_ENH.OrderType""]",,WarehouseTransform,OpenOrderHistory_ENH.vw_OpenOrderLineLevel,Fabric Pipeline,OpenOrderHistory_ENH.OpenOrderLineLevel,,,,24,daily,overwrite,"-- ---- OpenOrderHistory_Enh.v_OpenOrderLineLevel ----
+CREATE VIEW OpenOrderHistory_Enh.v_OpenOrderLineLevel AS
+SELECT T1.OrderID, T1.ItemSequenceNum, T1.Customer, T1.ShipToCode,
+    UPPER(RTRIM(CASE WHEN T1.ShipToCode IS NULL OR TRIM(T1.ShipToCode)='' THEN TRIM(T1.Customer) ELSE CONCAT(TRIM(T1.Customer),'-',TRIM(T1.ShipToCode)) END)) AS AccountShipTo,
+    T1.ItemSKU, T1.WarehouseCode,
+    CAST(T1.QtyOrdered-T1.QtyShipped AS INT) AS QtyOpenOrder,
+    CAST(T1.QtyBackordered AS INT) AS QtyBackorder,
+    CAST((T1.AmtExtendedSelling/CASE WHEN T1.QtyBackordered>0 THEN T1.QtyBackordered WHEN T1.QtyOrdered>0 THEN T1.QtyOrdered ELSE 1 END - COALESCE(T2.AmtFreight,0))
+        *CASE WHEN T1.QtyBackordered>0 THEN T1.QtyBackordered WHEN T1.QtyOrdered>0 THEN T1.QtyOrdered ELSE 1 END AS DECIMAL(13,2)) AS AmtOpenOrder,
+    CAST(CASE WHEN T1.QtyBackordered>0 THEN (T1.AmtExtendedSelling/T1.QtyBackordered-COALESCE(T2.AmtFreight,0))*T1.QtyBackordered ELSE 0 END AS DECIMAL(13,2)) AS AmtBackorder,
+    T3.OrderDate AS OrderTaken, T2.PromiseDate AS OriginalPromise, T1.RequestedDate AS CurrentPromise,
+    T4.FreezeDate AS OriginalRequest, T4.RequestedShipDate AS CurrentRequest, T1.ManufacturedDate AS CurrentLoad,
+    T4.OrderArrangementCode AS OrderArrivalCode, T1.AllocationFlagCode, T1.LoadDateChanges AS LoadDateChangesNum,
+    T3.LeadTimeDays AS LeadTimeDaysNum, T3.ShippingInstructionsName,
+    CASE WHEN T1.ItemDescriptionShortName=T1.ItemDescriptionName THEN '' ELSE T1.ItemDescriptionShortName EN",EXEC Meta.usp_GenericLoad OpenOrderHistory_ENH.OpenOrderLineLevel,,,175653,2026-05-04 13:06:04.640000,2026-05-10 04:32:35.490000,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-05-10 04:32:35.490000,Invalid object name 'OpenOrderHistory_ENH.OpenOrderLineLevel'.,2026-05-04 13:06:04.640000,2026-05-04 13:06:04.640000,Table,,0,26,,,Enterprise SupplyChain-Dev,SupplyChain_Processing_Warehouse,,,,,2026-05-10 04:32:35.490000,,,,OpenOrderHistory_ENH.OpenOrderLineLevel,,,,,,,DomainSilver,,,,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,ReferenceMaster_Enh,Warehouse,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,Enterprise SupplyChain-Dev,"[""Enterprise_Lakehouse.SupplyChain_DW.DimAFIWarehouses""]",,EnterpriseLakehouseShortcut,ReferenceMaster_ENH.vw_Warehouse,Fabric Pipeline,ReferenceMaster_ENH.Warehouse,,,,24,daily,overwrite,"-- ---- ReferenceMaster_Enh.v_Warehouse ----
+CREATE VIEW ReferenceMaster_Enh.v_Warehouse AS SELECT * FROM Enterprise_Lakehouse.SupplyChain_DW.DimAFIWarehouses",EXEC Meta.usp_GenericLoad ReferenceMaster_ENH.Warehouse,,,55,2026-05-04 00:08:00.533333,2026-05-10 04:18:09.070000,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-05-10 04:18:09.070000,,2026-05-04 00:08:00.533333,2026-05-04 00:08:00.533333,Table,,0,9,,,Enterprise SupplyChain-Dev,SupplyChain_Processing_Warehouse,,,,,2026-05-10 04:18:09.070000,,,,ReferenceMaster_ENH.Warehouse,,,,,,,ReferenceMaster,,,,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,SalesHistory_Enh,InvoiceDetailLineLevel,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,Enterprise SupplyChain-Dev,"[""Staging_WRK.InvoiceDetailEdw"",""Staging_WRK.InvoiceHeaderEdw"",""ReferenceMaster_ENH.CustomerAccountGroup""]",,WarehouseTransform,SalesHistory_ENH.vw_InvoiceDetailLineLevel,Fabric Pipeline,SalesHistory_ENH.InvoiceDetailLineLevel,,,,24,daily,overwrite,"-- ---- SalesHistory_Enh.v_InvoiceDetailLineLevel ----
+CREATE VIEW SalesHistory_Enh.v_InvoiceDetailLineLevel AS
+SELECT INV.InvoiceID, INV.InvoiceExtended, INV.OrderID, INV.ItemSequenceNum,
+    INV.Customer, INV.ShipToCode,
+    UPPER(RTRIM(CASE WHEN INV.ShipToCode IS NULL OR TRIM(INV.ShipToCode)='' THEN TRIM(INV.Customer) ELSE CONCAT(TRIM(INV.Customer),'-',TRIM(INV.ShipToCode)) END)) AS AccountShipTo,
+    INV.ItemSKU, INV.WarehouseCode,
+    UPPER(CG.CustomerGroupCode) AS CustomerGroupCode, IH.LeadTimeDaysNum,
+    INV.QtyShipped, INV.QtyOrdered, INV.QtyBackordered,
+    INV.AmtInvoice, INV.AmtNetSales, INV.AmtPrice, INV.AmtStandardPrice,
+    INV.AmtContractPrice, INV.AmtDiscount, INV.AmtPriceAdjustment, INV.AmtFreight,
+    INV.InvoiceDate, INV.OrderDate, INV.Request, INV.CurrentRequest,
+    INV.CurrentPromise, INV.OriginalRequest, INV.OriginalPromise,
+    INV.PromisedDelivery, INV.Delivery, INV.ActualDelivery,
+    INV.OrderTypeCode, INV.OrderType3Code, INV.CreditCode, INV.ItemClassCode, INV.OrderItemStatusCode
+FROM Staging_Wrk.InvoiceDetailEdw AS INV
+LEFT JOIN Staging_Wrk.InvoiceHeaderEdw AS IH ON INV.InvoiceID=IH.InvoiceID AND INV.InvoiceDate=IH.InvoiceDate AND INV.OrderDate=IH.OrderDate AND INV.OrderID=IH.OrderID
+LEFT JOIN ReferenceMaster_Enh.CustomerAccountGroup AS CG ON CG.Customer=INV.Customer",EXEC Meta.usp_GenericLoad SalesHistory_ENH.InvoiceDetailLineLevel,,,88761984,2026-05-04 13:08:33.630000,2026-05-10 04:33:01.943333,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-05-10 04:33:01.943333,There is already an object named 'InvoiceDetailLineLevel' in the database.,2026-05-04 13:08:33.630000,2026-05-04 13:08:33.630000,Table,,0,38,,,Enterprise SupplyChain-Dev,SupplyChain_Processing_Warehouse,,,,,2026-05-10 04:33:01.943333,,,,SalesHistory_ENH.InvoiceDetailLineLevel,,,,,,,DomainSilver,,,,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,ForecastHistory_Enh,NaiveForecastMonthly,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,Enterprise SupplyChain-Dev,"[""SalesHistory_ENH.ActualDemandMonthly"",""ReferenceMaster_ENH.Calendar""]",,WarehouseTransform,ForecastHistory_ENH.vw_NaiveForecastMonthly,Fabric Pipeline,ForecastHistory_ENH.NaiveForecastMonthly,,,,24,daily,overwrite,"-- ---- ForecastHistory_Enh.v_NaiveForecastMonthly ----
+CREATE VIEW ForecastHistory_Enh.v_NaiveForecastMonthly AS
+WITH
+mw AS (SELECT FSCMonthFirst, COUNT(DISTINCT FSCWeekFirst) AS NumWeeks FROM ReferenceMaster_Enh.Calendar GROUP BY FSCMonthFirst),
+am AS (SELECT ItemSKU, WarehouseCode, CustomerGroupCode, FSCMonthFirst, FSCMonthLast, SUM(QtyDemand) AS QtyActual FROM SalesHistory_Enh.ActualDemandMonthly GROUP BY ItemSKU, WarehouseCode, CustomerGroupCode, FSCMonthFirst, FSCMonthLast),
+al AS (SELECT A.*, MW.NumWeeks,
+    LAG(A.QtyActual) OVER (PARTITION BY A.ItemSKU, A.WarehouseCode, A.CustomerGroupCode ORDER BY A.FSCMonthFirst) AS QtyActualPrior,
+    LAG(MW.NumWeeks) OVER (PARTITION BY A.ItemSKU, A.WarehouseCode, A.CustomerGroupCode ORDER BY A.FSCMonthFirst) AS NumWeeksPrior
+    FROM am A INNER JOIN mw MW ON MW.FSCMonthFirst=A.FSCMonthFirst),
+cf AS (SELECT TOP 1 FSCYearNum FROM ReferenceMaster_Enh.Calendar WHERE Date=CAST(GETDATE() AS DATE))
+SELECT L.ItemSKU, L.WarehouseCode, L.CustomerGroupCode, L.FSCMonthFirst, L.FSCMonthLast,
+    CAST(L.QtyActualPrior/L.NumWeeksPrior*L.NumWeeks AS INT) AS QtyDemand,
+    'Naive Forecast' AS StatusCode, 'Naive Forecast' AS VersionName
+FROM al L INNER JOIN ReferenceMaster_Enh.Calendar CAL ON CAL.Date=L.FSCMonthFirst CROSS JOIN cf
+WHERE L.QtyActualPrior IS NOT NULL AND L.NumWeeksPrior>0 AND L.WarehouseCode NOT IN ('C','CNW','C35','55')
+    AND CAL.FSCMonthYearNum>=(cf.FSCYearNum-3)*100 AND CAL.FSCMonthYearNum<=(cf.FSCYearNum+1)*100+1299",EXEC Meta.usp_GenericLoad ForecastHistory_ENH.NaiveForecastMonthly,,,2054219,2026-05-04 13:17:27.443333,2026-05-10 04:42:18.250000,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-05-10 04:42:18.250000,Invalid object name 'ForecastHistory.vw_NaiveForecastMonthly'.,2026-05-04 13:17:27.443333,2026-05-04 13:17:27.443333,Table,,0,9,,,Enterprise SupplyChain-Dev,SupplyChain_Processing_Warehouse,,,,,2026-05-10 04:42:18.250000,,,,ForecastHistory_ENH.NaiveForecastMonthly,,,,,,,DomainSilver,,"[""SalesHistory_ENH.ActualDemandMonthly""]",,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,OpenOrderHistory_Enh,OpenOrderMonthly,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,Enterprise SupplyChain-Dev,"[""OpenOrderHistory_ENH.OpenOrderLineLevel"",""ReferenceMaster_ENH.Calendar"",""ReferenceMaster_ENH.CustomerAccountGroup""]",,WarehouseTransform,OpenOrderHistory_ENH.vw_OpenOrderMonthly,Fabric Pipeline,OpenOrderHistory_ENH.OpenOrderMonthly,,,,24,daily,overwrite,"-- ---- OpenOrderHistory_Enh.v_OpenOrderMonthly ----
+
+CREATE VIEW OpenOrderHistory_Enh.v_OpenOrderMonthly AS
+WITH cf AS (SELECT TOP 1 FSCYearNum FROM ReferenceMaster_Enh.Calendar WHERE Date=CAST(GETDATE() AS DATE))
+SELECT OO.ItemSKU, OO.WarehouseCode, UPPER(CG.CustomerGroupCode) AS CustomerGroupCode,
+    CAL.FSCMonthFirst, CAL.FSCMonthLast,
+    SUM(OO.QtyOpenOrder) AS QtyOpenOrder, SUM(OO.QtyBackorder) AS QtyBackorder,
+    SUM(OO.AmtOpenOrder) AS AmtOpenOrder, SUM(OO.AmtBackorder) AS AmtBackorder,
+    COUNT(*) AS OrderLines, COUNT(DISTINCT OO.OrderID) AS DistinctOrders,
+    SUM(CASE WHEN OO.PastDueFlagCode='Past Due' THEN OO.QtyOpenOrder ELSE 0 END) AS QtyPastDue,
+    SUM(CASE WHEN OO.PastDueFlagCode='Past Due' THEN OO.AmtOpenOrder ELSE 0 END) AS AmtPastDue
+FROM OpenOrderHistory_Enh.OpenOrderLineLevel OO
+INNER JOIN ReferenceMaster_Enh.Calendar CAL ON CAL.Date=OO.CurrentRequest
+LEFT JOIN ReferenceMaster_Enh.CustomerAccountGroup CG ON CG.Customer=OO.Customer
+CROSS JOIN cf WHERE CAL.FSCYearNum BETWEEN cf.FSCYearNum-3 AND cf.FSCYearNum+1
+GROUP BY OO.ItemSKU, OO.WarehouseCode, UPPER(CG.CustomerGroupCode), CAL.FSCMonthFirst, CAL.FSCMonthLast",EXEC Meta.usp_GenericLoad OpenOrderHistory_ENH.OpenOrderMonthly,,,73849,2026-05-04 13:10:55.986667,2026-05-10 04:37:54.060000,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-05-10 04:37:54.060000,Invalid object name 'OpenOrderHistory_ENH.OpenOrderMonthly'.,2026-05-04 13:10:55.986667,2026-05-04 13:10:55.986667,Table,,0,14,,,Enterprise SupplyChain-Dev,SupplyChain_Processing_Warehouse,,,,,2026-05-10 04:37:54.060000,,,,OpenOrderHistory_ENH.OpenOrderMonthly,,,,,,,DomainSilver,,"[""OpenOrderHistory_ENH.OpenOrderLineLevel""]",,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,ForecastHistory_Enh,ForecastDemandMonthly,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,Enterprise SupplyChain-Dev,"[""Staging_WRK.DemandForecastSnapshotDailyEdw"",""ReferenceMaster_ENH.ForecastCycle"",""ReferenceMaster_ENH.Calendar""]",,WarehouseTransform,ForecastHistory_ENH.vw_ForecastDemandMonthly,Fabric Pipeline,ForecastHistory_ENH.ForecastDemandMonthly,,,,24,daily,overwrite,"-- ============== Silver views ==============
+-- ============================================================
+-- Silver Views — Domain Business Logic
+-- ============================================================
+-- Layer: Silver. Pattern: JOIN + UPPER(TRIM(code)) + business derivations + aggregation.
+-- Source: SupplyChain_Processing_Warehouse
+-- Generated from live workspace scan (2026-05-06)
+-- ============================================================
+
+-- ---- ForecastHistory_Enh.v_ForecastDemandMonthly ----
+CREATE VIEW ForecastHistory_Enh.v_ForecastDemandMonthly AS
+WITH Raw AS (
+    SELECT f.ItemSKU, f.WarehouseCode, UPPER(f.CustomerGroupCode) AS CustomerGroupCode,
+        DATEFROMPARTS(CAST(f.FiscalMonth/100 AS INT), CAST(f.FiscalMonth%100 AS INT), 1) AS FiscalMonth,
+        CAST(f.SnapshotTS AS DATE) AS Snapshot, f.QtyResultantForecast, f.QtyPromotionalLift
+    FROM Staging_Wrk.DemandForecastSnapshotDailyEdw AS f
+    INNER JOIN ReferenceMaster_Enh.ForecastCycle AS c ON CAST(f.SnapshotTS AS DATE)=c.ForecastSnapshot
+),
+Calc AS (
+    SELECT FC.ItemSKU, FC.WarehouseCode, FC.CustomerGroupCode,
+        CAL.FSCMonthFirst, CAL.FSCMonthLast, FC.Snapshot,
+        CASE WHEN (YEAR(FC.FiscalMonth)*12+MONTH(FC.FiscalMonth))-(YEAR(FC.Snapshot)*12+MONTH(FC.Snapshot))=0 THEN 'Lag-0'
+             WHEN (YEAR(FC.FiscalMonth)*12+MONTH(FC.FiscalMonth))-(YEAR(FC.Snapshot)*12+MONTH(FC.Snapshot))=1 THEN 'Lag-1'
+             WHEN (YEAR(FC.FiscalMonth)*12+MONTH(FC.FiscalMonth))-(YEAR(FC.Snaps",EXEC Meta.usp_GenericLoad ForecastHistory_ENH.ForecastDemandMonthly,,,42406201,2026-05-04 13:08:31.300000,2026-05-10 04:35:28.036667,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-05-10 04:35:28.036667,Invalid object name 'ForecastHistory_ENH.ForecastDemandMonthly'.,2026-05-04 13:08:31.300000,2026-05-04 13:08:31.300000,Table,,0,11,,,Enterprise SupplyChain-Dev,SupplyChain_Processing_Warehouse,,,,,2026-05-10 04:35:28.036667,,,,ForecastHistory_ENH.ForecastDemandMonthly,,,,,,,DomainSilver,,,,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,SalesHistory_Enh,ActualDemandMonthly,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,Enterprise SupplyChain-Dev,"[""SalesHistory_ENH.InvoiceDetailLineLevel"",""OpenOrderHistory_ENH.OpenOrderLineLevel"",""ReferenceMaster_ENH.Calendar"",""ReferenceMaster_ENH.CustomerAccountGroup""]",,WarehouseTransform,SalesHistory_ENH.vw_ActualDemandMonthly,Fabric Pipeline,SalesHistory_ENH.ActualDemandMonthly,,,,24,daily,overwrite,"-- ---- SalesHistory_Enh.v_ActualDemandMonthly ----
+CREATE VIEW SalesHistory_Enh.v_ActualDemandMonthly AS
+WITH cf AS (SELECT TOP 1 FSCYearNum FROM ReferenceMaster_Enh.Calendar WHERE Date=CAST(GETDATE() AS DATE))
+SELECT INV.ItemSKU, INV.WarehouseCode,
+    CASE WHEN CAL.FSCMonthFirst<'2025-04-01' THEN 'AFICONS' ELSE INV.CustomerGroupCode END AS CustomerGroupCode,
+    CAL.FSCMonthFirst, CAL.FSCMonthLast,
+    SUM(INV.QtyShipped) AS QtyDemand, SUM(INV.AmtNetSales) AS AmtDemand, 'Invoice' AS StatusCode, 'Actual Demand' AS VersionName
+FROM SalesHistory_Enh.InvoiceDetailLineLevel INV
+INNER JOIN ReferenceMaster_Enh.Calendar CAL ON CAL.Date=DATEADD(DAY,-INV.LeadTimeDaysNum,INV.CurrentRequest)
+CROSS JOIN cf WHERE INV.QtyShipped>0 AND CAL.FSCYearNum BETWEEN cf.FSCYearNum-3 AND cf.FSCYearNum+1
+GROUP BY INV.ItemSKU, INV.WarehouseCode, CASE WHEN CAL.FSCMonthFirst<'2025-04-01' THEN 'AFICONS' ELSE INV.CustomerGroupCode END, CAL.FSCMonthFirst, CAL.FSCMonthLast
+UNION ALL
+SELECT OO.ItemSKU, OO.WarehouseCode,
+    CASE WHEN CAL.FSCMonthFirst<'2025-04-01' THEN 'AFICONS' ELSE CG.CustomerGroupCode END,
+    CAL.FSCMonthFirst, CAL.FSCMonthLast,
+    SUM(OO.QtyOpenOrder), SUM(OO.AmtOpenOrder), 'Open Order', 'Actual Demand'
+FROM OpenOrderHistory_Enh.OpenOrderLineLevel OO
+INNER JOIN ReferenceMaster_Enh.Calendar CAL ON CAL.Date=DATEADD(DAY,-OO.LeadTimeDaysNum,OO.CurrentRequest)
+LEFT JOIN ReferenceMaster_Enh.CustomerAccountGroup CG ON CG.Customer=OO.Customer
+CROSS JOIN cf WHERE OO.AllocationFlagCode='2' AND ",EXEC Meta.usp_GenericLoad SalesHistory_ENH.ActualDemandMonthly,,,2655980,2026-05-04 13:12:18.553333,2026-05-10 04:38:36.143333,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-05-10 04:38:36.143333,Invalid object name 'SalesHistory_ENH.ActualDemandMonthly'.,2026-05-04 13:12:18.553333,2026-05-04 13:12:18.553333,Table,,0,10,,,Enterprise SupplyChain-Dev,SupplyChain_Processing_Warehouse,,,,,2026-05-10 04:38:36.143333,,,,SalesHistory_ENH.ActualDemandMonthly,,,,,,,DomainSilver,,"[""SalesHistory_ENH.InvoiceDetailLineLevel"",""OpenOrderHistory_ENH.OpenOrderLineLevel""]",,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,SalesHistory_Enh,InvoiceWeekly,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,Enterprise SupplyChain-Dev,"[""SalesHistory_ENH.InvoiceDetailLineLevel"",""ReferenceMaster_ENH.Calendar""]",,WarehouseTransform,SalesHistory_ENH.vw_InvoiceWeekly,Fabric Pipeline,SalesHistory_ENH.InvoiceWeekly,,,,24,daily,overwrite,"-- ---- SalesHistory_Enh.v_InvoiceWeekly ----
+CREATE VIEW SalesHistory_Enh.v_InvoiceWeekly AS
+WITH cf AS (SELECT TOP 1 FSCYearNum FROM ReferenceMaster_Enh.Calendar WHERE Date=CAST(GETDATE() AS DATE))
+SELECT INV.AccountShipTo, INV.ItemSKU, INV.WarehouseCode, INV.CustomerGroupCode,
+    CAL.FSCWeekFirst, CAL.FSCWeekLast,
+    SUM(INV.QtyShipped) AS QtyShipped, SUM(INV.AmtNetSales) AS AmtNetSales,
+    SUM(INV.AmtInvoice) AS AmtInvoice, SUM(INV.AmtFreight) AS AmtFreight,
+    COUNT(*) AS InvoiceLines, COUNT(DISTINCT INV.InvoiceID) AS DistinctInvoices
+FROM SalesHistory_Enh.InvoiceDetailLineLevel INV
+INNER JOIN ReferenceMaster_Enh.Calendar CAL ON CAL.Date=INV.InvoiceDate
+CROSS JOIN cf WHERE INV.QtyShipped>0 AND CAL.FSCYearNum>=cf.FSCYearNum-3
+GROUP BY INV.AccountShipTo, INV.ItemSKU, INV.WarehouseCode, INV.CustomerGroupCode, CAL.FSCWeekFirst, CAL.FSCWeekLast",EXEC Meta.usp_GenericLoad SalesHistory_ENH.InvoiceWeekly,,,37738742,2026-05-04 13:14:12.383333,2026-05-10 04:40:36.156667,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-05-10 04:40:36.156667,There is already an object named 'InvoiceWeekly' in the database.,2026-05-04 13:14:12.383333,2026-05-04 13:14:12.383333,Table,,0,13,,,Enterprise SupplyChain-Dev,SupplyChain_Processing_Warehouse,,,,,2026-05-10 04:40:36.156667,,,,SalesHistory_ENH.InvoiceWeekly,,,,,,,DomainSilver,,"[""SalesHistory_ENH.InvoiceDetailLineLevel""]",,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,SalesHistory_Enh,ActualDemandWeekly,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,Enterprise SupplyChain-Dev,"[""SalesHistory_ENH.InvoiceDetailLineLevel"",""OpenOrderHistory_ENH.OpenOrderLineLevel"",""ReferenceMaster_ENH.Calendar"",""ReferenceMaster_ENH.CustomerAccountGroup""]",,WarehouseTransform,SalesHistory_ENH.vw_ActualDemandWeekly,Fabric Pipeline,SalesHistory_ENH.ActualDemandWeekly,,,,24,daily,overwrite,"-- ---- SalesHistory_Enh.v_ActualDemandWeekly ----
+CREATE VIEW SalesHistory_Enh.v_ActualDemandWeekly AS
+WITH cf AS (SELECT TOP 1 FSCYearNum FROM ReferenceMaster_Enh.Calendar WHERE Date=CAST(GETDATE() AS DATE))
+SELECT INV.ItemSKU, INV.WarehouseCode,
+    CASE WHEN CAL.FSCWeekFirst<'2025-04-01' THEN 'AFICONS' ELSE INV.CustomerGroupCode END AS CustomerGroupCode,
+    CAL.FSCWeekFirst, CAL.FSCWeekLast,
+    SUM(INV.QtyShipped) AS QtyDemand, SUM(INV.AmtNetSales) AS AmtDemand, 'Invoice' AS StatusCode, 'Actual Demand' AS VersionName
+FROM SalesHistory_Enh.InvoiceDetailLineLevel INV
+INNER JOIN ReferenceMaster_Enh.Calendar CAL ON CAL.Date=DATEADD(DAY,-INV.LeadTimeDaysNum,INV.CurrentRequest)
+CROSS JOIN cf WHERE INV.QtyShipped>0 AND CAL.FSCYearNum BETWEEN cf.FSCYearNum-3 AND cf.FSCYearNum+1
+GROUP BY INV.ItemSKU, INV.WarehouseCode, CASE WHEN CAL.FSCWeekFirst<'2025-04-01' THEN 'AFICONS' ELSE INV.CustomerGroupCode END, CAL.FSCWeekFirst, CAL.FSCWeekLast
+UNION ALL
+SELECT OO.ItemSKU, OO.WarehouseCode,
+    CASE WHEN CAL.FSCWeekFirst<'2025-04-01' THEN 'AFICONS' ELSE CG.CustomerGroupCode END,
+    CAL.FSCWeekFirst, CAL.FSCWeekLast,
+    SUM(OO.QtyOpenOrder), SUM(OO.AmtOpenOrder), 'Open Order', 'Actual Demand'
+FROM OpenOrderHistory_Enh.OpenOrderLineLevel OO
+INNER JOIN ReferenceMaster_Enh.Calendar CAL ON CAL.Date=DATEADD(DAY,-OO.LeadTimeDaysNum,OO.CurrentRequest)
+LEFT JOIN ReferenceMaster_Enh.CustomerAccountGroup CG ON CG.Customer=OO.Customer
+CROSS JOIN cf WHERE OO.AllocationFlagCode='2' AND CAL.FSCYearNum BETWEEN cf.FSCYearNum-3 AND cf.FSCYearNum+1
+GROUP BY OO.ItemSKU, OO.WarehouseCode, CASE WHEN CAL.FSCWeekFirst<'2025-04-01' THEN 'AFICONS' ELSE CG.CustomerGroupCode END, CAL.FSCWeekFirst, CAL.FSCWeekLast",EXEC Meta.usp_GenericLoad SalesHistory_ENH.ActualDemandWeekly,,,7888842,2026-05-04 13:12:11.896667,2026-05-10 04:38:49.243333,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-05-10 04:38:49.243333,Invalid object name 'SalesHistory_ENH.ActualDemandWeekly'.,2026-05-04 13:12:11.896667,2026-05-04 13:12:11.896667,Table,,0,10,,,Enterprise SupplyChain-Dev,SupplyChain_Processing_Warehouse,,,,,2026-05-10 04:38:49.243333,,,,SalesHistory_ENH.ActualDemandWeekly,,,,,,,DomainSilver,,"[""SalesHistory_ENH.InvoiceDetailLineLevel"",""OpenOrderHistory_ENH.OpenOrderLineLevel""]",,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,PurchaseOrder,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,16771889,2026-05-18 23:19:02.963333,2026-05-18 23:19:02.963333,,,2026-05-18 23:19:02.963333,,,2026-05-18 23:19:02.963333,,,,,,,,,,,,,,,,,InventoryHistory_Enh.PurchaseOrder,,,,,,,,,,,,
+EDW-Fabric,SupplyChain_Processing_Warehouse,ReferenceMaster_Enh,CustomerAccountGroup,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,Enterprise SupplyChain-Dev,"[""Enterprise_Lakehouse.Wholesale_ProductSourcing_AFI.CustomerGrouping""]",,EnterpriseLakehouseShortcut,ReferenceMaster_ENH.vw_CustomerAccountGroup,Fabric Pipeline,ReferenceMaster_ENH.CustomerAccountGroup,,,,720,monthly,overwrite,"-- ---- ReferenceMaster_Enh.v_CustomerAccountGroup ----
+CREATE VIEW ReferenceMaster_Enh.v_CustomerAccountGroup AS
+SELECT TRIM(CustomerNumber) AS Customer, UPPER(TRIM(CustomerGroup)) AS CustomerGroupCode,
+    TRIM(CustomerGroupLevel3) AS CustomerGroupLevel3Code, TRIM(BusinessTypeCode) AS BusinessTypeCode
+FROM Enterprise_Lakehouse.Wholesale_ProductSourcing_AFI.CustomerGrouping",EXEC Meta.usp_GenericLoad ReferenceMaster_ENH.CustomerAccountGroup,,,35617,2026-05-02 02:14:08.500000,2026-05-02 02:14:08.500000,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-05-02 02:14:08.500000,,2026-05-02 02:14:08.500000,2026-05-02 02:14:08.500000,Table,,0,5,,,Enterprise SupplyChain-Dev,SupplyChain_Processing_Warehouse,,,,,2026-05-02 02:14:08.500000,,,,ReferenceMaster_ENH.CustomerAccountGroup,,,,,,,ReferenceMaster,,,,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,ReferenceMaster_Enh,OrderType,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,Enterprise SupplyChain-Dev,"[""Enterprise_Lakehouse.Wholesale_Codis_AFI.AAORDTYP""]",,EnterpriseLakehouseShortcut,ReferenceMaster_ENH.vw_OrderType,Fabric Pipeline,ReferenceMaster_ENH.OrderType,,,,720,monthly,overwrite,"-- ---- ReferenceMaster_Enh.v_OrderType ----
+CREATE VIEW ReferenceMaster_Enh.v_OrderType AS SELECT * FROM Enterprise_Lakehouse.Wholesale_Codis_AFI.AAORDTYP",EXEC Meta.usp_GenericLoad ReferenceMaster_ENH.OrderType,,,29,2026-05-02 02:14:57.546667,2026-05-02 02:14:57.546667,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-05-02 02:14:57.546667,,2026-05-02 02:14:57.546667,2026-05-02 02:14:57.546667,Table,,0,21,,,Enterprise SupplyChain-Dev,SupplyChain_Processing_Warehouse,,,,,2026-05-02 02:14:57.546667,,,,ReferenceMaster_ENH.OrderType,,,,,,,ReferenceMaster,,,,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,LogilityItemStatusSnapshotWeekly,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,100227,2026-05-18 23:28:20.536667,2026-05-18 23:28:20.536667,,,2026-05-18 23:28:20.536667,,,2026-05-18 23:28:20.536667,,,,,,,,,,,,,,,,,InventoryHistory_Enh.LogilityItemStatusSnapshotWeekly,,,,,,,,,,,,
+EDW-Fabric,SupplyChain_Processing_Warehouse,ReferenceMaster_Enh,ItemMaster,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,Enterprise SupplyChain-Dev,"[""Enterprise_Lakehouse.MasterData_DW.DimItemMaster""]",,EnterpriseLakehouseShortcut,ReferenceMaster_ENH.vw_ItemMaster,Fabric Pipeline,ReferenceMaster_ENH.ItemMaster,,,,720,monthly,overwrite,"-- ---- ReferenceMaster_Enh.v_ItemMaster ----
+CREATE VIEW ReferenceMaster_Enh.v_ItemMaster AS SELECT * FROM Enterprise_Lakehouse.MasterData_DW.DimItemMaster",EXEC Meta.usp_GenericLoad ReferenceMaster_ENH.ItemMaster,,,381163,2026-05-02 02:14:54.423333,2026-05-02 02:14:54.423333,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-05-02 02:14:54.423333,,2026-05-02 02:14:54.423333,2026-05-02 02:14:54.423333,Table,,0,174,,,Enterprise SupplyChain-Dev,SupplyChain_Processing_Warehouse,,,,,2026-05-02 02:14:54.423333,,,,ReferenceMaster_ENH.ItemMaster,,,,,,,ReferenceMaster,,,,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,ForecastSnapshotWeekly,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,4254382,2026-05-18 23:16:37.890000,2026-05-18 23:16:37.890000,,,2026-05-18 23:16:37.890000,,,2026-05-18 23:16:37.890000,,,,,,,,,,,,,,,,,InventoryHistory_Enh.ForecastSnapshotWeekly,,,,,,,,,,,,
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,WarehouseExt,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,53,2026-05-18 23:19:57.230000,2026-05-18 23:19:57.230000,,,2026-05-18 23:19:57.230000,,,2026-05-18 23:19:57.230000,,,,,,,,,,,,,,,,,InventoryHistory_Enh.WarehouseExt,,,,,,,,,,,,
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,ForecastCurrent,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,2762676,2026-05-18 23:16:15.826667,2026-05-18 23:16:15.826667,,,2026-05-18 23:16:15.826667,,,2026-05-18 23:16:15.826667,,,,,,,,,,,,,,,,,InventoryHistory_Enh.ForecastCurrent,,,,,,,,,,,,
+EDW-Fabric,SupplyChain_Gold_Warehouse,ForecastAccuracy_DW,DimProduct,Table,ItemSKU,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,SC_ForecastAccuracy,EDW-Fabric,SupplyChain DA,"[""Staging_WRK.ProductEdw""]",,,ForecastAccuracy_DW.vw_DimProduct,Fabric Pipeline,ForecastAccuracy_DW.DimProduct,,,,24,daily,overwrite,"-- ---- ForecastAccuracy_DW.v_DimProduct ----
+
+CREATE VIEW ForecastAccuracy_DW.v_DimProduct AS
+SELECT *, CAST(GETUTCDATE() AS DATETIME2(6)) AS LoadDT
+FROM SupplyChain_Processing_Warehouse.Staging_Wrk.ProductEdw",EXEC Meta.usp_GenericLoad ForecastAccuracy_DW.DimProduct,,,999,2026-05-10 06:36:35.706667,2026-05-10 06:36:35.706667,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-05-10 06:36:35.706667,,2026-05-10 06:36:35.706667,2026-05-10 06:36:35.706667,Table,,0,90,,,SupplyChain DA,SupplyChain_Gold_Warehouse,,,,,2026-05-10 06:36:35.706667,,,,ForecastAccuracy_DW.DimProduct,,,,,,,Gold,,,,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,ReferenceMaster_Enh,ForecastHorizon,Table,,,Delta,,,AUTO,CLUSTERED COLUMNSTORE,supplychain,EDW-Fabric,Enterprise SupplyChain-Dev,"[""manual""]",,EnterpriseLakehouseShortcut,ReferenceMaster_ENH.vw_ForecastHorizon,Fabric Pipeline,ReferenceMaster_ENH.ForecastHorizon,,,,720,monthly,overwrite,"-- ---- ReferenceMaster_Enh.v_ForecastHorizon ----
+
+CREATE   VIEW ReferenceMaster_Enh.v_ForecastHorizon AS
+SELECT 'Lag-0'          AS HorizonCode, 1 AS [Rank] UNION ALL
+SELECT 'Lag-1',          2 UNION ALL
+SELECT 'Lag-2',          3 UNION ALL
+SELECT 'Lag-3',          4 UNION ALL
+SELECT 'Lag-4',          5 UNION ALL
+SELECT '>Lag-4',         6 UNION ALL
+SELECT 'Actual demand',  7 UNION ALL
+SELECT 'Naive forecast', 8",EXEC Meta.usp_GenericLoad ReferenceMaster_ENH.ForecastHorizon,,,8,2026-05-05 07:54:16.026667,2026-05-05 07:54:16.026667,NAric@ashleyfurniture.com,NAric@ashleyfurniture.com,2026-05-05 07:54:16.026667,,2026-05-05 07:54:16.026667,2026-05-05 07:54:16.026667,Table,,0,3,,,Enterprise SupplyChain-Dev,SupplyChain_Processing_Warehouse,,,,,2026-05-05 07:54:16.026667,,,,ReferenceMaster_ENH.ForecastHorizon,,,,,,,ReferenceMaster,,,,,True
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,HoldingTransferSnapshotDaily,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,835,2026-05-18 23:20:56.580000,2026-05-18 23:20:56.580000,,,2026-05-18 23:20:56.580000,,,2026-05-18 23:20:56.580000,,,,,,,,,,,,,,,,,InventoryHistory_Enh.HoldingTransferSnapshotDaily,,,,,,,,,,,,
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,MovementFlagHelper,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,5242072,2026-05-18 23:24:56.580000,2026-05-18 23:24:56.580000,,,2026-05-18 23:24:56.580000,,,2026-05-18 23:24:56.580000,,,,,,,,,,,,,,,,,InventoryHistory_Enh.MovementFlagHelper,,,,,,,,,,,,
+EDW-Fabric,SupplyChain_Processing_Warehouse,InventoryHistory_Enh,HoldingTransfer,Table,,,Delta,,,,,,,,,,,,Fabric Pipeline,,,,,,,,,,,,835,2026-05-18 23:16:44.360000,2026-05-18 23:16:44.360000,,,2026-05-18 23:16:44.360000,,,2026-05-18 23:16:44.360000,,,,,,,,,,,,,,,,,InventoryHistory_Enh.HoldingTransfer,,,,,,,,,,,,

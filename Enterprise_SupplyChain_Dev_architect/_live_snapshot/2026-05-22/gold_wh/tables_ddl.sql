@@ -1,0 +1,560 @@
+-- Live TABLE DDL (reconstructed from INFORMATION_SCHEMA.COLUMNS) — SupplyChain_Gold_Warehouse
+-- Generated 2026-05-22
+-- 15 base tables
+
+-- ============================================================
+-- ForecastAccuracy_DW.DimCalendar (75 cols)
+-- ============================================================
+CREATE TABLE [ForecastAccuracy_DW].[DimCalendar] (
+    [DateSK] int,
+    [MapicsDate] int,
+    [Date] date,
+    [Datetime] date,
+    [Calendar] date,
+    [CalendarDateName] varchar(8000),
+    [CalDateIndicatorNum] int,
+    [CalDayOfWeekNum] int,
+    [CalDayOfWeekName] varchar(8000),
+    [CalDayOfMonthNum] int,
+    [CalDayOfYearNum] int,
+    [CalWeekNum] int,
+    [CalWeekIndicatorNum] int,
+    [CalWeekYearNum] int,
+    [CalWeekYearName] varchar(8000),
+    [CalWeekFirst] date,
+    [CalWeekLast] date,
+    [CalWeekOfMonthNum] int,
+    [CalMonthNum] int,
+    [CalMonthIndicatorNum] int,
+    [CalMonthYearNum] int,
+    [CalMonthName] varchar(8000),
+    [CalMonthYearName] varchar(8000),
+    [CalMonthFirst] date,
+    [CalMonthLast] date,
+    [CalQuarterNum] int,
+    [CalQuarterName] varchar(8000),
+    [CalQuarterIndicatorNum] int,
+    [CalQuarterYearNum] int,
+    [CalQuarterYearName] varchar(8000),
+    [CalSemesterNum] int,
+    [CalSemesterYearNum] int,
+    [CalYearNum] int,
+    [CalYearName] varchar(8000),
+    [CalYearIndicatorNum] int,
+    [FiscalDate] date,
+    [FiscalDateName] varchar(8000),
+    [FSCDateIndicatorNum] int,
+    [FSCDayOfWeekNum] int,
+    [FSCDayOfWeekName] varchar(8000),
+    [FSCDayOfMonthNum] int,
+    [FSCDayOfYearNum] int,
+    [FSCWeekNum] int,
+    [FSCWeekIndicatorNum] int,
+    [FSCWeekYearNum] int,
+    [FSCWeekYearName] varchar(8000),
+    [FSCWeekFirst] date,
+    [FSCWeekLast] date,
+    [FSCWeekOfMonthNum] int,
+    [FSCMonthNum] int,
+    [FSCMonthIndicatorNum] int,
+    [FSCMonthYearNum] int,
+    [FSCMonthName] varchar(8000),
+    [FSCMonthYearName] varchar(8000),
+    [FSCMonthFirst] date,
+    [FSCMonthLast] date,
+    [FSCQuarterNum] int,
+    [FSCQuarterName] varchar(8000),
+    [FSCQuarterIndicatorNum] int,
+    [FSCQuarterYearNum] int,
+    [FSCQuarterYearName] varchar(8000),
+    [FSCQuarterFirst] date,
+    [FSCQuarterLast] date,
+    [FSCSemesterNum] int,
+    [FSCSemesterYearNum] int,
+    [FSCYearNum] int,
+    [FSCYearName] varchar(8000),
+    [FSCYearIndicatorNum] int,
+    [FSCYearFirst] date,
+    [FSCYearLast] date,
+    [HolidayIndicatorCode] varchar(8000),
+    [HolidayName] varchar(8000),
+    [WorkingDayCode] varchar(8000),
+    [WeekdayWeekendCode] varchar(8000),
+    [LoadDT] datetime2
+);
+GO
+
+-- ============================================================
+-- ForecastAccuracy_DW.DimCustomerGrouping (3 cols)
+-- ============================================================
+CREATE TABLE [ForecastAccuracy_DW].[DimCustomerGrouping] (
+    [CustomerGroupCode] varchar(8000),
+    [Customer] varchar(8000),
+    [LoadDT] datetime2
+);
+GO
+
+-- ============================================================
+-- ForecastAccuracy_DW.DimForecastHorizon (3 cols)
+-- ============================================================
+CREATE TABLE [ForecastAccuracy_DW].[DimForecastHorizon] (
+    [HorizonCode] varchar(14) NOT NULL,
+    [Rank] int NOT NULL,
+    [LoadDT] datetime2
+);
+GO
+
+-- ============================================================
+-- ForecastAccuracy_DW.DimProduct (207 cols)
+-- ============================================================
+CREATE TABLE [ForecastAccuracy_DW].[DimProduct] (
+    [ItemSKU] varchar(8000) NOT NULL,
+    [Item] varchar(8000),
+    [SeriesName] varchar(8000),
+    [ItemClassCode] varchar(8000),
+    [ItemClassName] varchar(8000),
+    [ItemCode] varchar(8000),
+    [ItemStyleCode] varchar(8000),
+    [RetailCategoryCode] varchar(8000),
+    [RetailCategoryName] varchar(8000),
+    [AssociationCode] varchar(8000),
+    [SalesClassCode] varchar(8000),
+    [AFISalesCategoryCode] varchar(8000),
+    [AFISalesDivisionCode] varchar(8000),
+    [DiscountClassCode] varchar(8000),
+    [CommissionClassCode] varchar(8000),
+    [FreightClassCode] varchar(8000),
+    [ImportDomesticCode] varchar(8000),
+    [ItemDescriptionName] varchar(8000),
+    [QtyInBoxNum] decimal(4,0),
+    [UOMCode] varchar(8000),
+    [SeriesColorName] varchar(8000),
+    [SeriesDescriptionName] varchar(8000),
+    [ShSeriesDescriptionName] varchar(8000),
+    [ItemClassFullName] varchar(8000),
+    [ItemGroupingName] varchar(8000),
+    [ItemStyleGroupName] varchar(8000),
+    [ItemStyleName] varchar(8000),
+    [ProductLineName] varchar(8000),
+    [MerchandisingCategoryName] smallint,
+    [PricePointName] int,
+    [SalesClassDescriptionName] varchar(8000),
+    [SalesClassName] varchar(8000),
+    [AFISalesCategoryName] varchar(8000),
+    [AFISalesDivisionName] varchar(8000),
+    [AFIFinanceDivisionName] varchar(8000),
+    [DiscountClassDescriptionName] varchar(8000),
+    [DiscountClassName] varchar(8000),
+    [CommissionClassDescriptionName] varchar(8000),
+    [CommissionClassName] varchar(8000),
+    [FreightClassDescriptionName] varchar(8000),
+    [FreightClassName] varchar(8000),
+    [CollectiveClassCode] varchar(8000),
+    [CollectiveClassName] varchar(8000),
+    [ResponsibleOfficeCode] varchar(8000),
+    [CountryOfOriginName] varchar(8000),
+    [AFIItemStatusCode] varchar(8000),
+    [ManufacturingStatusCode] varchar(8000),
+    [MarketingItemStatusCode] varchar(8000),
+    [ManufacturingStatusChange] date,
+    [CommodityItemNum] bit,
+    [IsBenchcraftProduct] bit,
+    [IsNewMillenniumProduct] bit,
+    [IsShanghaiStore] bit,
+    [DefaultGroupNum] bit,
+    [MarketIntroducedAtName] varchar(8000),
+    [PrimaryVendorCode] varchar(8000),
+    [PrimaryVendorName] varchar(8000),
+    [InitialInvoicePeriodCode] varchar(8000),
+    [ItemForecastPlanner] varchar(8000),
+    [SKProduct] varchar(50),
+    [SCPItem] varchar(50),
+    [ColorName] varchar(100),
+    [SeriesCode] varchar(50),
+    [ExtSeriesCode] varchar(50),
+    [ItemExtSeriesCode] varchar(50),
+    [ItemDescSeriesName] varchar(200),
+    [ShItemDescSeriesName] varchar(200),
+    [ItemDescSeriesColorName] varchar(200),
+    [ChildStyleName] varchar(100),
+    [ParentStyleName] varchar(100),
+    [CexCode] varchar(50),
+    [CurrentSCPManufacturingStatusCode] varchar(20),
+    [MarketingStatusName] varchar(100),
+    [CurrentStatusCode] varchar(20),
+    [IsMainPiece] bit,
+    [SellableItemCode] varchar(20),
+    [IsF123Product] bit,
+    [IsHsCoreProduct] bit,
+    [IsHsProprietaryProduct] bit,
+    [IsHsExclusive] bit,
+    [IsBerklineProduct] bit,
+    [IsBardiniProduct] bit,
+    [MarketBegin] date,
+    [MarketEnd] date,
+    [AmtFobPrice] decimal(18,4),
+    [GoodBetterBestCode] varchar(20),
+    [GbbSortNum] int,
+    [QtyInitialInvoice] decimal(18,4),
+    [MainPieceCode] varchar(50),
+    [AFIFinanceDivisionCode] varchar(8000),
+    [BardiniProductFlag] bit,
+    [BerklineProductFlag] bit,
+    [CEXCode] varchar(8000),
+    [CartonDepthInches] decimal(7,2),
+    [CartonDepthMeters] decimal(7,2),
+    [CartonHeightInches] decimal(7,2),
+    [CartonHeightMeters] decimal(7,2),
+    [CartonWidthInches] decimal(7,2),
+    [CartonWidthMeters] decimal(7,2),
+    [ChildStyleDescription] varchar(8000),
+    [Colors] varchar(8000),
+    [CommonCarrierFlag] varchar(8000),
+    [ConsumerChoiceFlag] varchar(8000),
+    [Cubes] decimal(5,2),
+    [CurrentUnitCost] decimal(19,8),
+    [DiningSeriesFlag] varchar(8000),
+    [DiscontinuedDate] date,
+    [DiscontinuedFlag] bit,
+    [DiscontinuedYearPeriod] varchar(8000),
+    [Division] varchar(8000),
+    [DivisionRanking] int,
+    [ERetailChannelSku] varchar(8000),
+    [ERetailSeriesName] varchar(8000),
+    [ERetailSeriesNumber] varchar(8000),
+    [EligibleForProtectionPlan] varchar(8000),
+    [ExclusiveComment] varchar(8000),
+    [ExpressShipFlag] varchar(8000),
+    [ExtSeriesNumber] varchar(8000),
+    [F123ProductFlag] bit,
+    [FOBArcPrice] decimal(8,2),
+    [FluffAFI] varchar(8000),
+    [FrameNumber] varchar(8000),
+    [FriendlyDimensions] varchar(8000),
+    [GBBSortId] int,
+    [GoodBetterBestForPricePoint] varchar(8000),
+    [GroupPriceIncr] decimal(5,0),
+    [GroupPricePointType] varchar(8000),
+    [HSCoreProductFlag] bit,
+    [HSExclusiveFlag] bit,
+    [HSProprietaryProductFlag] bit,
+    [InitialInvoiceQty] decimal(38,0),
+    [IsProtectionPlan] varchar(8000),
+    [ItemAmazonBrandOwner] varchar(8000),
+    [ItemBedSizeType] varchar(8000),
+    [ItemBedStyleType] varchar(8000),
+    [ItemClass] varchar(8000),
+    [ItemConsumerDescription] varchar(8000),
+    [ItemDescriptionSeries] varchar(8000),
+    [ItemDescriptionSeriesItemColor] varchar(8000),
+    [ItemEcomMerchantNotes] varchar(8000),
+    [ItemGeneralColor] varchar(8000),
+    [ItemHomeStoreProductLine] varchar(8000),
+    [ItemImage] varchar(8000),
+    [ItemIsRTA] varchar(8000),
+    [ItemKey] varchar(8000) NOT NULL,
+    [ItemMerchGridOverridePhoto] varchar(8000),
+    [ItemName] varchar(8000),
+    [ItemPricePointRating] varchar(8000),
+    [ItemSupplierDirectShipOnly] varchar(8000),
+    [ItemTableShapeType] varchar(8000),
+    [ItemThirdPartyItem] varchar(8000),
+    [ItemType] varchar(8000),
+    [KeyItem] bit,
+    [Knockout] varchar(8000),
+    [Lifestyle] varchar(8000),
+    [LoadDT] datetime2,
+    [MainPieceItem] varchar(8000),
+    [MarketBeginDate] date,
+    [MarketEndDate] date,
+    [MarketingStatusDescription] varchar(8000),
+    [MasterGroupCode] varchar(8000),
+    [Material] varchar(8000),
+    [MfgWarranty] varchar(8000),
+    [NewItemFlag] bit,
+    [ParentStyleDescription] varchar(8000),
+    [PowerMotionSeriesFlag] varchar(8000),
+    [PreviousStatusCode] varchar(8000),
+    [PrimaryChannelSku] varchar(8000),
+    [PrimarySeriesName] varchar(8000),
+    [PrimarySeriesNumber] varchar(8000),
+    [ProductDepthInches] decimal(7,2),
+    [ProductDepthMeters] decimal(7,2),
+    [ProductHeightInches] decimal(7,2),
+    [ProductHeightMeters] decimal(7,2),
+    [ProductWidthInches] decimal(7,2),
+    [ProductWidthMeters] decimal(7,2),
+    [ReclinerSeriesFlag] varchar(8000),
+    [ResponsibleOfficeName] varchar(8000),
+    [RetailBrandName] varchar(8000),
+    [RetailCategoryChargeType] varchar(8000),
+    [RetailCategoryDescription] varchar(8000),
+    [RetailCategoryGroup] varchar(8000),
+    [RetailDepartmentName] varchar(8000),
+    [RetailTypeDescription] varchar(8000),
+    [RowID] bigint NOT NULL,
+    [SHItemDescriptionSeries] varchar(8000),
+    [Scene7ImageSet] varchar(8000),
+    [Seats] decimal(5,2),
+    [SellableItemFlag] varchar(8000),
+    [SeriesDateArchived] date,
+    [SeriesDiscontinuedFlag] bit,
+    [SeriesFeatures] varchar(8000),
+    [SeriesGrouping] smallint,
+    [SeriesImage] varchar(8000),
+    [SeriesMainImage] varchar(8000),
+    [SeriesNumber] varchar(8000),
+    [SeriesPrimary] varchar(8000),
+    [SeriesThirdParty] varchar(8000),
+    [Showroom] varchar(8000),
+    [SofaTableSeriesFlag] varchar(8000),
+    [StandAloneFlag] varchar(8000),
+    [StatusCodeChangeDate] date,
+    [SuppWeightNetWeightLbs] varchar(8000),
+    [TrendArrow] varchar(8000),
+    [UPC] varchar(8000),
+    [UnitWeightLbs] varchar(8000),
+    [WedgeSeriesFlag] varchar(8000)
+);
+GO
+
+-- ============================================================
+-- ForecastAccuracy_DW.DimWarehouse (9 cols)
+-- ============================================================
+CREATE TABLE [ForecastAccuracy_DW].[DimWarehouse] (
+    [AFIWarehousesKey] int,
+    [WarehouseCode] varchar(8000),
+    [IntransitWarehouse] varchar(8000),
+    [ContainerDirectWarehouse] varchar(8000),
+    [ControlledWarehouse] int,
+    [WarehouseLocation] varchar(8000),
+    [WarehouseOrderGroup] varchar(8000),
+    [FinanceInventoryReportFlag] int,
+    [LoadDT] datetime2
+);
+GO
+
+-- ============================================================
+-- ForecastAccuracy_DW.FactForecastActual (10 cols)
+-- ============================================================
+CREATE TABLE [ForecastAccuracy_DW].[FactForecastActual] (
+    [ItemSKU] varchar(8000),
+    [WarehouseCode] varchar(8000),
+    [CustomerGroupCode] varchar(8000),
+    [FSCMonthFirst] date,
+    [FSCMonthLast] date,
+    [HorizonCode] varchar(20),
+    [StatusCode] varchar(20),
+    [VersionName] varchar(20),
+    [Qty] float,
+    [LoadDT] datetime2
+);
+GO
+
+-- ============================================================
+-- ForecastAccuracy_DW.FactForecastKpi (19 cols)
+-- ============================================================
+CREATE TABLE [ForecastAccuracy_DW].[FactForecastKpi] (
+    [ItemSKU] varchar(8000),
+    [WarehouseCode] varchar(8000),
+    [FSCMonthFirst] date,
+    [FSCMonthLast] date,
+    [HorizonCode] varchar(14) NOT NULL,
+    [Snapshot] date,
+    [QtyForecast] float,
+    [QtyActual] float,
+    [QtyNaiveForecast] float,
+    [QtyFcstError] float,
+    [QtyAbsFcstError] float,
+    [QtyNaiveFcstError] float,
+    [QtyAbsNaiveFcstError] float,
+    [QtySquaredFcstError] float,
+    [QtySquaredNaiveFcstError] float,
+    [ValidObsFlag] int,
+    [ValidActualNonzeroFlag] int,
+    [AbsPctError] float,
+    [LoadDT] datetime2
+);
+GO
+
+-- ============================================================
+-- InventoryHealth_DW.CogsRollingHelper (7 cols)
+-- ============================================================
+CREATE TABLE [InventoryHealth_DW].[CogsRollingHelper] (
+    [ItemSku] varchar(50),
+    [WarehouseCode] varchar(50),
+    [FiscalMonthYear] int,
+    [PeriodCogs] decimal(18,4),
+    [PeriodShippedQty] decimal(18,4),
+    [Cogs12M] decimal(18,4),
+    [Cogs52M] decimal(18,4)
+);
+GO
+
+-- ============================================================
+-- InventoryHealth_DW.DimDate (10 cols)
+-- ============================================================
+CREATE TABLE [InventoryHealth_DW].[DimDate] (
+    [DateKey] bigint,
+    [CalendarDate] date,
+    [WeekEndingDate] date,
+    [FiscalWeek] int,
+    [FiscalWeekIndicator] int,
+    [FiscalMonth] int,
+    [FiscalMonthYear] int,
+    [IsCurrentDate] int,
+    [IsCurrentWeek] int,
+    [IsMonthEnd] int
+);
+GO
+
+-- ============================================================
+-- InventoryHealth_DW.DimItem (20 cols)
+-- ============================================================
+CREATE TABLE [InventoryHealth_DW].[DimItem] (
+    [ItemSku] varchar(50),
+    [ItemDescription] varchar(200),
+    [ItemClassCode] varchar(50),
+    [ItemClassName] varchar(100),
+    [CategoryName] varchar(100),
+    [CategoryCode] varchar(50),
+    [CollectiveClass] varchar(50),
+    [SeriesNumber] varchar(50),
+    [SeriesName] varchar(100),
+    [AfiItemStatus] varchar(10),
+    [LifecycleStatus] varchar(20),
+    [PrimaryVendorNumber] varchar(50),
+    [PrimaryVendorName] varchar(200),
+    [Cubes] decimal(18,4),
+    [FobArcPrice] decimal(18,4),
+    [IsFinishedGoodsItem] bit,
+    [DiscontinuedFlag] bit,
+    [NewItemFlag] bit,
+    [StatusCodeChangeDate] date,
+    [UnavailableFlag] bit
+);
+GO
+
+-- ============================================================
+-- InventoryHealth_DW.DimRuleVersion (5 cols)
+-- ============================================================
+CREATE TABLE [InventoryHealth_DW].[DimRuleVersion] (
+    [RuleVersionKey] bigint,
+    [RuleName] varchar(100),
+    [EffectiveStartDate] date,
+    [EffectiveEndDate] date,
+    [RuleDescription] varchar(500)
+);
+GO
+
+-- ============================================================
+-- InventoryHealth_DW.DimVendor (2 cols)
+-- ============================================================
+CREATE TABLE [InventoryHealth_DW].[DimVendor] (
+    [VendorNumber] varchar(50),
+    [VendorName] varchar(200)
+);
+GO
+
+-- ============================================================
+-- InventoryHealth_DW.DimWarehouse (13 cols)
+-- ============================================================
+CREATE TABLE [InventoryHealth_DW].[DimWarehouse] (
+    [WarehouseCode] varchar(50),
+    [WarehouseName] varchar(50),
+    [WarehouseType] varchar(100),
+    [WarehouseOrderGroup] varchar(50),
+    [WarehouseSourceId] varchar(50),
+    [SellableWarehouseFlag] bit,
+    [ControlledFlag] bit,
+    [WhereMadeCode] varchar(50),
+    [ManufacturingSite] varchar(50),
+    [IntransitWarehouseCode] varchar(50),
+    [IsFinishedGoodsWarehouse] bit,
+    [IsManufacturingWarehouse] bit,
+    [TotalAvailableWarehouseCube] decimal(18,4)
+);
+GO
+
+-- ============================================================
+-- InventoryHealth_DW.FactInventoryHealthSnapshot (44 cols)
+-- ============================================================
+CREATE TABLE [InventoryHealth_DW].[FactInventoryHealthSnapshot] (
+    [ItemSku] varchar(50),
+    [WarehouseCode] varchar(50),
+    [SnapshotDate] date,
+    [SnapshotType] varchar(10),
+    [WeekEndingDate] date,
+    [DateKey] int,
+    [FiscalMonth] int,
+    [FiscalMonthYear] int,
+    [IsLatestSnapshot] bit,
+    [SourceSystem] varchar(64),
+    [SourceTable] varchar(128),
+    [RuleVersionKey] bigint,
+    [OnHandQty] decimal(18,4),
+    [TransferInInTransitQty] decimal(18,4),
+    [POInTransitQty] decimal(18,4),
+    [POOnOrderQty] decimal(18,4),
+    [MOOnOrderQty] decimal(18,4),
+    [InTransitQty] decimal(18,4),
+    [OnOrderQty] decimal(18,4),
+    [AwdQty] decimal(18,4),
+    [AwdSource] varchar(20),
+    [WeeksOfSupply] decimal(18,4),
+    [SafetyStockTargetQty] decimal(18,4),
+    [SafetyStockMultiple] decimal(18,4),
+    [InventoryClassification] varchar(30),
+    [StandardCost] decimal(18,4),
+    [FobArcPrice] decimal(18,4),
+    [Cubes] decimal(18,4),
+    [InventoryValueAtCost] decimal(18,4),
+    [InventoryValueAtRevenue] decimal(18,4),
+    [UsedStorageCube] decimal(18,4),
+    [PeriodCogs] decimal(18,4),
+    [Cogs52M] decimal(18,4),
+    [Cogs12M] decimal(18,4),
+    [AverageInventoryValueAtCost] decimal(18,4),
+    [LastInvoiceDate] date,
+    [LifecycleStatus] varchar(20),
+    [InactiveFlag] bit,
+    [SlobFlag] bit,
+    [NoMovementFlag] bit,
+    [UnavailableFlag] bit,
+    [OnHoldQty] decimal(18,4),
+    [OnHoldFlag] bit,
+    [ObsoleteValue] decimal(18,4)
+);
+GO
+
+-- ============================================================
+-- InventoryHealth_DW.FactInventoryRiskForward (24 cols)
+-- ============================================================
+CREATE TABLE [InventoryHealth_DW].[FactInventoryRiskForward] (
+    [ItemSku] varchar(50),
+    [WarehouseCode] varchar(50),
+    [WeekEndingDate] date,
+    [DateKey] int,
+    [BeginningBalanceQty] decimal(18,4),
+    [FirmDemandQty] decimal(18,4),
+    [NetForecastQty] decimal(18,4),
+    [FirmPurchaseOrderQty] decimal(18,4),
+    [PlannedPurchaseOrderQty] decimal(18,4),
+    [OnOrderTransferInQty] decimal(18,4),
+    [ShippableInventoryQty] decimal(18,4),
+    [SafetyStockTargetQty] decimal(18,4),
+    [MonthsOfSupply] decimal(18,4),
+    [ExpectedDemand14DQty] decimal(18,4),
+    [Inbound14DQty] decimal(18,4),
+    [AllocatedDemandQty] decimal(18,4),
+    [ATPQty] decimal(18,4),
+    [ATPInStockFlag] bit,
+    [ShippableInStockFlag] bit,
+    [SINegQty] decimal(18,4),
+    [RevenueAtRiskValue] decimal(18,4),
+    [WeekFourFlag] bit,
+    [FobArcPrice] decimal(18,4),
+    [RuleVersionKey] bigint
+);
+GO
+

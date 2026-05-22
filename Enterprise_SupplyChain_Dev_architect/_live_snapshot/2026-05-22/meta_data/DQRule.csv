@@ -1,0 +1,96 @@
+rule_id,rule_name,target_schema,target_table,check_type,column_name,severity,threshold,params,is_active,layer,source_row_number
+29,gold_fact_forecast_kpi_completeness_id_item_sku,ForecastAccuracy_DW,FactForecastKpi,completeness,ItemSKU,CRITICAL,100.00,,True,Gold,52
+34,gld_kpi_unique_item,ForecastAccuracy_DW,FactForecastKpi,uniqueness,ItemSKU,WARNING,0.00,,False,Gold,30
+34,gld_kpi_unique_item,ForecastAccuracy_DW,FactForecastKpi,uniqueness,ItemSKU,WARNING,0.00,,False,Gold,34
+34,gld_kpi_uniq,ForecastAccuracy_DW,FactForecastKpi,uniqueness,ItemSKU,WARNING,0.00,,False,Gold,24
+27,gold_fact_flat_forecast_actual_completeness_id_item_sku,ForecastAccuracy_DW,FactForecastActual,completeness,ItemSKU,CRITICAL,100.00,,True,Gold,2
+76,ItemBalanceHistorical.ItemSku completeness,InventoryHistory_Enh,ItemBalanceHistorical,completeness,ItemSku,CRITICAL,100,,True,DomainSilver,
+77,ItemBalanceHistorical row_count > 1M,InventoryHistory_Enh,ItemBalanceHistorical,row_count,,CRITICAL,1000000,,True,DomainSilver,
+5,brz_codatan id_order not null,Staging_Wrk,v_Codatan,completeness,OrderID,CRITICAL,,,True,Staging,16
+15,brz_codatan min 100K rows,Staging_Wrk,v_Codatan,row_count,,WARNING,100000.00,,True,Staging,8
+22,slv_forecast id_item_sku not null,ForecastHistory_Enh,ForecastDemandMonthly,completeness,ItemSKU,CRITICAL,,,True,DomainSilver,12
+33,slv_forecast_unique_item_month,ForecastHistory_Enh,ForecastDemandMonthly,uniqueness,ItemSKU,WARNING,0.00,,False,DomainSilver,32
+33,slv_fcst_uniq,ForecastHistory_Enh,ForecastDemandMonthly,uniqueness,ItemSKU,WARNING,0.00,,False,DomainSilver,23
+33,slv_forecast_unique_item,ForecastHistory_Enh,ForecastDemandMonthly,uniqueness,ItemSKU,WARNING,0.00,,False,DomainSilver,22
+26,slv_naive_forecast min 100K rows,ForecastHistory_Enh,NaiveForecastMonthly,row_count,,WARNING,100000.00,,True,DomainSilver,6
+46,FactInventoryHealthSnapshot row_count > 0,InventoryHealth_DW,FactInventoryHealthSnapshot,row_count,,CRITICAL,1.0,,False,Gold,
+72,Vendor.VendorNumber completeness,ReferenceMaster_Enh,Vendor,completeness,VendorNumber,CRITICAL,100.0,,True,ReferenceMaster,
+42,CostCurrent.ItemSku completeness,InventoryHistory_Enh,CostCurrent,completeness,ItemSku,CRITICAL,100.0,,True,DomainSilver,
+54,ITBEXT.CRHLD expected_zero,ItemMaster_AFI,ITBEXT,expected_zero,CRHLD,WARNING,100.00,"{""reason"":""verified deprecated 2026-05-19, EDW source confirmed zero""}",True,Bronze,
+65,LogilityItemStatus.ItemSku completeness,InventoryHistory_Enh,LogilityItemStatus,completeness,ItemSku,WARNING,95.0,,False,DomainSilver,
+48,FactInventoryRiskForward row_count > 0,InventoryHealth_DW,FactInventoryRiskForward,row_count,,CRITICAL,1.0,,True,Gold,
+43,CostCurrent.StandardCost not negative,InventoryHistory_Enh,CostCurrent,completeness,StandardCost,WARNING,95.0,,True,DomainSilver,
+62,ItemMasterExt.ItemSku completeness,InventoryHistory_Enh,ItemMasterExt,completeness,ItemSku,CRITICAL,100.0,,True,DomainSilver,
+63,ItemMasterExt.ItemSku uniqueness,InventoryHistory_Enh,ItemMasterExt,uniqueness,ItemSku,CRITICAL,,,True,DomainSilver,
+39,AllocatedDemandCandidate row_count > 0,InventoryHistory_Enh,AllocatedDemandCandidate,row_count,,WARNING,1.0,,True,DomainSilver,
+61,InventoryCurrent.OnHandQty present,InventoryHistory_Enh,InventoryCurrent,completeness,OnHandQty,WARNING,90.0,,True,DomainSilver,
+40,AtpWeekEnding.WeekNumber not null,InventoryHistory_Enh,AtpWeekEnding,completeness,WeekNumber,CRITICAL,100.0,,True,DomainSilver,
+51,ForecastCurrent.FiscalMonthYear completeness,InventoryHistory_Enh,ForecastCurrent,completeness,FiscalMonthYear,CRITICAL,100.0,,True,DomainSilver,
+44,DimRuleVersion row_count = 1 (Phase 1),InventoryHealth_DW,DimRuleVersion,row_count,,WARNING,1.0,,True,Gold,
+47,FactInventoryHealthSnapshot.ItemSku completeness,InventoryHealth_DW,FactInventoryHealthSnapshot,completeness,ItemSku,CRITICAL,100.0,,False,Gold,
+75,WarehouseExt.WarehouseCode uniqueness,InventoryHistory_Enh,WarehouseExt,uniqueness,WarehouseCode,CRITICAL,,,True,DomainSilver,
+52,HoldingTransfer.TransferNumber completeness,InventoryHistory_Enh,HoldingTransfer,completeness,TransferNumber,CRITICAL,100.0,,True,DomainSilver,
+41,CogsRollingHelper.FiscalMonthYear completeness,InventoryHealth_DW,CogsRollingHelper,completeness,FiscalMonthYear,CRITICAL,100.0,,True,Gold,
+58,InvSnapshotWeekly.SnapshotDate completeness,InventoryHistory_Enh,InventorySnapshotWeekly,completeness,SnapshotDate,CRITICAL,100.0,,False,DomainSilver,
+50,FcstSnapshotWeekly.WeekEndingDate completeness,InventoryHistory_Enh,ForecastSnapshotWeekly,completeness,WeekEndingDate,CRITICAL,100.0,,True,DomainSilver,
+55,ITBEXT.DLHLD expected_zero,ItemMaster_AFI,ITBEXT,expected_zero,DLHLD,WARNING,100.00,"{""reason"":""verified deprecated 2026-05-19, EDW source confirmed zero""}",True,Bronze,
+45,DimVendor.VendorNumber completeness,InventoryHealth_DW,DimVendor,completeness,VendorNumber,CRITICAL,100.0,,True,Gold,
+49,FactInventoryRiskForward.WeekEndingDate completeness,InventoryHealth_DW,FactInventoryRiskForward,completeness,WeekEndingDate,CRITICAL,100.0,,True,Gold,
+74,WarehouseExt.WarehouseCode completeness,InventoryHistory_Enh,WarehouseExt,completeness,WarehouseCode,CRITICAL,100.0,,True,DomainSilver,
+68,PurchaseOrder.PoNumber completeness,InventoryHistory_Enh,PurchaseOrder,completeness,PoNumber,CRITICAL,100.0,,True,DomainSilver,
+71,Vendor row_count > 1000,ReferenceMaster_Enh,Vendor,row_count,,WARNING,1000.0,,True,ReferenceMaster,
+70,SupplyPlan.ItemSku completeness,InventoryHistory_Enh,SupplyPlan,completeness,ItemSku,CRITICAL,100.0,,True,DomainSilver,
+64,"Logility dup_ratio_max (Item,Whse,Week)",SupplyChain_Enh,DemandFulfillmentCommonContainer_Logility,expected_dup_ratio_max,,WARNING,0.05,"{""grain"":""Item,Whse,WeekEnding"",""baseline"":""0.024% (9128/38.36M) on 2026-05-19"",""threshold_meaning"":""alert if >0.05% (~2x baseline)""}",True,Bronze,
+60,InventoryCurrent.ItemSku completeness,InventoryHistory_Enh,InventoryCurrent,completeness,ItemSku,CRITICAL,100.0,,True,DomainSilver,
+69,SalesShipment.InvoiceDate completeness,InventoryHistory_Enh,SalesShipment,completeness,InvoiceDate,CRITICAL,100.0,,True,DomainSilver,
+66,ManufacturingOrder.MoNumber completeness,InventoryHistory_Enh,ManufacturingOrder,completeness,MoNumber,CRITICAL,100.0,,True,DomainSilver,
+57,ITEMBL.PHYOH expected_zero,ItemMaster_AFI,ITEMBL,expected_zero,PHYOH,WARNING,100.00,"{""reason"":""verified deprecated 2026-05-19, EDW source confirmed zero""}",True,Bronze,
+73,Vendor.VendorNumber uniqueness,ReferenceMaster_Enh,Vendor,uniqueness,VendorNumber,CRITICAL,,,True,ReferenceMaster,
+56,ITBEXT.TOHLD expected_zero,ItemMaster_AFI,ITBEXT,expected_zero,TOHLD,WARNING,100.00,"{""reason"":""verified deprecated 2026-05-19, EDW source confirmed zero""}",True,Bronze,
+67,MovementHistory.TransactionDate completeness,InventoryHistory_Enh,MovementHistory,completeness,TransactionDate,CRITICAL,100.0,,True,DomainSilver,
+53,ITBEXT.ATPQT expected_zero,ItemMaster_AFI,ITBEXT,expected_zero,ATPQT,WARNING,100.00,"{""reason"":""verified deprecated 2026-05-19, EDW source confirmed zero""}",True,Bronze,
+10,ref_item_master id_item_sku not null,ReferenceMaster_Enh,ItemMaster,completeness,ItemSKU,CRITICAL,,,True,ReferenceMaster,45
+12,ref_warehouse code_warehouse not null,ReferenceMaster_Enh,Warehouse,completeness,WarehouseCode,CRITICAL,,,True,ReferenceMaster,47
+18,ref_forecast_horizon exact 8 rows,ReferenceMaster_Enh,ForecastHorizon,row_count,,CRITICAL,8.00,,True,ReferenceMaster,14
+16,ref_calendar min 10K rows,ReferenceMaster_Enh,Calendar,row_count,,CRITICAL,10000.00,,True,ReferenceMaster,10
+17,ref_item_master min 100K rows,ReferenceMaster_Enh,ItemMaster,row_count,,WARNING,100000.00,,True,ReferenceMaster,43
+9,ref_calendar sk_date not null,ReferenceMaster_Enh,Calendar,completeness,SKDate,CRITICAL,,,True,ReferenceMaster,42
+7,brz_extord id_order not null,Staging_Wrk,v_Extord,completeness,OrderID,CRITICAL,,,True,Staging,54
+28,gold_fact_flat_forecast_actual_row_count,ForecastAccuracy_DW,FactForecastActual,row_count,,CRITICAL,100000.00,,True,Gold,3
+30,gold_fact_forecast_kpi_row_count,ForecastAccuracy_DW,FactForecastKpi,row_count,,CRITICAL,100000.00,,True,Gold,51
+35,gld_flat_freshness,ForecastAccuracy_DW,FactForecastActual,freshness,LoadDT,WARNING,48.00,,False,Gold,18
+35,gld_flat_freshness,ForecastAccuracy_DW,FactForecastActual,freshness,LoadDT,WARNING,48.00,,False,Gold,38
+35,gld_flat_fresh,ForecastAccuracy_DW,FactForecastActual,freshness,LoadDT,WARNING,48.00,,False,Gold,28
+36,gld_kpi_fresh,ForecastAccuracy_DW,FactForecastKpi,freshness,LoadDT,WARNING,48.00,,False,Gold,35
+36,gld_kpi_freshness,ForecastAccuracy_DW,FactForecastKpi,freshness,LoadDT,WARNING,48.00,,False,Gold,27
+36,gld_kpi_freshness,ForecastAccuracy_DW,FactForecastKpi,freshness,LoadDT,WARNING,48.00,,False,Gold,37
+21,slv_open_order id_item_sku not null,OpenOrderHistory_Enh,OpenOrderLineLevel,completeness,ItemSKU,CRITICAL,,,True,DomainSilver,1
+32,slv_ord_uniq,OpenOrderHistory_Enh,OpenOrderLineLevel,uniqueness,OrderID,WARNING,0.00,,False,DomainSilver,31
+32,slv_open_order_unique_id,OpenOrderHistory_Enh,OpenOrderLineLevel,uniqueness,OrderID,WARNING,0.00,,False,DomainSilver,21
+32,slv_open_order_unique_id_order,OpenOrderHistory_Enh,OpenOrderLineLevel,uniqueness,OrderID,WARNING,0.00,,False,DomainSilver,36
+59,InventoryCurrent row_count > 100K,InventoryHistory_Enh,InventoryCurrent,row_count,,CRITICAL,40000,,True,DomainSilver,
+78,"ItemBalanceHistorical (ItemSku,WarehouseCode,WeekEndingDate) uniqueness",InventoryHistory_Enh,ItemBalanceHistorical,uniqueness,ItemSku,WARNING,,,True,DomainSilver,
+8,brz_extorit id_order not null,Staging_Wrk,v_Extorit,completeness,OrderID,CRITICAL,,,True,Staging,53
+79,PurchaseOrderSnapshotHistorical.ItemSku completeness,InventoryHistory_Enh,PurchaseOrderSnapshotHistorical,completeness,ItemSku,CRITICAL,100,,False,DomainSilver,
+6,brz_comast id_order not null,Staging_Wrk,v_Comast,completeness,OrderID,CRITICAL,,,True,Staging,44
+31,slv_inv_uniq,SalesHistory_Enh,InvoiceDetailLineLevel,uniqueness,InvoiceID,WARNING,0.00,,False,DomainSilver,39
+31,slv_invoice_detail_unique_composite,SalesHistory_Enh,InvoiceDetailLineLevel,uniqueness,InvoiceID,WARNING,0.00,,False,DomainSilver,20
+31,slv_invoice_detail_unique_id,SalesHistory_Enh,InvoiceDetailLineLevel,uniqueness,InvoiceID,WARNING,0.00,,False,DomainSilver,29
+19,slv_invoice_detail id_item_sku not null,SalesHistory_Enh,InvoiceDetailLineLevel,completeness,ItemSKU,CRITICAL,,,True,DomainSilver,9
+37,slv_invoice_freshness,SalesHistory_Enh,InvoiceDetailLineLevel,freshness,LoadDT,WARNING,48.00,,False,DomainSilver,17
+37,slv_invoice_detail_freshness,SalesHistory_Enh,InvoiceDetailLineLevel,freshness,LoadDT,WARNING,48.00,,False,DomainSilver,33
+37,slv_inv_fresh,SalesHistory_Enh,InvoiceDetailLineLevel,freshness,LoadDT,WARNING,48.00,,False,DomainSilver,19
+38,slv_demand_freshness,SalesHistory_Enh,ActualDemandMonthly,freshness,LoadDT,WARNING,48.00,,False,DomainSilver,26
+38,slv_dem_fresh,SalesHistory_Enh,ActualDemandMonthly,freshness,LoadDT,WARNING,48.00,,False,DomainSilver,25
+38,slv_actual_demand_freshness,SalesHistory_Enh,ActualDemandMonthly,freshness,LoadDT,WARNING,48.00,,False,DomainSilver,40
+23,slv_actual_monthly min 100K rows,SalesHistory_Enh,ActualDemandMonthly,row_count,,CRITICAL,100000.00,,True,DomainSilver,15
+25,slv_invoice_weekly min 1M rows,SalesHistory_Enh,InvoiceWeekly,row_count,,WARNING,1000000.00,,True,DomainSilver,41
+20,slv_invoice_detail min 1M rows,SalesHistory_Enh,InvoiceDetailLineLevel,row_count,,CRITICAL,1000000.00,,True,DomainSilver,50
+24,slv_actual_weekly min 100K rows,SalesHistory_Enh,ActualDemandWeekly,row_count,,WARNING,100000.00,,True,DomainSilver,11
+1,"brz_invoicedetail id_invoice not null [DEACTIVATED 2026-05-22: target dropped post-EDW-Exit, recreate on new Silver target separately]",Staging_Wrk,InvoiceDetailEdw,completeness,InvoiceID,CRITICAL,,,False,Staging,5
+3,"brz_invoiceheader id_invoice not null [DEACTIVATED 2026-05-22: target dropped post-EDW-Exit, recreate on new Silver target separately]",Staging_Wrk,InvoiceHeaderEdw,completeness,InvoiceID,CRITICAL,,,False,Staging,7
+11,"ref_product id_item_sku not null [DEACTIVATED 2026-05-22: target dropped post-EDW-Exit, recreate on new Silver target separately]",Staging_Wrk,ProductEdw,completeness,ItemSKU,CRITICAL,,,False,ReferenceMaster,46
+4,"brz_demandforecast id_item_sku not null [DEACTIVATED 2026-05-22: target dropped post-EDW-Exit, recreate on new Silver target separately]",Staging_Wrk,DemandForecastSnapshotDailyEdw,completeness,ItemSKU,CRITICAL,,,False,Staging,13
+2,"brz_invoicedetail id_item_sku not null [DEACTIVATED 2026-05-22: target dropped post-EDW-Exit, recreate on new Silver target separately]",Staging_Wrk,InvoiceDetailEdw,completeness,ItemSKU,CRITICAL,,,False,Staging,48
+14,"brz_invoiceheader min 100K rows [DEACTIVATED 2026-05-22: target dropped post-EDW-Exit, recreate on new Silver target separately]",Staging_Wrk,InvoiceHeaderEdw,row_count,,CRITICAL,100000.00,,False,Staging,4
+13,"brz_invoicedetail min 1M rows [DEACTIVATED 2026-05-22: target dropped post-EDW-Exit, recreate on new Silver target separately]",Staging_Wrk,InvoiceDetailEdw,row_count,,CRITICAL,1000000.00,,False,Staging,49

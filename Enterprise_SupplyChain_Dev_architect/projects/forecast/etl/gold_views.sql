@@ -132,10 +132,20 @@ FROM SupplyChain_Processing_Warehouse.ReferenceMaster_Enh.ForecastHorizon
 GO
 
 -- ---- ForecastAccuracy_DW.v_DimProduct ----
+-- NOTE 2026-05-22: Live definition diverged from this file on 2026-05-20 after EDW Exit.
+-- Old: SELECT * FROM Staging_Wrk.ProductEdw (table DROPPED)
+-- New: 207-col backward-compat view sourcing ReferenceMaster_Enh.ItemMaster (174 cols)
+--      17 direct + 42 alias + 30 NULL stub + 118 bonus cols. 0 DAX/relationship impact verified.
+-- Full live definition: _live_snapshot/2026-05-22/gold_wh/views_ddl.sql (search "v_DimProduct")
+-- See memory: [DimProduct compat view]
 
-CREATE VIEW ForecastAccuracy_DW.v_DimProduct AS
-SELECT *, CAST(GETUTCDATE() AS DATETIME2(6)) AS LoadDT
-FROM SupplyChain_Processing_Warehouse.Staging_Wrk.ProductEdw
+-- (Live def too large to inline here; see snapshot file above. Skeleton:)
+-- CREATE VIEW ForecastAccuracy_DW.v_DimProduct AS
+-- SELECT [ItemSKU], [Item], [SeriesName], ... 17 direct cols
+--      , [ItemDescription] AS [ItemDescriptionName], ... 42 alias cols
+--      , CAST(NULL AS VARCHAR(50)) AS [SKProduct], ... 30 NULL stub cols
+--      , [<all-bonus-cols>], ... 118 bonus cols
+-- FROM SupplyChain_Processing_Warehouse.ReferenceMaster_Enh.ItemMaster
 
 GO
 
