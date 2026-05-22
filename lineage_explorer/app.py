@@ -401,26 +401,66 @@ def classify_mart(node_id: str) -> str:
     return "other"
 
 
+# Explicit shared assets — Gold dims/facts intentionally reused across marts.
+# These don't get caught by auto-detection because intra-warehouse lineage edges
+# (same-schema CTAS dependency) are NOT recorded in source_objects/LineageEdge.
+# Example: ForecastAccuracy_DW Facts reference ForecastAccuracy_DW.DimCalendar
+# implicitly (same Gold WH), so no edge is generated for forecast's own usage —
+# only the cross-schema usage by InventoryHealth_DW shows up.
+# Update this list when new shared assets are added (re-evaluate per Q4 in
+# _open_questions_for_bob.md when architecture changes to a SharedDims_DW schema).
+EXPLICIT_SHARED_NODES = {
+    "ForecastAccuracy_DW.DimCalendar",  # cross-mart date dim
+    "DimCalendar",                      # bare-name variant (when source_schema-qualified ID isn't used)
+}
+
+
+def compute_cross_mart_nodes(edges: list) -> set:
+    """Detect nodes whose downstream targets span multiple marts → effectively shared.
+    Auto-detection catches assets with EXPLICIT cross-schema edges (e.g. Bronze
+    sources, RefMaster.Calendar feeding both forecast and inventory_health Silver).
+    For intra-warehouse implicit reuses (e.g. forecast Facts joining forecast DimCalendar
+    in same WH without source_objects declaration), supplement with EXPLICIT_SHARED_NODES.
+    """
+    from collections import defaultdict
+    downstream = defaultdict(set)
+    for e in edges:
+        src = e.get("source", "")
+        tgt = e.get("target", "")
+        tgt_mart = classify_mart(tgt)
+        if tgt_mart in ("forecast", "inventory_health"):
+            downstream[src].add(tgt_mart)
+    auto_detected = {nid for nid, marts in downstream.items() if len(marts) > 1}
+    return auto_detected | EXPLICIT_SHARED_NODES
+
+
 def filter_dag_by_mart(dag_data: dict, mart: str) -> dict:
     """Filter DAG nodes and edges to only those belonging to the given mart.
-    'all' = no filter. 'shared' includes bronze sources used by every mart.
+    'all' = no filter. Shared assets: (a) external sources (Enterprise_Lakehouse,
+    SupplyChain_Lakehouse, ReferenceMaster_Enh), (b) auto-detected cross-mart nodes
+    whose downstream spans multiple marts (e.g. DimCalendar reused by both marts).
     """
     if mart == "all":
         return dag_data
     nodes = dag_data.get("nodes", [])
     edges = dag_data.get("edges", [])
-    # Keep nodes where mart matches OR shared (bronze / refmaster surface in every mart view)
+    cross_mart = compute_cross_mart_nodes(edges)
+
+    def effective_mart(nid):
+        if nid in cross_mart:
+            return "shared"
+        return classify_mart(nid)
+
     keep_ids = set()
     for n in nodes:
         nid = n.get("id", "")
-        node_mart = classify_mart(nid)
+        node_mart = effective_mart(nid)
         if node_mart == mart or node_mart == "shared":
             keep_ids.add(nid)
     # Also keep shared sources that connect to selected mart targets via edges
     for e in edges:
         if e.get("target") in keep_ids and e.get("source") not in keep_ids:
-            # only keep upstream source if it's shared (avoid pulling in other marts)
-            if classify_mart(e.get("source", "")) == "shared":
+            if effective_mart(e.get("source", "")) == "shared":
                 keep_ids.add(e.get("source"))
     filtered_nodes = [n for n in nodes if n.get("id") in keep_ids]
     filtered_edges = [e for e in edges if e.get("source") in keep_ids and e.get("target") in keep_ids]
