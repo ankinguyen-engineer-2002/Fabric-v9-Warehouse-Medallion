@@ -1,6 +1,6 @@
 # Dataflow API automation — results + Microsoft documentation findings
 
-**Date:** 2026-05-12 · **Status:** 5 dataflows created via REST API in workspace `Enterprise SupplyChain-Dev`
+**Date:** 2026-05-12, **updated 2026-05-18** · **Status:** 7 dataflows created via REST API in workspace `Enterprise SupplyChain-Dev`
 
 ## Microsoft Learn docs research (via MCP `microsoft-docs-search` + `microsoft_docs_fetch`)
 
@@ -40,6 +40,8 @@ All `ShareableCloud` + `OAuth2` → có thể reference trong queryMetadata.json
 | 3 | `df_brz_ITBEXT_Reloaded` | `f6d601e3-76bd-49d0-af95-1f90a7ac647b` | `itbext_reloaded` | **P0** |
 | 4 | `df_brz_ITEMBL_PHYOH_Reloaded` | `d3d87cbe-252b-47f0-9d64-5c99be4b4192` | `itembl_phyoh_reloaded` | **P1** |
 | 5 | `df_brz_Logility_ItemStatus` | `d409ee6f-4009-4a40-b9f1-6f69fc2d33d4` | `logility_itemstatus` | **P2** conditional |
+| 6 | `df_brz_ItemBalance` | `7254bbc6-deb8-44e9-859d-67c11cfeec75` | `itembalance` | **P1** (added 2026-05-18) |
+| 7 | `df_brz_PurchaseOrderSnapshot` | `35814293-0b87-4e21-a4ec-1a681c8032a0` | `purchaseordersnapshot` | **P2** (added 2026-05-18, Phase 2 PO-as-of feature) |
 
 ## Action required from Aric (per dataflow)
 
@@ -122,6 +124,35 @@ Workaround paths trong tương lai (theo Microsoft docs):
 - **Scheduled refresh** (đã implement qua `.schedules` part) — auto-runs daily
 - **Pipeline activity wrapper** — Dataflow activity inside Fabric Data Pipeline → pipeline API trigger DOES work (proven: `pl_sc_master` run 42m08s success via API)
 - **Manual UI refresh** — always works
+
+## 2026-05-18 — Iteration #3: Add 2 dataflows for Phase 1B/2 sources
+
+Added `df_brz_ItemBalance` + `df_brz_PurchaseOrderSnapshot` via inline `curl + python3` REST API calls (no Python script file). Same connection IDs reused from `df_brz_PoDetail_v2`:
+- Lakehouse: `ClusterId=e6436dba-643f-44c3-ad6f-51a8cbc45b81, DatasourceId=b4311980-3d3b-49be-bd11-7e2f8e424e19`
+- SQL EDW: `ClusterId=e6436dba-..., DatasourceId=67192c57-5e5c-4ad4-8801-858e75656fe4`
+
+Both dataflows:
+1. Created via `POST /workspaces/{ws}/dataflows` (returns dataflowId) — HTTP 201
+2. updateDefinition via `POST /workspaces/{ws}/dataflows/{id}/updateDefinition` with 3 parts (queryMetadata.json + mashup.pq + .platform) — HTTP 200
+
+**Source paths** (verify on first refresh — if "Invalid object name" → query EDW SSMS for actual schema):
+- `df_brz_ItemBalance`: `Inventory_Enh_History.ItemBalance` (BRD path; may need MasterData_* prefix per iteration #2 pattern)
+- `df_brz_PurchaseOrderSnapshot`: `SupplyChain_Enh.PurchaseOrderSnapshot` (per Track A doc "anh sếp dùng cho PO-as-of query")
+
+**Action required from Aric**:
+- Mở Fabric portal → mỗi dataflow → click Save (if prompt for credential, pick `ashley-edw.database.windows.net;ASHLEY_EDW` connection id `67192c57-...`)
+- Optional manual Refresh để verify EDW schema; nếu fail → adjust SQL in `add_or_update_query_in_dataflow` after Claude restart loads DataFactory.MCP
+
+## DataFactory.MCP setup (added 2026-05-18)
+
+Microsoft official MCP server đã configured: `~/.claude.json` → `mcpServers.datafactory`. Will load on next Claude Code session. Provides:
+- `create_dataflow` + `save_dataflow_definition` (full automation, no UI Save)
+- `refresh_dataflow_background` (working refresh API — alternative to scheduled-only workaround)
+- `create_connection` (with inline credentials)
+
+Setup command was: `claude mcp add datafactory -s user -- /opt/homebrew/Cellar/dotnet/10.0.102/libexec/dnx Microsoft.DataFactory.MCP --yes`
+
+Future dataflow operations should prefer DataFactory.MCP tools over raw REST (cleaner, refresh works).
 
 ## Reference
 

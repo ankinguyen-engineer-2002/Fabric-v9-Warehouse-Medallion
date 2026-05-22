@@ -112,7 +112,7 @@ INSERT INTO Meta.AssetRegistry (
 ) VALUES (
     'gold::FactForecastActual', 'Gold', 'GoldPublish',
     'ForecastAccuracy_DW', 'FactForecastActual', 'overwrite', 'daily', '0 2 * * *',
-    'forecast', 1,
+    'forecast_accuracy', 1,
     '["SalesHistory_Enh.ActualDemandMonthly","ForecastHistory_Enh.ForecastDemandMonthly","ForecastHistory_Enh.NaiveForecastMonthly"]',
     'ForecastAccuracy_DW.v_FactForecastActual'
 );

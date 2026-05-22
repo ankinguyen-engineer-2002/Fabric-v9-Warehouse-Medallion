@@ -314,12 +314,16 @@ def build_node_mart_lookup() -> dict:
 def _classify_by_schema(schema_or_nid: str) -> str:
     """Schema string → mart bucket. Pure pattern match, no I/O."""
     s = schema_or_nid or ""
-    # Shared (Bronze sources + RefMaster + Staging bridge)
+    # Truly shared sources — Bronze EL/SC_LH + RefMaster (used by both marts)
     if any(k in s for k in [
         "Enterprise_Lakehouse", "SupplyChain_Lakehouse",
-        "ReferenceMaster_Enh", "Staging_Wrk",
+        "ReferenceMaster_Enh",
     ]):
         return "shared"
+    # Staging_Wrk wrapper views — only consumed by forecast.v_OpenOrderLineLevel
+    # → classify as forecast (not shared) so inventory mart filter doesn't show them
+    if "Staging_Wrk" in s:
+        return "forecast"
     # Forecast project schemas
     if any(k in s for k in [
         "SalesHistory_Enh", "ForecastHistory_Enh", "OpenOrderHistory_Enh",
@@ -401,10 +405,18 @@ with tab1:
     dag_data = build_dag_data()
     if mart_filter != "all":
         dag_data = filter_dag_by_mart(dag_data, mart_filter)
-    st.caption(f"Showing {len(dag_data.get('nodes', []))} nodes · {len(dag_data.get('edges', []))} edges")
+    # Per-layer counts for visibility (helps confirm cleaner layered view)
+    layer_counts = {}
+    for n in dag_data.get("nodes", []):
+        layer_counts[n.get("layer","other")] = layer_counts.get(n.get("layer","other"),0) + 1
+    layer_summary = " · ".join(f"{k}: {v}" for k,v in sorted(layer_counts.items()))
+    st.caption(f"Showing {len(dag_data.get('nodes', []))} nodes · {len(dag_data.get('edges', []))} edges  |  {layer_summary}")
     html_content = html_path.read_text(encoding="utf-8")
     if dag_data and dag_data["nodes"]:
         html_content = html_content.replace("window.__LINEAGE_API_DATA__ = null;", f"window.__LINEAGE_API_DATA__ = {json.dumps(dag_data)};")
+    # Inject mart_filter so HTML layer labels show correct Gold/Semantic for the selected mart
+    html_content = html_content.replace("window.__LINEAGE_API_DATA__ = null;", "window.__LINEAGE_API_DATA__ = null;")  # noop guard
+    html_content = html_content.replace("<body>", f"<body><script>window.__MART_FILTER__ = {json.dumps(mart_filter)};</script>")
     components.html(html_content, height=700, scrolling=False)
 
 # ══ TAB 2: ETL Flow by Table ══

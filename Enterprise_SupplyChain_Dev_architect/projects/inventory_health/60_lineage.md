@@ -1,55 +1,55 @@
 # 60 — Lineage
 
-> **Status:** Skeleton — lineage auto-builds from `Meta.AssetRegistry.source_objects` once registry rows added.
+> **Status:** Lineage edges auto-built from `Meta.AssetRegistry.source_objects` after registry insert + `EXEC Meta.usp_BuildLineage`.
 
-## Pattern (reuse from forecast)
+## How lineage works in v10
 
-Lineage = directed graph of `(source_asset → target_asset, edge_type)` stored in `Meta.LineageEdge`. Auto-built via `Meta.usp_BuildLineage`:
+Each row in `Meta.AssetRegistry` carries a `source_objects` JSON array listing upstream entities. `Meta.usp_BuildLineage` runs `STRING_SPLIT` on each row to produce direct lineage edges in `Meta.LineageEdge`:
 
 ```sql
--- 1. DELETE direct + derived edges (semantic edges preserved)
-DELETE FROM Meta.LineageEdge WHERE edge_type IN ('direct','derived');
-
--- 2. INSERT from registry.source_objects (JSON array)
-INSERT INTO Meta.LineageEdge
-SELECT
-  CONCAT('lineage::', ROW_NUMBER() OVER (...)),
-  TRIM(src.value),  -- source from JSON
-  r.asset_id,       -- target from registry
-  'direct',
-  r.load_type,
-  0, SYSUTCDATETIME()
+INSERT INTO Meta.LineageEdge (source_asset, target_asset, edge_type, transform_type, ...)
+SELECT TRIM(src.value), r.asset_id, 'direct', r.load_type, ...
 FROM Meta.AssetRegistry r
-CROSS APPLY STRING_SPLIT(r.source_objects, ',') src;
+CROSS APPLY STRING_SPLIT(REPLACE(REPLACE(r.source_objects,'[',''),']',''), ',') src
+WHERE r.source_objects IS NOT NULL
 ```
 
-## Estimated edges (TBD)
+## Expected lineage edges for inventory_health (post `usp_BuildLineage`)
 
-When `inventory_health` is fully registered:
-- ~10-15 direct edges (per Silver/Gold asset source mapping)
-- ~3-5 semantic edges (Gold → `sc_inventory_health` model)
-- Total estimated: **+15-20 edges** on top of current 60 (forecast).
+Approximate counts based on the 33 registry rows authored:
+
+| Source asset (upstream) | Target asset (inventory_health) | Count |
+|---|---|---:|
+| `Enterprise_Lakehouse.*` (Bronze shortcuts) | `ReferenceMaster_Enh.Vendor` + 12 Tier-1 silver views | ~25 |
+| `SupplyChain_Lakehouse.*` (workaround) | v_PurchaseOrder + v_LogilityItemStatus | ~3 |
+| `ReferenceMaster_Enh.ItemMaster/Warehouse/Calendar` (REUSED) | `InventoryHistory_Enh.ItemMasterExt/WarehouseExt` + Gold dims | ~6 |
+| `InventoryHistory_Enh.*` (intra-mart) | helpers + self-snapshots + Gold facts | ~30 |
+| `InventoryHealth_DW.CogsRollingHelper` | `InventoryHealth_DW.FactInventoryHealthSnapshot` | 1 |
+
+**Estimated total: ~65 new edges** for inventory_health (forecast has 60 edges currently).
 
 ## Cross-mart edges
 
-`StockoutHistory_Enh.StockoutEvents` will have multi-source `source_objects`:
+Lineage will show inventory_health depends on forecast's masters:
+- `ReferenceMaster_Enh.ItemMaster` → `InventoryHistory_Enh.ItemMasterExt`
+- `ReferenceMaster_Enh.Warehouse` → `InventoryHistory_Enh.WarehouseExt`
+- `ReferenceMaster_Enh.Calendar` → `InventoryHealth_DW.DimDate`
 
-```json
-[
-  "InventoryHistory_Enh.InventoryDailySnapshot",
-  "OpenOrderHistory_Enh.OpenOrderLineLevel",
-  "SalesHistory_Enh.ActualDemandMonthly"
-]
+This is intentional — `ReferenceMaster_Enh` is shared infrastructure.
+
+NO cross-mart edge from forecast's `ForecastAccuracy_DW.Dim*` to inventory_health (decision per `30_gold.md`: inventory_health has its own self-contained Gold dims).
+
+## Visualization
+
+Lineage edges are consumed by `lineage_explorer` Streamlit app (in repo root). After deploy + `usp_BuildLineage`, run:
+- `lineage_explorer/scripts/refresh_lineage_data.py` (or wait for GitHub Action `refresh_lineage_data.yml`)
+- Open Streamlit app → toggle `project='inventory_health'` filter
+
+## Rebuild trigger
+
+`usp_BuildLineage` runs automatically at end of `pl_sc_master` (in `usp_FinalizePipeline`). Manual rebuild:
+```sql
+EXEC Meta.usp_BuildLineage;
 ```
 
-This creates cross-mart edges visible in Streamlit lineage app — important for impact analysis (if `ActualDemandMonthly` fails, both forecast + inventory_health affected).
-
-## Bridge edges (EDW supplement, if applicable)
-
-If `Staging_Wrk.InventorySnapshotEdw` is used (vs direct shortcut), add render-time bridge edge `SupplyChain_Lakehouse._edw → Staging_Wrk.*` (same pattern as 4 existing forecast EDW bridges, defined in `lineage_explorer/app.py` `load_augmented_lineage_rows`).
-
-## TBD
-
-- [ ] Confirm final source_objects per asset (depends on Silver design)
-- [ ] Cross-mart dependency graph diagram (Mermaid)
-- [ ] Update Streamlit app `load_augmented_lineage_rows` if new EDW supplements added
+This deletes all `edge_type IN ('direct','derived')` rows and recomputes from registry. `edge_type='semantic'` rows (TMDL-derived) are preserved (managed by `build_semantic_model_lineage.py`).

@@ -1,82 +1,101 @@
 # inventory_health — Inventory Health Mart
 
-> **Status:** PLANNED (skeleton scaffold created 2026-05-12) · **Gold schema:** `InventoryHealth_DW` (planned)
+> **Status (updated 2026-05-19):** CODE-AUTHORED · NOT YET DEPLOYED · **Gold schema:** `InventoryHealth_DW`
+> Source: deliverable v1 (`_source_v1/`, archived gitignored). Standardized into v10 v_* views following "1 SP + N views" pattern. **Bronze layer 100% covered** (3 Enterprise loads done by Dhivya 2026-05-18 + 2 SC_LH workarounds via Aric dataflows). Deploy now blocked only on **3 Robert sign-offs** (H1/H5/M3).
 
 ## What
 
-End-to-end Inventory Health analytics mart on Microsoft Fabric. Will combine on-hand inventory snapshots, in-transit, safety stock, slow/excess thresholds, and stockout signals into a unified Gold serving layer for Power BI Direct Lake reporting.
+End-to-end Inventory Health analytics mart on Microsoft Fabric. Combines current + weekly inventory snapshots, supply plans, purchase/manufacturing orders, sales movement history, ATP, and allocated demand into a unified Gold serving layer for Power BI Direct Lake reporting via the `InventoryHealth` semantic model.
 
-> Layout mirrors `forecast/` project exactly. Files currently scaffold-only — concrete data fills in during build phase.
+Phase 1 scope: 26 of 30 KPIs from BRD v1 (rest are Phase 2 — storage cube physical, warehouse-physical). 14 Track A fixes applied during 2-person QC review (2026-05-17); fixes preserved through view-conversion.
 
-## Planned infrastructure (target)
+## Live infrastructure snapshot (planned, not yet deployed)
 
 | Item | Value |
 |------|-------|
-| Workspace DEV | `c8d9fc83-18b6-4e1d-8264-0b49eed36fe0` (same as `forecast/`) |
-| Processing WH | `c0262cef-b8a7-495f-bccc-53b098c7948c` (extend with new Silver schemas) |
-| Gold WH | `98e2a911-5af9-442e-9cc8-5d8dadb8b762` (add `InventoryHealth_DW` schema) |
-| New Silver schemas (planned) | `InventoryHistory_Enh`, `InventoryMovementHistory_Enh`, `StockoutHistory_Enh` |
-| Gold schema | `InventoryHealth_DW` (Fact + Dim — count TBD) |
-| Semantic model | TBD — naming proposal: `sc_inventory_health` |
-| Naming convention | Bob-aligned per ADR-008: `_Enh`/`_Wrk` (PascalCase), `v_*` view prefix, `_DW` ALL CAPS for Gold |
-| Control plane | Reuse existing `Meta.*` (TableDictionary, AssetRegistry, AuditLog, RunLog) |
+| Workspace DEV | `c8d9fc83-18b6-4e1d-8264-0b49eed36fe0` |
+| Processing WH | `c0262cef-b8a7-495f-bccc-53b098c7948c` (`SupplyChain_Processing_Warehouse`) |
+| Gold WH | `98e2a911-5af9-442e-9cc8-5d8dadb8b762` (`SupplyChain_Gold_Warehouse`) |
+| SQL Endpoint | `7woj2wroypauvkpn72b56t46ju-qp6ntsfwdaou5atebne65u3p4a.datawarehouse.fabric.microsoft.com` |
+| New Schemas | 1 in Processing (`InventoryHistory_Enh`) + 1 in Gold (`InventoryHealth_DW`) + 1 NEW row in existing `ReferenceMaster_Enh` (Vendor) |
+| Views authored | **34** (1 RefMaster.v_Vendor + 25 Silver `v_*` + 8 Gold `v_*`) |
+| Registry rows (planned) | **33** (1 ReferenceMaster + 24 DomainSilver + 8 Gold) |
+| DQ rules (planned) | **27** (23 active + 4 inactive pending sources) |
+| Semantic model | `InventoryHealth` TMDL (7 user-facing tables + 1 hidden helper + 30 DAX measures) |
+| Naming convention | Bob-aligned per ADR-008: `_Enh` (Silver) / `_DW` (Gold), `v_*` view prefix |
+| Control plane reuse | `Meta.AssetRegistry`, `Meta.DQRule`, `Meta.LineageEdge` (no project-specific procs) |
+| Pipelines reused | 7 v10 pipelines (no new pipeline; multi-mart `pl_sc_master` ForEach auto-picks `project='inventory_health'`) |
 
-## Quick links (skeleton — content TBD)
+## Live row counts
+
+**Not yet measured** — deploy blocked. Expected magnitudes from deliverable v1 estimates:
+- `FactInventoryHealthSnapshot`: O(10M rows) (item × warehouse × 7 daily + ~104 weekly snapshots)
+- `FactInventoryRiskForward`: O(1M rows) (item × warehouse × 4 forward weeks)
+- Silver helpers: O(50M) (Item × Warehouse × AsOfDate)
+- Silver base: O(420M) (sum across 12 base tables, similar to forecast)
+
+## Quick links
 
 | Section | Doc |
 |---------|-----|
 | Workspace + IDs | [00_workspace.md](00_workspace.md) |
-| Bronze layer | [10_bronze.md](10_bronze.md) |
-| Silver layer (per schema) | [20_silver.md](20_silver.md) |
-| Gold layer | [30_gold.md](30_gold.md) |
-| Pipelines (IDs + DAG) | [40_pipelines.md](40_pipelines.md) |
-| Semantic model | [50_semantic.md](50_semantic.md) |
+| Bronze layer (32 sources: 30 Enterprise ready + 2 SC_LH workaround) | [10_bronze.md](10_bronze.md) |
+| Silver layer (1 RefMaster + 24 InventoryHistory_Enh) | [20_silver.md](20_silver.md) |
+| Gold layer (8 InventoryHealth_DW) | [30_gold.md](30_gold.md) |
+| Pipelines (reuses existing 7) | [40_pipelines.md](40_pipelines.md) |
+| Semantic model + 30 DAX | [50_semantic.md](50_semantic.md) |
 | Lineage | [60_lineage.md](60_lineage.md) |
-| ETL DDL | [etl/](etl/) |
-| Open questions for Bob | [_open_questions_for_bob.md](_open_questions_for_bob.md) |
-| **Source × KPI mapping** | [InventoryHealth_Source_KPI_Mapping.xlsx](InventoryHealth_Source_KPI_Mapping.xlsx) |
-| **Dataflow Gen2 setup guide** | [dataflow_setup.md](dataflow_setup.md) |
+| ETL views + registry | [etl/](etl/) |
+| Semantic TMDL/DAX | [semantic/](semantic/) |
+| Open questions (3 Robert + 2 DE US workaround pending + Bob Q) | [_open_questions_for_bob.md](_open_questions_for_bob.md) |
+| Source deliverable v1 (gitignored) | [_source_v1/](_source_v1/) |
+| Dataflow drafts (7 created; 2 still relevant + 2 deprecation cleanup) | [_dataflow_drafts/](_dataflow_drafts/) |
 
-## Source × KPI mapping (input artifact)
+## Known operational state
 
-`InventoryHealth_Source_KPI_Mapping.xlsx` — pre-build analysis sheet, 5 tabs:
+| Item | Status |
+|------|--------|
+| ETL views authored | ✅ DONE (2026-05-18); Silver source switches applied 2026-05-19 |
+| Registry rows authored | ✅ DONE; A2+A3 flipped `is_active=1` 2026-05-19 |
+| DQ rules authored | ✅ DONE; pending `expected_zero` rule for 5 deprecated cols + `expected_dup_ratio_max` for Logility |
+| Semantic model TMDL ported (`gold.` → `InventoryHealth_DW.`) | ✅ DONE |
+| Deploy to Fabric | ⏳ NOT STARTED — bronze unblocked (Dhivya + workarounds); ETL source refs migrated to EL 2026-05-19; now blocked only on (a) Robert sign-off, (b) user go-ahead |
+| Bronze sources (5 originally stale/missing) | ✅ 3 EL loads (PoDetail 21.95M + PoMaster 5.69M + Logility 38.36M, Dhivya 2026-05-18, verified pyodbc 2026-05-19) + 2 SC_LH workarounds (`df_brz_ItemBalance` 48.97M + `df_brz_PurchaseOrderSnapshot` ~2B) |
+| Column-deprecation finding (5 cols) | ✅ Verified zero on EDW source: ITBEXT.CRHLD/DLHLD/TOHLD/ATPQT + ITEMBL.PHYOH → planned `expected_zero` DQ rule + delete 2 reload dataflows |
+| Dup classification (Rakeshbalaji Slack 2026-05-09) | ✅ Verified 2026-05-19: PoDetail = TRUE row dup (1 pair, all 53 cols identical) → ROW_NUMBER drops safely; Logility = GRAIN CONFLICT (9,128 pairs, 6 metrics differ) → view ORDER BY rewritten to prefer non-zero metrics row |
+| ETL Silver source-path migration (2026-05-19) | ✅ DONE: `v_PurchaseOrder` LEFT JOIN switched to EL.PoMaster; `v_LogilityItemStatus` switched to EL.DemandFulfillmentCommonContainer_Logility + new grain-conflict ORDER BY |
+| 3 Robert sign-offs (H1/H5/M3) | ⏳ email pending (see `_open_questions_for_bob.md`) — **only remaining blocker** |
+| Pipeline schedule | N/A until deploy |
+| Alerting / CI / Schedule trigger | BLOCKED — same IT permission issue as forecast |
 
-| Sheet | Rows | Purpose |
-|-------|-----:|---------|
-| `README` | 17 | Mục đích + cách đọc file |
-| `EDW_vs_Lakehouse` | 46 | EDW source ↔ Lakehouse mapping (Mapped / Renamed / Missing status) |
-| `Source_to_KPI` | 25 | Mỗi source → list KPI nó phục vụ + vai trò (Dim trục dọc / Fact đa năng) |
-| `KPI_to_Source` | 35 | **35 KPIs** with source list per KPI (e.g., KPI #1 "On Hand Quantity" ← ITEMBL.MOHTQ + ITMRVA.cost + ...) |
-| `Source_Classification` | 15 | Phân loại source theo độ tái sử dụng, identify candidates to consolidate |
+## Track A fixes preserved through v10 port (deliverable v1 → views)
 
-**Use during build**:
-- Phase 1 scoping → reference `KPI_to_Source` để gen `Meta.AssetRegistry` rows
-- Phase 2 Bronze → reference `EDW_vs_Lakehouse` để confirm shortcut vs EDW supplement decision per source
-- Phase 3 Silver schema design → reference `Source_Classification` để identify which sources go where
-- Phase 5 pipeline registration → KPI count (35) drives Fact + Dim count in Gold
+| # | Code | Where in v10 | Robert sign-off |
+|---|------|--------------|---|
+| 1 | H1 ItemAllocationFlag=2 | [silver_views.sql:v_AllocatedDemandCandidate](etl/silver_views.sql) | ⏳ |
+| 2 | H2 ATPSUM UNPIVOT APAT01-43 | [silver_views.sql:v_AtpWeekEnding](etl/silver_views.sql) | n/a (data shape) |
+| 3 | H3 FG-only + WH exclusion | [silver_views.sql:v_InventoryCurrent](etl/silver_views.sql) | n/a (matches sếp) |
+| 4 | H4 ORDER BY FiscalMonthYear | [gold_views.sql:v_CogsRollingHelper](etl/gold_views.sql) | n/a (math) |
+| 5 | H5 WeekFourFlag exact week | [gold_views.sql:v_FactInventoryRiskForward](etl/gold_views.sql) | ⏳ |
+| 6 | M1 Saturday DATENAME | N/A in v10 (cron handled by `Meta.ufn_should_run` + registry `cron_expression`) | n/a |
+| 7 | M2 Walrus removed | N/A (no procedural SQL in v10 views) | n/a |
+| 8 | M3 Cogs52W → Cogs52M | [gold_views.sql:v_CogsRollingHelper](etl/gold_views.sql) + TMDL + DAX | ⏳ |
+| 9 | M4 SLOB NULL guard | [gold_views.sql:v_FactInventoryHealthSnapshot](etl/gold_views.sql) | n/a (defensive) |
+| 10 | M5 AWD COUNTROWS SUMMARIZE | [semantic/Measures_DAX.dax](semantic/Measures_DAX.dax) verbatim | n/a (math) |
+| 11 | B1 PoDetail Enterprise source | [silver_views.sql:v_PurchaseOrder](etl/silver_views.sql) | n/a (data switch) |
+| 12 | B2 DemandForecast source | [silver_views.sql:v_ForecastCurrent](etl/silver_views.sql) | n/a |
+| 13 | B3 Warehouse exclusion flags | [silver_views.sql:v_WarehouseExt](etl/silver_views.sql) + v_InventoryCurrent + v_PurchaseOrder | n/a |
+| 14 | M3 doc trail | inline comments in views + TMDL/DAX | n/a |
 
-## Build phases (planned)
+## Migration deltas vs deliverable v1
 
-| Phase | Goal | Status |
-|-------|------|--------|
-| 1. Scope + source mapping | Identify EDW / Enterprise Lakehouse source tables for inventory snapshots | Not started |
-| 2. Bronze surface | Add 4 EDW supplement tables OR shortcut from `Enterprise_Lakehouse.SupplyChain_DW` | Not started |
-| 3. Silver schemas | DDL + CTAS views in 3 new domain schemas | Not started |
-| 4. Gold star schema | Fact + Dim in `InventoryHealth_DW` | Not started |
-| 5. Pipeline wiring | Register assets in `Meta.AssetRegistry` (project=`inventory_health`) — multi-mart ForEach auto-picks | Not started |
-| 6. Semantic model | TMDL + Direct Lake deploy | Not started |
-| 7. Lineage refresh | `usp_BuildLineage` regenerates edges from registry | Not started |
-| 8. Pipeline run + DQ | First end-to-end + DQ gates active | Not started |
-
-## Dependencies
-
-- Same control plane (`Meta.*`) as `forecast/` — no new SP needed (registry-driven generic load handles all 8 patterns)
-- Multi-mart routing in `pl_sc_master` ForEach picks up `project='inventory_health'` automatically once registry rows added
-- May need new EDW supplement tables in `Staging_Wrk` if source not in Enterprise_Lakehouse shortcut
-
-## References
-
-- Parent index: [../README.md](../README.md)
-- Sibling project: [`forecast/`](../forecast/) — LIVE reference implementation
-- v10 architecture: [ADR-001](../../../docs/decisions/ADR-001-v10-hybrid-medallion.md)
-- Bob alignment: [ADR-008](../../../docs/decisions/ADR-008-bob-alignment-naming-and-integration.md)
+| Aspect | Deliverable v1 | v10 (this folder) |
+|---|---|---|
+| Silver schema | `silver` (lowercase, flat 35 tables) | `InventoryHistory_Enh` (24 tables) + `ReferenceMaster_Enh.Vendor` (NEW) |
+| Gold schema | `gold` (lowercase, flat 8 tables) | `InventoryHealth_DW` (8 tables, all self-contained) |
+| Warehouse refs | `SupplyChain Processing Warehouse` (space) | `SupplyChain_Processing_Warehouse` (underscore) |
+| Load orchestration | 14 custom `usp_Build_*` procs + 1 `usp_RefreshAll` | 1 generic `Meta.usp_GenericLoad` + 34 views + 33 registry rows |
+| Control plane | None | Full `Meta.*` integration (registry + DQ + lineage + audit) |
+| Pipeline | Manual exec | Registry-driven multi-mart via `pl_sc_master` |
+| Watermark | `silver.EtlWatermark` table (5 rows) | `Meta.AssetRegistry.last_watermark_value` column |
+| TMDL bind | `schemaName: gold` | `schemaName: InventoryHealth_DW` |

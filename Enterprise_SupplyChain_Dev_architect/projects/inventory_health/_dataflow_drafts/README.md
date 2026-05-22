@@ -2,17 +2,19 @@
 
 Pre-built Power Query M files for inventory_health dataflows. Drop-in templates: copy entire file content → paste vào Fabric Dataflow Gen2 Advanced Editor → Save & Refresh.
 
-## Status (updated 2026-05-12)
+## Status (updated 2026-05-18)
 
-All 5 dataflows now **created in workspace** via Python + Fabric REST API (see [API_AUTOMATION_RESULTS.md](API_AUTOMATION_RESULTS.md) for Microsoft docs findings + item IDs).
+All **7 dataflows** now created in workspace via Fabric REST API (see [API_AUTOMATION_RESULTS.md](API_AUTOMATION_RESULTS.md)).
 
-| # | Dataflow | Status | Priority |
-|---|----------|--------|----------|
-| 1 | `df_brz_PoDetail_v2` | ✅ **LIVE** (Aric Save+Refresh, 99+ rows verified) | P0 |
-| 2 | `df_brz_PoMaster` | ✅ Created via API — Aric needs UI Save | P0 |
-| 3 | `df_brz_ITBEXT_Reloaded` | ✅ Created via API — Aric needs UI Save | P0 |
-| 4 | `df_brz_ITEMBL_PHYOH_Reloaded` | ✅ Created via API — Aric needs UI Save | P1 |
-| 5 | `df_brz_Logility_ItemStatus` | ✅ Created via API — Aric needs UI Save | P2 |
+| # | Dataflow | Item ID | Status | Priority |
+|---|----------|---------|--------|----------|
+| 1 | `df_brz_PoDetail_v2` | `689271c0-b11d-433e-b9f0-fd767a38f08a` | ✅ **LIVE** (verified 99+ rows in lakehouse) | P0 |
+| 2 | `df_brz_PoMaster` | `585b4cbd-6e8e-4dcd-89e9-ac915984138d` | ✅ Created — UI Save + first refresh pending | P0 |
+| 3 | `df_brz_ITBEXT_Reloaded` | `f6d601e3-76bd-49d0-af95-1f90a7ac647b` | ✅ Created (EDW raw `MasterData_ItemMaster_AFI.ITBEXT`) — UI Save pending | P0 |
+| 4 | `df_brz_ITEMBL_PHYOH_Reloaded` | `d3d87cbe-252b-47f0-9d64-5c99be4b4192` | ✅ Created (EDW raw `MasterData_ItemMaster_AFI.ITEMBL`) — UI Save pending | P1 |
+| 5 | `df_brz_Logility_ItemStatus` | `d409ee6f-4009-4a40-b9f1-6f69fc2d33d4` | ✅ Created — Robert sign-off conditional | P2 |
+| **6** | **`df_brz_ItemBalance`** | **`7254bbc6-deb8-44e9-859d-67c11cfeec75`** | **✅ Created 2026-05-18 — UI Save + verify EDW schema pending** | **P1** |
+| **7** | **`df_brz_PurchaseOrderSnapshot`** | **`35814293-0b87-4e21-a4ec-1a681c8032a0`** | **✅ Created 2026-05-18 — UI Save + verify EDW schema pending** | **P2** |
 
 All 4 new dataflows have:
 - Explicit connection binding (cluster/datasource IDs reused from forecast — credential should pre-bind)

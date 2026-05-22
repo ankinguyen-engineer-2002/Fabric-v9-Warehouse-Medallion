@@ -1,54 +1,71 @@
 # 40 — Pipelines
 
-> **Status:** Skeleton — no new pipelines needed. Existing 7 v10 pipelines pick up `inventory_health` mart via multi-mart ForEach.
+> **Status:** No new pipelines required. Inventory Health is fully orchestrated by the existing 7 v10 pipelines via registry-driven multi-mart ForEach.
 
-## Pipeline reuse strategy
+## How inventory_health joins the multi-mart flow
 
-Per ADR-001 multi-mart design, **adding a new mart requires zero new pipelines**. The orchestrator `pl_sc_master` runs:
+`pl_sc_master` runs `SELECT DISTINCT project FROM Meta.AssetRegistry WHERE is_active=1` → ForEach project → invoke `pl_sc_mart(project_name)`. After inserting 33 rows with `project='inventory_health'` into the registry, `pl_sc_master` automatically picks `inventory_health` alongside `forecast` on next trigger.
+
+## Existing 7 pipelines (reused as-is)
+
+| # | Pipeline | ID | Role for inventory_health |
+|---|----------|----|---|
+| 1 | `pl_sc_master` | `f36f56b8-5668-4a0c-b991-2c28302f1710` | Master orchestrator — auto-picks `inventory_health` via ForEach |
+| 2 | `pl_sc_mart` | `20db5725-80e3-4081-9ef5-01700acdf3b3` | Per-project router — runs Staging→Silver→Gold sequentially per project |
+| 3 | `pl_sc_staging` | `10221fb2-6e30-4911-9d95-d8dd67440d84` | Staging + ReferenceMaster load — runs `Meta.usp_GenericLoad` for `Vendor` |
+| 4 | `pl_sc_silver` | `7dc6ecda-56cc-4797-893c-1c502863323f` | Silver DAG dispatcher — invokes wave executor 3-4 times |
+| 5 | `pl_sc_silver_wave` | `797b1a02-f973-4584-bd27-bb0151549d4b` | Parallel batch=8 executor per wave |
+| 6 | `pl_sc_gold` | `50ff6263-659d-4b09-9e45-b42a3434e093` | Cross-DB CTAS for 8 InventoryHealth_DW tables |
+| 7 | `pl_dq_check` | `3c7c61f6-c184-41e5-8309-f9ac3260d38d` | DQ rule gate (run separately or on-demand) |
+
+## Expected runtime (estimated, post-deploy)
+
+Based on forecast's ~31 min for ~420M rows and similar data volume:
+
+| Stage | Estimated duration | Notes |
+|---|---:|---|
+| Staging (Vendor REF) | ~1 min | small master |
+| Silver Wave 0 (12 base + 2 master ext) | ~10-15 min | parallel batch=8 |
+| Silver Wave 1 (2 weekly snapshots) | ~5-8 min | depends on ItemBalance availability |
+| Silver Wave 2 (4 helpers) | ~3-5 min | parallel; CROSS JOIN AsOfDate × Item×WH |
+| Silver Wave 3 (4 self-snapshots) | ~2 min | datekey insert-today only |
+| Gold cross-DB CTAS (8 InventoryHealth_DW) | ~5-8 min | FactInventoryHealthSnapshot largest |
+| **Total inventory_health window** | **~25-40 min** | sequential after forecast (~31 min) |
+
+## DAG topology (in pl_sc_silver_wave)
+
+`Meta.usp_ComputeSilverWaves` reads `depends_on` from registry rows. Expected DAG for inventory_health:
 
 ```
-Lookup: SELECT DISTINCT project FROM Meta.AssetRegistry WHERE is_active=1
-  ForEach project (concurrency=1)
-    → Invoke pl_sc_mart(@project)
-      → pl_sc_staging (if EDW supplement assets exist for project)
-      → pl_sc_silver  → pl_sc_silver_wave (DAG waves)
-      → pl_sc_gold    (cross-DB CTAS)
-      → finalize
+Wave 0: ItemMasterExt, WarehouseExt, Vendor (RefMaster),
+        CostCurrent, InventoryCurrent, SupplyPlan, SalesShipment,
+        PurchaseOrder, ManufacturingOrder, LogilityItemStatus, HoldingTransfer,
+        AtpWeekEnding, MovementHistory, AllocatedDemandCandidate, ForecastCurrent
+Wave 1: InventorySnapshotWeekly, ForecastSnapshotWeekly
+Wave 2: AwdHelper, LastInvoiceHelper, MovementFlagHelper, SafetyStockHelper
+Wave 3: PurchaseOrderSnapshotDaily, ManufacturingOrderSnapshotDaily,
+        HoldingTransferSnapshotDaily, LogilityItemStatusSnapshotWeekly
 ```
 
-When `project='inventory_health'` rows are added to `Meta.AssetRegistry`, the existing pipeline picks them up automatically next run.
+## Smart skip + scheduling
 
-## Existing 7 v10 pipelines (no change needed)
+Per-asset `cron_expression` in registry:
+- Daily masters / base / snapshots: `0 2 * * *` (02:00 UTC)
+- Monthly masters (Vendor): `0 3 1 * *`
+- Weekly snapshots (Logility, weekly forecasts): `0 6 * * 6` (Saturday)
+- Helpers: `0 3 * * *`
+- Self-snapshots: `0 4 * * *`
+- Gold: `0 5 * * *`
+- Monthly Gold dims (DimDate, DimItem, DimWarehouse, DimVendor): `0 3 1 * *`
 
-| Pipeline | ID | Role |
-|----------|----|------|
-| `pl_sc_master` | `f36f56b8-5668-4a0c-b991-2c28302f1710` | Multi-mart orchestrator |
-| `pl_sc_mart` | `20db5725-80e3-4081-9ef5-01700acdf3b3` | Per-mart wrapper |
-| `pl_sc_staging` | `10221fb2-6e30-4911-9d95-d8dd67440d84` | EDW supplement load (if applicable) |
-| `pl_sc_silver` | `7dc6ecda-56cc-4797-893c-1c502863323f` | Silver DAG dispatcher |
-| `pl_sc_silver_wave` | `797b1a02-f973-4584-bd27-bb0151549d4b` | Wave executor (batch=8 parallel) |
-| `pl_sc_gold` | `50ff6263-659d-4b09-9e45-b42a3434e093` | Gold cross-DB CTAS |
-| `pl_dq_check` | `3c7c61f6-c184-41e5-8309-f9ac3260d38d` | DQ gate (standalone) |
+`Meta.ufn_should_run(asset_id)` evaluates `cron_expression` vs UTC now; out-of-window assets are skipped.
 
-## Registry rows needed for inventory_health (TBD)
+## Deploy sequence (when ready)
 
-Estimate ~10-15 rows in `Meta.AssetRegistry`:
-- 2-4 Staging_Wrk (if EDW supplement needed)
-- 5-7 Silver (3 schemas × ~2 tables each)
-- 3-5 Gold (3 facts + 1-2 new dims)
-
-Add via INSERT to `Meta.AssetRegistry` with `project='inventory_health'`. Then:
-1. `EXEC Meta.usp_ComputeSilverWaves` (regenerate DAG)
-2. `EXEC Meta.usp_BuildLineage` (rebuild edges)
-3. Trigger `pl_sc_master` — multi-mart ForEach picks both `supplychain` (existing forecast) + `inventory_health`
-
-## DQ rules needed
-
-Add rows to `Meta.DQRule` per Silver/Gold table. Same 7 check types available (completeness, row_count, uniqueness, freshness, etc.).
-
-## TBD
-
-- [ ] Final asset list with `load_type` per asset
-- [ ] Watermark columns for any `incremental` assets
-- [ ] DAG `depends_on` graph (esp. `StockoutEvents` cross-mart dependency)
-- [ ] Schedule: same daily 2AM UTC+7 trigger, or different cadence?
+1. `silver_views.sql` → Processing WH
+2. `gold_views.sql` → Gold WH
+3. `registry_inserts.sql` → Processing WH (Meta schema)
+4. `dq_rules_inserts.sql` → Processing WH (Meta schema)
+5. `EXEC Meta.usp_ComputeSilverWaves;`
+6. `EXEC Meta.usp_BuildLineage;`
+7. Manually trigger `pl_sc_master` via Fabric portal → verify both `forecast` + `inventory_health` runs.
