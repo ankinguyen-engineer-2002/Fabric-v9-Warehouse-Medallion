@@ -13,17 +13,18 @@
 --   M3 Cogs52W → Cogs52M rename (Robert sign-off pending re: keep 52M or rewrite weekly)
 --   M4 SLOB NULL guard on LastInvoiceDate
 -- ============================================================
--- 7 NEW views (Gold artifacts for inventory_health mart — self-contained schema):
---   1. InventoryHealth_DW.v_DimDate                  — derived from ReferenceMaster_Enh.Calendar
---   2. InventoryHealth_DW.v_DimItem                  — derived from InventoryHistory_Enh.ItemMasterExt
---   3. InventoryHealth_DW.v_DimWarehouse             — derived from InventoryHistory_Enh.WarehouseExt
---   4. InventoryHealth_DW.v_DimVendor                — derived from ReferenceMaster_Enh.Vendor
---   5. InventoryHealth_DW.v_CogsRollingHelper        — 52M + 12M rolling COGS (H4 + M3)
---   6. InventoryHealth_DW.v_FactInventoryHealthSnapshot
---   7. InventoryHealth_DW.v_FactInventoryRiskForward (H5)
--- DROPPED 2026-05-22: DimRuleVersion (over-engineering — Aric decision). When BRD updates,
--- create new semantic model version instead of versioning via dim. RuleVersionKey column
--- removed from both Fact views; semantic model TMDL relationships removed.
+-- 6 NEW views (Gold artifacts for inventory_health mart):
+--   1. InventoryHealth_DW.v_DimItem                  — derived from InventoryHistory_Enh.ItemMasterExt
+--   2. InventoryHealth_DW.v_DimWarehouse             — derived from InventoryHistory_Enh.WarehouseExt
+--   3. InventoryHealth_DW.v_DimVendor                — derived from ReferenceMaster_Enh.Vendor
+--   4. InventoryHealth_DW.v_CogsRollingHelper        — 52M + 12M rolling COGS (H4 + M3)
+--   5. InventoryHealth_DW.v_FactInventoryHealthSnapshot
+--   6. InventoryHealth_DW.v_FactInventoryRiskForward (H5)
+-- DROPPED 2026-05-22 (round 1): DimRuleVersion (over-engineering — Aric decision).
+-- DROPPED 2026-05-22 (round 2): DimDate (duplication with ForecastAccuracy_DW.DimCalendar).
+--   Inventory_health TMDL now rebinds to ForecastAccuracy_DW.DimCalendar (single shared
+--   date dim across both marts). Fact views already JOIN to that table for fiscal cols.
+-- Shared date dim: see ForecastAccuracy_DW.v_DimCalendar (75 cols, lives in mart A schema).
 -- DESIGN NOTE: Per deliverable v1, the TMDL semantic model expects all 7 user-facing
 -- tables (5 Dims + 2 Facts) under InventoryHealth_DW. We DO NOT bind DirectLake to
 -- ForecastAccuracy_DW dims because their column schemas differ from the deliverable's
@@ -32,33 +33,14 @@
 -- ============================================================
 
 
--- ---- InventoryHealth_DW.v_DimDate ----
--- Subset of DimDate columns matching deliverable v1 semantic model.
--- Sources from ReferenceMaster_Enh.Calendar (which reuses MasterData_DW.DimDate at Bronze).
--- Computes IsCurrentDate / IsCurrentWeek / IsMonthEnd flags.
-CREATE VIEW InventoryHealth_DW.v_DimDate AS
-SELECT
-    CAST(CAST(FORMAT(c.[Date], 'yyyyMMdd') AS BIGINT) AS BIGINT) AS DateKey,
-    CAST(c.[Date]                                                AS DATE)  AS CalendarDate,
-    CAST(c.FSCWeekLast                                           AS DATE)  AS WeekEndingDate,
-    CAST(c.FSCWeekNum                                            AS INT)   AS FiscalWeek,
-    CAST(c.FSCWeekIndicatorNum                                   AS INT)   AS FiscalWeekIndicator,
-    CAST(c.FSCMonthNum                                           AS INT)   AS FiscalMonth,
-    CAST(c.FSCMonthYearNum                                       AS INT)   AS FiscalMonthYear,
-    CAST(CASE WHEN c.[Date] = CAST(SYSUTCDATETIME() AS DATE) THEN 1 ELSE 0 END AS INT) AS IsCurrentDate,
-    CAST(CASE WHEN c.FSCWeekLast = (
-            SELECT MAX(c2.FSCWeekLast)
-            FROM [SupplyChain_Processing_Warehouse].[ReferenceMaster_Enh].[Calendar] c2
-            WHERE c2.[Date] <= CAST(SYSUTCDATETIME() AS DATE)
-          ) THEN 1 ELSE 0 END AS INT)                             AS IsCurrentWeek,
-    CAST(CASE WHEN c.[Date] = (
-            SELECT MAX(c3.[Date])
-            FROM [SupplyChain_Processing_Warehouse].[ReferenceMaster_Enh].[Calendar] c3
-            WHERE c3.FSCMonthYearNum = c.FSCMonthYearNum
-          ) THEN 1 ELSE 0 END AS INT)                             AS IsMonthEnd
-FROM [SupplyChain_Processing_Warehouse].[ReferenceMaster_Enh].[Calendar] c
+-- ---- InventoryHealth_DW.v_DimDate ----  [DROPPED 2026-05-22]
+-- Reason: duplicate of ForecastAccuracy_DW.DimCalendar (same source ReferenceMaster_Enh.Calendar).
+-- Inv_health TMDL now binds directly to ForecastAccuracy_DW.DimCalendar via column-name
+-- aliases (DateKey→DateSK, FiscalMonth→FSCMonthNum, etc.). Single shared date dim.
+-- IsCurrentDate/IsCurrentWeek/IsMonthEnd flag cols deferred — compute report-level DAX if needed.
+-- See git history pre-2026-05-22 for restoration if Phase 2 needs them as physical cols.
 
-GO
+-- (Full v_DimDate CREATE VIEW body removed — recoverable from git pre-2026-05-22)
 
 
 -- ---- InventoryHealth_DW.v_DimItem ----

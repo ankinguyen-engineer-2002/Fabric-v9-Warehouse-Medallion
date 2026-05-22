@@ -1,8 +1,10 @@
 # 30 — Gold Layer
 
-> **Status (updated 2026-05-22):** LIVE post-cleanup. 7 active assets in `InventoryHealth_DW` (Gold WH). Self-contained schema for TMDL semantic model.
+> **Status (updated 2026-05-22):** LIVE post-cleanup. **6 active assets** in `InventoryHealth_DW` (Gold WH) + 1 shared dim cross-mart (DimCalendar in ForecastAccuracy_DW).
 >
-> **2026-05-22 change**: Dropped `DimRuleVersion` (over-engineering — Aric decision: when BRD updates, create new semantic model version `sc_inventory_health_control_tower_v2` rather than versioning via dim). Removed RuleVersionKey column from both Fact views + 2 TMDL relationships + 1 DAX measure simplified.
+> **2026-05-22 changes** (2 cleanup rounds):
+> - Round 1: Dropped `DimRuleVersion` (over-engineering — versioning via new semantic model when BRD changes, not via versioned dim). Removed RuleVersionKey column from both Fact views + 2 TMDL relationships + 1 DAX measure simplified.
+> - Round 2: Dropped `DimDate` (duplicate of `ForecastAccuracy_DW.DimCalendar`). Inv_health TMDL rebinds to mart A's DimCalendar via column-name aliases — single shared date dim across both marts. Eliminates physical Gold dim duplication.
 
 ## Schema
 
@@ -13,25 +15,31 @@ Pattern: cross-DB CTAS via `pl_sc_gold` pipeline (registry-driven). Each Gold vi
 ## Star schema (post-cleanup 2026-05-22)
 
 ```
-                  DimDate ────┐
+       DimCalendar (shared) ────┐
                   DimItem ────┤
               DimWarehouse ───┼── FactInventoryHealthSnapshot
                 DimVendor ────┘        │
                                        │
                                        └─→ CogsRollingHelper (hidden, JOIN at view-time)
 
-                  DimDate ────┐
+       DimCalendar (shared) ────┐
                   DimItem ────┼── FactInventoryRiskForward
               DimWarehouse ───┘
 ```
 
-## Assets (7 total after cleanup, was 8)
+## Assets (6 inv_health + 1 shared, was 8 pre-cleanup)
 
-### Dims (4)
+### Shared dim cross-mart (1)
+
+| Asset | TMDL bind | Notes |
+|---|---|---|
+| `DimCalendar` | `ForecastAccuracy_DW.DimCalendar` (75 cols) | Single shared date dim used by both forecast + inv_health marts. Inv_health TMDL aliases display names: DateKey→DateSK, FiscalMonth→FSCMonthNum, FiscalMonthYear→FSCMonthYearNum, etc. |
+
+### Dims (3 inv_health-only)
 
 | Asset | View | Source | Notes |
 |---|---|---|---|
-| `DimDate` | `v_DimDate` | `ReferenceMaster_Enh.Calendar` + IsCurrent flags computed | Subset of 80+ cols for inventory_health usage |
+| ~~`DimDate`~~ | — | **DROPPED 2026-05-22** | Consolidated to `ForecastAccuracy_DW.DimCalendar` — single shared date dim used by both marts. TMDL rebinds cross-schema. |
 | `DimItem` | `v_DimItem` | `InventoryHistory_Enh.ItemMasterExt` + LifecycleStatus computed | LifecycleStatus = Active/Inactive/New/Discontinued |
 | `DimWarehouse` | `v_DimWarehouse` | `InventoryHistory_Enh.WarehouseExt` | Includes B3 fix flags |
 | `DimVendor` | `v_DimVendor` | `ReferenceMaster_Enh.Vendor` (NEW master) | 2-col Phase 1 (VendorNumber, VendorName) |

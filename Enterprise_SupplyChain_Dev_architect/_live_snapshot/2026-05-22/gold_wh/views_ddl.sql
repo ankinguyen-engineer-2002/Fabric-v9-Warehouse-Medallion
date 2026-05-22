@@ -1,6 +1,6 @@
 -- Live VIEW dump from SupplyChain_Gold_Warehouse
 -- Generated 2026-05-22 via OBJECT_DEFINITION
--- 14 views
+-- 13 views
 
 -- ============================================================
 -- ForecastAccuracy_DW.v_DimCalendar
@@ -563,68 +563,6 @@ SELECT
         ROWS BETWEEN 51 PRECEDING AND CURRENT ROW
     ) AS DECIMAL(18,4))                      AS Cogs52M   -- M3 FIX: renamed from Cogs52W
 FROM monthly
-GO
-
--- ============================================================
--- InventoryHealth_DW.v_DimDate
--- ============================================================
--- ============================================================
--- Gold Views — InventoryHealth_DW Serving Layer (project='inventory_health')
--- ============================================================
--- Target: SupplyChain_Gold_Warehouse (98e2a911-...) schema InventoryHealth_DW
--- Pattern: cross-DB 3-part name from Processing WH + Direct Lake-compatible CAST.
--- Cross-DB CTAS executed by pl_sc_gold pipeline (registry-driven) — Fabric WH
--- restriction: cross-DB CREATE TABLE cannot run from SP, so the pipeline bridges
--- via separate WH connections.
--- ============================================================
--- Track A fixes preserved:
---   H4 ORDER BY FiscalMonthYear (CogsRollingHelper)
---   H5 WeekFourFlag exact week (FactInventoryRiskForward, Robert sign-off pending)
---   M3 Cogs52W → Cogs52M rename (Robert sign-off pending re: keep 52M or rewrite weekly)
---   M4 SLOB NULL guard on LastInvoiceDate
--- ============================================================
--- 8 NEW views (Gold artifacts for inventory_health mart — self-contained schema):
---   1. InventoryHealth_DW.v_DimDate                  — derived from ReferenceMaster_Enh.Calendar
---   2. InventoryHealth_DW.v_DimItem                  — derived from InventoryHistory_Enh.ItemMasterExt
---   3. InventoryHealth_DW.v_DimWarehouse             — derived from InventoryHistory_Enh.WarehouseExt
---   4. InventoryHealth_DW.v_DimVendor                — derived from ReferenceMaster_Enh.Vendor
---   5. InventoryHealth_DW.v_DimRuleVersion           — manual seed (BRD v1 rule snapshot)
---   6. InventoryHealth_DW.v_CogsRollingHelper        — 52M + 12M rolling COGS (H4 + M3)
---   7. InventoryHealth_DW.v_FactInventoryHealthSnapshot
---   8. InventoryHealth_DW.v_FactInventoryRiskForward (H5)
--- DESIGN NOTE: Per deliverable v1, the TMDL semantic model expects all 7 user-facing
--- tables (5 Dims + 2 Facts) under InventoryHealth_DW. We DO NOT bind DirectLake to
--- ForecastAccuracy_DW dims because their column schemas differ from the deliverable's
--- design (e.g. DimProduct vs DimItem, DimCalendar vs DimDate). Source layer reuse is
--- still applied (ItemMasterExt reads ReferenceMaster_Enh.ItemMaster).
--- ============================================================
-
-
--- ---- InventoryHealth_DW.v_DimDate ----
--- Subset of DimDate columns matching deliverable v1 semantic model.
--- Sources from ReferenceMaster_Enh.Calendar (which reuses MasterData_DW.DimDate at Bronze).
--- Computes IsCurrentDate / IsCurrentWeek / IsMonthEnd flags.
-CREATE VIEW InventoryHealth_DW.v_DimDate AS
-SELECT
-    CAST(CAST(FORMAT(c.[Date], 'yyyyMMdd') AS BIGINT) AS BIGINT) AS DateKey,
-    CAST(c.[Date]                                                AS DATE)  AS CalendarDate,
-    CAST(c.FSCWeekLast                                           AS DATE)  AS WeekEndingDate,
-    CAST(c.FSCWeekNum                                            AS INT)   AS FiscalWeek,
-    CAST(c.FSCWeekIndicatorNum                                   AS INT)   AS FiscalWeekIndicator,
-    CAST(c.FSCMonthNum                                           AS INT)   AS FiscalMonth,
-    CAST(c.FSCMonthYearNum                                       AS INT)   AS FiscalMonthYear,
-    CAST(CASE WHEN c.[Date] = CAST(SYSUTCDATETIME() AS DATE) THEN 1 ELSE 0 END AS INT) AS IsCurrentDate,
-    CAST(CASE WHEN c.FSCWeekLast = (
-            SELECT MAX(c2.FSCWeekLast)
-            FROM [SupplyChain_Processing_Warehouse].[ReferenceMaster_Enh].[Calendar] c2
-            WHERE c2.[Date] <= CAST(SYSUTCDATETIME() AS DATE)
-          ) THEN 1 ELSE 0 END AS INT)                             AS IsCurrentWeek,
-    CAST(CASE WHEN c.[Date] = (
-            SELECT MAX(c3.[Date])
-            FROM [SupplyChain_Processing_Warehouse].[ReferenceMaster_Enh].[Calendar] c3
-            WHERE c3.FSCMonthYearNum = c.FSCMonthYearNum
-          ) THEN 1 ELSE 0 END AS INT)                             AS IsMonthEnd
-FROM [SupplyChain_Processing_Warehouse].[ReferenceMaster_Enh].[Calendar] c
 GO
 
 -- ============================================================

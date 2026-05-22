@@ -2,6 +2,9 @@ edge_id,source_asset,target_asset,edge_type,transform_type,is_synthetic,created_
 semantic::sc_forecast_control_tower::DimWarehouse,ForecastAccuracy_DW.DimWarehouse,SemanticModel.sc_forecast_control_tower,semantic,directLake,False,2026-05-05 08:31:36.313155,Auto-discovered via Fabric API getDefinition — model_id=f06a2361-15fd-4f91-9d37-941fefe62aaf
 semantic::sc_forecast_control_tower::DimCustomerGrouping,ForecastAccuracy_DW.DimCustomerGrouping,SemanticModel.sc_forecast_control_tower,semantic,directLake,False,2026-05-05 08:31:32.561879,Auto-discovered via Fabric API getDefinition — model_id=f06a2361-15fd-4f91-9d37-941fefe62aaf
 semantic::sc_forecast_control_tower::FactForecastActual,ForecastAccuracy_DW.FactForecastActual,SemanticModel.sc_forecast_control_tower,semantic,directLake,False,2026-05-05 08:31:41.221063,Auto-discovered via Fabric API getDefinition — model_id=f06a2361-15fd-4f91-9d37-941fefe62aaf
+semantic::sc_forecast_control_tower::FactForecastKpi,ForecastAccuracy_DW.FactForecastKpi,SemanticModel.sc_forecast_control_tower,semantic,directLake,False,2026-05-05 08:31:43.110440,Auto-discovered via Fabric API getDefinition — model_id=f06a2361-15fd-4f91-9d37-941fefe62aaf
+semantic::sc_forecast_control_tower::DimForecastHorizon,ForecastAccuracy_DW.DimForecastHorizon,SemanticModel.sc_forecast_control_tower,semantic,directLake,False,2026-05-05 08:31:39.677939,Auto-discovered via Fabric API getDefinition — model_id=f06a2361-15fd-4f91-9d37-941fefe62aaf
+semantic::sc_forecast_control_tower::DimProduct,ForecastAccuracy_DW.DimProduct,SemanticModel.sc_forecast_control_tower,semantic,directLake,False,2026-05-05 08:31:37.874484,Auto-discovered via Fabric API getDefinition — model_id=f06a2361-15fd-4f91-9d37-941fefe62aaf
 lineage::1,ReferenceMaster_Enh.Calendar,ForecastAccuracy_DW.DimCalendar,direct,overwrite,False,2026-05-22 04:21:51.009052,
 lineage::2,ReferenceMaster_Enh.CustomerGrouping,ForecastAccuracy_DW.DimCustomerGrouping,direct,overwrite,False,2026-05-22 04:21:51.009052,
 lineage::3,ReferenceMaster_Enh.ForecastHorizon,ForecastAccuracy_DW.DimForecastHorizon,direct,overwrite,False,2026-05-22 04:21:51.009052,
@@ -20,7 +23,6 @@ lineage::15,SalesHistory_Enh.ActualDemandMonthly,ForecastHistory_Enh.NaiveForeca
 lineage::16,ForecastAccuracy_DW.DimCalendar,InventoryHealth_DW.CogsRollingHelper,direct,overwrite,False,2026-05-22 04:21:51.009052,
 lineage::17,InventoryHistory_Enh.CostCurrent,InventoryHealth_DW.CogsRollingHelper,direct,overwrite,False,2026-05-22 04:21:51.009052,
 lineage::18,InventoryHistory_Enh.SalesShipment,InventoryHealth_DW.CogsRollingHelper,direct,overwrite,False,2026-05-22 04:21:51.009052,
-lineage::19,ReferenceMaster_Enh.Calendar,InventoryHealth_DW.DimDate,direct,overwrite,False,2026-05-22 04:21:51.009052,
 lineage::20,InventoryHistory_Enh.ItemMasterExt,InventoryHealth_DW.DimItem,direct,overwrite,False,2026-05-22 04:21:51.009052,
 lineage::22,ReferenceMaster_Enh.Vendor,InventoryHealth_DW.DimVendor,direct,overwrite,False,2026-05-22 04:21:51.009052,
 lineage::23,InventoryHistory_Enh.WarehouseExt,InventoryHealth_DW.DimWarehouse,direct,overwrite,False,2026-05-22 04:21:51.009052,
@@ -99,7 +101,4 @@ lineage::95,Enterprise_Lakehouse.SalesHistory_AFI.InvoiceDetail,SalesHistory_Enh
 lineage::96,Enterprise_Lakehouse.SalesHistory_AFI.InvoiceHeader,SalesHistory_Enh.InvoiceDetailLineLevel,direct,overwrite,False,2026-05-22 04:21:51.009052,
 lineage::97,ReferenceMaster_Enh.Calendar,SalesHistory_Enh.InvoiceWeekly,direct,overwrite,False,2026-05-22 04:21:51.009052,
 lineage::98,SalesHistory_Enh.InvoiceDetailLineLevel,SalesHistory_Enh.InvoiceWeekly,direct,overwrite,False,2026-05-22 04:21:51.009052,
-semantic::sc_forecast_control_tower::DimForecastHorizon,ForecastAccuracy_DW.DimForecastHorizon,SemanticModel.sc_forecast_control_tower,semantic,directLake,False,2026-05-05 08:31:39.677939,Auto-discovered via Fabric API getDefinition — model_id=f06a2361-15fd-4f91-9d37-941fefe62aaf
 semantic::sc_forecast_control_tower::DimCalendar,ForecastAccuracy_DW.DimCalendar,SemanticModel.sc_forecast_control_tower,semantic,directLake,False,2026-05-05 08:31:34.484386,Auto-discovered via Fabric API getDefinition — model_id=f06a2361-15fd-4f91-9d37-941fefe62aaf
-semantic::sc_forecast_control_tower::DimProduct,ForecastAccuracy_DW.DimProduct,SemanticModel.sc_forecast_control_tower,semantic,directLake,False,2026-05-05 08:31:37.874484,Auto-discovered via Fabric API getDefinition — model_id=f06a2361-15fd-4f91-9d37-941fefe62aaf
-semantic::sc_forecast_control_tower::FactForecastKpi,ForecastAccuracy_DW.FactForecastKpi,SemanticModel.sc_forecast_control_tower,semantic,directLake,False,2026-05-05 08:31:43.110440,Auto-discovered via Fabric API getDefinition — model_id=f06a2361-15fd-4f91-9d37-941fefe62aaf

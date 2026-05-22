@@ -92,7 +92,7 @@ Phase 1 scope: 26 of 30 KPIs from BRD v1 (rest are Phase 2 — storage cube phys
 | Aspect | Deliverable v1 | v10 (this folder) |
 |---|---|---|
 | Silver schema | `silver` (lowercase, flat 35 tables) | `InventoryHistory_Enh` (**22 active tables post-2026-05-22 cleanup**: was 24, -2 dropped MovementHistory + ForecastCurrent, -1 deactivated LogilityItemStatusSnapshotWeekly) + `ReferenceMaster_Enh.Vendor` (NEW) |
-| Gold schema | `gold` (lowercase, flat 8 tables) | `InventoryHealth_DW` (**7 active tables post-2026-05-22**: was 8, -1 dropped DimRuleVersion) |
+| Gold schema | `gold` (lowercase, flat 8 tables) | `InventoryHealth_DW` (**6 active inv_health-only post-2026-05-22**: was 8, -1 dropped DimRuleVersion + -1 dropped DimDate) + 1 shared dim `ForecastAccuracy_DW.DimCalendar` (cross-mart) |
 | Warehouse refs | `SupplyChain Processing Warehouse` (space) | `SupplyChain_Processing_Warehouse` (underscore) |
 | Load orchestration | 14 custom `usp_Build_*` procs + 1 `usp_RefreshAll` | 1 generic `Meta.usp_GenericLoad` + 34 views + 33 registry rows |
 | Control plane | None | Full `Meta.*` integration (registry + DQ + lineage + audit) |

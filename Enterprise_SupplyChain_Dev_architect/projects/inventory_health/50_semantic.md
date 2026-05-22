@@ -22,7 +22,7 @@
 
 | TMDL table | DirectLake → Gold table | Role |
 |---|---|---|
-| `DimDate` | `InventoryHealth_DW.DimDate` | Date dim (subset of ReferenceMaster Calendar) |
+| `DimCalendar` | **`ForecastAccuracy_DW.DimCalendar`** (cross-schema, **single shared dim**) | Date dim. **2026-05-22**: rebind from `InventoryHealth_DW.DimDate` (dropped) → ForecastAccuracy_DW.DimCalendar with TMDL column aliases (DateKey→DateSK, FiscalMonth→FSCMonthNum, etc.). DAX unchanged. |
 | `DimItem` | `InventoryHealth_DW.DimItem` | Item dim + LifecycleStatus |
 | `DimWarehouse` | `InventoryHealth_DW.DimWarehouse` | Warehouse dim + B3 flags |
 | `DimVendor` | `InventoryHealth_DW.DimVendor` | Vendor dim (Phase 1: 2 cols) |
@@ -34,8 +34,8 @@
 ## Relationships (7 active, was 9 pre-cleanup)
 
 ```
-DimDate.DateKey            → FactInventoryHealthSnapshot.DateKey
-DimDate.DateKey            → FactInventoryRiskForward.DateKey
+DimCalendar.DateKey            → FactInventoryHealthSnapshot.DateKey
+DimCalendar.DateKey            → FactInventoryRiskForward.DateKey
 DimItem.ItemSku            → FactInventoryHealthSnapshot.ItemSku
 DimItem.ItemSku            → FactInventoryRiskForward.ItemSku
 DimWarehouse.WarehouseCode → FactInventoryHealthSnapshot.WarehouseCode

@@ -2,6 +2,7 @@ runtime_id,project,asset_id,physical_schema,physical_object,wave_number,dependen
 wave::InventoryHistory_Enh.ForecastSnapshotWeekly,inventory_health,InventoryHistory_Enh.ForecastSnapshotWeekly,InventoryHistory_Enh,ForecastSnapshotWeekly,0,0,True,2026-05-22 03:47:49.944353
 wave::InventoryHistory_Enh.ItemBalanceHistorical,inventory_health,InventoryHistory_Enh.ItemBalanceHistorical,InventoryHistory_Enh,ItemBalanceHistorical,0,0,True,2026-05-22 03:47:49.944353
 wave::InventoryHistory_Enh.SalesShipment,inventory_health,InventoryHistory_Enh.SalesShipment,InventoryHistory_Enh,SalesShipment,0,0,True,2026-05-22 03:47:49.944353
+wave::ForecastHistory_Enh.NaiveForecastMonthly,forecast_accuracy,ForecastHistory_Enh.NaiveForecastMonthly,ForecastHistory_Enh,NaiveForecastMonthly,2,1,True,2026-05-22 03:27:53.315683
 wave::OpenOrderHistory_Enh.OpenOrderLineLevel,forecast_accuracy,OpenOrderHistory_Enh.OpenOrderLineLevel,OpenOrderHistory_Enh,OpenOrderLineLevel,0,0,True,2026-05-22 03:27:51.312808
 wave::ForecastHistory_Enh.ForecastDemandMonthly,forecast_accuracy,ForecastHistory_Enh.ForecastDemandMonthly,ForecastHistory_Enh,ForecastDemandMonthly,0,0,True,2026-05-22 03:27:51.312808
 wave::SalesHistory_Enh.InvoiceDetailLineLevel,forecast_accuracy,SalesHistory_Enh.InvoiceDetailLineLevel,SalesHistory_Enh,InvoiceDetailLineLevel,0,0,True,2026-05-22 03:27:51.312808
@@ -13,9 +14,8 @@ wave::InventoryHistory_Enh.PurchaseOrderSnapshotDaily,inventory_health,Inventory
 wave::InventoryHistory_Enh.LastInvoiceHelper,inventory_health,InventoryHistory_Enh.LastInvoiceHelper,InventoryHistory_Enh,LastInvoiceHelper,1,1,True,2026-05-22 03:47:50.586097
 wave::InventoryHistory_Enh.InventorySnapshotWeekly,inventory_health,InventoryHistory_Enh.InventorySnapshotWeekly,InventoryHistory_Enh,InventorySnapshotWeekly,1,1,True,2026-05-22 03:47:50.586097
 wave::InventoryHistory_Enh.LogilityItemStatusSnapshotWeekly,inventory_health,InventoryHistory_Enh.LogilityItemStatusSnapshotWeekly,InventoryHistory_Enh,LogilityItemStatusSnapshotWeekly,1,0,False,2026-05-22 03:47:50.586097
+wave::InventoryHistory_Enh.SafetyStockHelper,inventory_health,InventoryHistory_Enh.SafetyStockHelper,InventoryHistory_Enh,SafetyStockHelper,2,1,True,2026-05-22 03:47:51.721783
 wave::SalesHistory_Enh.ActualDemandMonthly,forecast_accuracy,SalesHistory_Enh.ActualDemandMonthly,SalesHistory_Enh,ActualDemandMonthly,1,2,True,2026-05-22 03:27:52.256589
 wave::SalesHistory_Enh.InvoiceWeekly,forecast_accuracy,SalesHistory_Enh.InvoiceWeekly,SalesHistory_Enh,InvoiceWeekly,1,1,True,2026-05-22 03:27:52.256589
 wave::SalesHistory_Enh.ActualDemandWeekly,forecast_accuracy,SalesHistory_Enh.ActualDemandWeekly,SalesHistory_Enh,ActualDemandWeekly,1,2,True,2026-05-22 03:27:52.256589
 wave::OpenOrderHistory_Enh.OpenOrderMonthly,forecast_accuracy,OpenOrderHistory_Enh.OpenOrderMonthly,OpenOrderHistory_Enh,OpenOrderMonthly,1,1,True,2026-05-22 03:27:52.256589
-wave::ForecastHistory_Enh.NaiveForecastMonthly,forecast_accuracy,ForecastHistory_Enh.NaiveForecastMonthly,ForecastHistory_Enh,NaiveForecastMonthly,2,1,True,2026-05-22 03:27:53.315683
-wave::InventoryHistory_Enh.SafetyStockHelper,inventory_health,InventoryHistory_Enh.SafetyStockHelper,InventoryHistory_Enh,SafetyStockHelper,2,1,True,2026-05-22 03:47:51.721783

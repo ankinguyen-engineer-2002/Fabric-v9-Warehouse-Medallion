@@ -13,8 +13,12 @@
 /// To deploy:
 ///   1. Open Power BI Desktop → "New report" → "Direct Lake on OneLake"
 ///   2. Point to workspace > SupplyChain_Gold_Warehouse
-///   3. Select 7 tables: DimDate, DimItem, DimWarehouse, DimVendor,
-///      CogsRollingHelper (hidden), FactInventoryHealthSnapshot, FactInventoryRiskForward
+///   3. Select 6 tables: DimCalendar (consolidated 2026-05-22, was DimDate),
+///      DimItem, DimWarehouse, DimVendor, CogsRollingHelper (hidden),
+///      FactInventoryHealthSnapshot, FactInventoryRiskForward
+///   NOTE 2026-05-22: DimCalendar binds to ForecastAccuracy_DW.DimCalendar
+///   (single shared physical date dim across both marts — was duplicated as
+///   InventoryHealth_DW.DimDate, now consolidated to 1).
 ///   NOTE 2026-05-22: DimRuleVersion removed (over-engineering). When BRD updates,
 ///      create a NEW semantic model version (sc_inventory_health_control_tower_v2)
 ///      rather than versioning via dim. Side-by-side comparison via Power BI app
@@ -26,55 +30,57 @@ model InventoryHealth
     defaultPowerBIDataSourceVersion: powerBI_V3
 
 /// ═══════════════════════════════════════════════════════
-/// TABLE: DimDate
+/// TABLE: DimCalendar (consolidated 2026-05-22 — was DimDate)
 /// ═══════════════════════════════════════════════════════
-table DimDate
-    lineageTag: dim-date
+/// 2026-05-22 CONSOLIDATION: Rebind from InventoryHealth_DW.DimDate (subset 10 cols)
+/// to ForecastAccuracy_DW.DimCalendar (75 cols) — single shared date dim used by
+/// both marts. Eliminates physical duplication; mart B "borrows" mart A's DimCalendar
+/// via cross-schema DirectLake bind. Column display names preserved using sourceColumn
+/// aliases so existing inv_health DAX measures + reports keep working unchanged.
+/// IsCurrentDate / IsCurrentWeek / IsMonthEnd flag columns NOT re-added — compute in
+/// report-level DAX when needed (e.g. IsCurrentDate = IF(CalendarDate=TODAY(),1,0)).
+table DimCalendar
+    lineageTag: dim-calendar
 
     column DateKey
+        sourceColumn: DateSK
         dataType: int64
         isKey
         summarizeBy: none
 
     column CalendarDate
+        sourceColumn: Date
         dataType: dateTime
         formatString: yyyy-mm-dd
         summarizeBy: none
 
     column WeekEndingDate
+        sourceColumn: FSCWeekLast
         dataType: dateTime
         formatString: yyyy-mm-dd
         summarizeBy: none
 
     column FiscalWeek
+        sourceColumn: FSCWeekNum
         dataType: int64
 
     column FiscalWeekIndicator
+        sourceColumn: FSCWeekIndicatorNum
         dataType: int64
 
     column FiscalMonth
+        sourceColumn: FSCMonthNum
         dataType: int64
 
     column FiscalMonthYear
+        sourceColumn: FSCMonthYearNum
         dataType: int64
 
-    column IsCurrentDate
-        dataType: int64
-        summarizeBy: none
-
-    column IsCurrentWeek
-        dataType: int64
-        summarizeBy: none
-
-    column IsMonthEnd
-        dataType: int64
-        summarizeBy: none
-
-    partition DimDate-prt = entity
+    partition DimCalendar-prt = entity
         mode: directLake
         source = entity
-            entityName: DimDate
-            schemaName: InventoryHealth_DW
+            entityName: DimCalendar
+            schemaName: ForecastAccuracy_DW
 
 
 /// ═══════════════════════════════════════════════════════
@@ -535,14 +541,14 @@ table FactInventoryRiskForward
 /// RELATIONSHIPS
 /// ═══════════════════════════════════════════════════════
 
-relationship DimDate_to_FactHealth
+relationship DimCalendar_to_FactHealth
     fromColumn: FactInventoryHealthSnapshot.DateKey
-    toColumn:   DimDate.DateKey
+    toColumn:   DimCalendar.DateKey
     crossFilteringBehavior: oneDirection
 
-relationship DimDate_to_FactRisk
+relationship DimCalendar_to_FactRisk
     fromColumn: FactInventoryRiskForward.DateKey
-    toColumn:   DimDate.DateKey
+    toColumn:   DimCalendar.DateKey
     crossFilteringBehavior: oneDirection
 
 relationship DimItem_to_FactHealth

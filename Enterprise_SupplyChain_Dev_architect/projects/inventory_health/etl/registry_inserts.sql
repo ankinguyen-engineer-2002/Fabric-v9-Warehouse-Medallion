@@ -253,9 +253,12 @@ INSERT INTO Meta.AssetRegistry (
 -- (Phase 2 conditional — KPI #17/#18/#20a past-tracking, awaiting Robert sign-off).
 
 -- ============================================================
--- §3. Gold layer — InventoryHealth_DW (4 Dim + 1 Helper + 2 Fact = 7 assets)
--- 2026-05-22: dropped DimRuleVersion (over-engineering — versioning via new
---             semantic model when BRD changes, not via versioned dim).
+-- §3. Gold layer — InventoryHealth_DW (3 Dim + 1 Helper + 2 Fact = 6 assets)
+-- 2026-05-22 cleanup:
+--   - DROPPED DimRuleVersion (over-engineering — versioning via new semantic model
+--     when BRD changes, not via versioned dim)
+--   - DROPPED DimDate (duplicate — consolidated to ForecastAccuracy_DW.DimCalendar
+--     as single shared date dim; cross-schema TMDL bind from inv_health)
 -- ============================================================
 
 INSERT INTO Meta.AssetRegistry (
@@ -265,11 +268,8 @@ INSERT INTO Meta.AssetRegistry (
     source_objects, depends_on,
     frequency, cron_expression, is_active, access_mode
 ) VALUES
-('InventoryHealth_DW.DimDate', 'inventory_health', 'Gold',
- @ws, @wh_gold, 'InventoryHealth_DW', 'DimDate',
- 'InventoryHealth_DW.v_DimDate', 'overwrite', 'DateKey',
- '["ReferenceMaster_Enh.Calendar"]', 'ReferenceMaster_Enh.Calendar',
- 'monthly', '0 3 1 * *', 1, 'GoldPublish'),
+-- DROPPED 2026-05-22: DimDate ── consolidated to ForecastAccuracy_DW.DimCalendar
+-- (single shared date dim across both marts; inv_health TMDL rebinds via cross-schema)
 
 ('InventoryHealth_DW.DimItem', 'inventory_health', 'Gold',
  @ws, @wh_gold, 'InventoryHealth_DW', 'DimItem',

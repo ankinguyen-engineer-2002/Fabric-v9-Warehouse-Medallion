@@ -1,6 +1,6 @@
 -- Live TABLE DDL (reconstructed from INFORMATION_SCHEMA.COLUMNS) — SupplyChain_Gold_Warehouse
 -- Generated 2026-05-22
--- 14 base tables
+-- 13 base tables
 
 -- ============================================================
 -- ForecastAccuracy_DW.DimCalendar (75 cols)
@@ -388,23 +388,6 @@ CREATE TABLE [InventoryHealth_DW].[CogsRollingHelper] (
     [PeriodShippedQty] decimal(18,4),
     [Cogs12M] decimal(18,4),
     [Cogs52M] decimal(18,4)
-);
-GO
-
--- ============================================================
--- InventoryHealth_DW.DimDate (10 cols)
--- ============================================================
-CREATE TABLE [InventoryHealth_DW].[DimDate] (
-    [DateKey] bigint,
-    [CalendarDate] date,
-    [WeekEndingDate] date,
-    [FiscalWeek] int,
-    [FiscalWeekIndicator] int,
-    [FiscalMonth] int,
-    [FiscalMonthYear] int,
-    [IsCurrentDate] int,
-    [IsCurrentWeek] int,
-    [IsMonthEnd] int
 );
 GO
 
