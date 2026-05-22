@@ -232,6 +232,21 @@ def build_dag_data():
         elif layer == "ReferenceMaster": schema_tier[schema] = "brz"
         elif layer == "Gold": schema_tier[schema] = "gld"
 
+    # Build table→schema lookup from BOTH registry AND lineage edges.
+    # Critical for view-only Silvers (LogilityItemStatus, SupplyPlan, AtpWeekEnding,
+    # ItemMasterExt, etc.) that aren't registered but appear as edge endpoints.
+    table_to_schema = {}
+    for tbl, reg in registry.items():
+        sch = (reg.get("target_schema") or "").strip()
+        if sch and tbl not in table_to_schema:
+            table_to_schema[tbl] = sch
+    for r in rows:
+        for sch_col, tbl_col in (("source_schema","source_table"), ("target_schema","target_table")):
+            sch = (r.get(sch_col) or "").strip()
+            tbl = (r.get(tbl_col) or "").strip()
+            if sch and tbl and tbl not in table_to_schema:
+                table_to_schema[tbl] = sch
+
     def get_tier(name):
         """Tier assignment using physical schema names."""
         n = name.lower()
@@ -257,6 +272,10 @@ def build_dag_data():
             return "brz"
         if layer == "Gold":
             return "gld"
+
+        # Schema recovery for bare names (view-only Silvers etc.)
+        if not schema and tbl in table_to_schema:
+            schema = table_to_schema[tbl]
 
         # Schema-based fallback
         if schema in schema_tier:
