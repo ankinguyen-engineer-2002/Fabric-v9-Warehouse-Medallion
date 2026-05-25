@@ -1,10 +1,10 @@
 edge_id,source_asset,target_asset,edge_type,transform_type,is_synthetic,created_at_utc,notes
-semantic::sc_forecast_control_tower::DimWarehouse,ForecastAccuracy_DW.DimWarehouse,SemanticModel.sc_forecast_control_tower,semantic,directLake,False,2026-05-05 08:31:36.313155,Auto-discovered via Fabric API getDefinition — model_id=f06a2361-15fd-4f91-9d37-941fefe62aaf
+lineage::201,Staging_Wrk.DemandForecastSnapshotDaily,InventoryHistory_Enh.ForecastSnapshotWeeklySat,direct,incremental,False,2026-05-25 03:46:02.186667,Auto 2026-05-22: Mart B weekly snapshot derived from Daily filtered Saturday only. Matches BRD week-ending Sat requirement.
 semantic::sc_forecast_control_tower::DimCustomerGrouping,ForecastAccuracy_DW.DimCustomerGrouping,SemanticModel.sc_forecast_control_tower,semantic,directLake,False,2026-05-05 08:31:32.561879,Auto-discovered via Fabric API getDefinition — model_id=f06a2361-15fd-4f91-9d37-941fefe62aaf
+semantic::sc_forecast_control_tower::DimWarehouse,ForecastAccuracy_DW.DimWarehouse,SemanticModel.sc_forecast_control_tower,semantic,directLake,False,2026-05-05 08:31:36.313155,Auto-discovered via Fabric API getDefinition — model_id=f06a2361-15fd-4f91-9d37-941fefe62aaf
 semantic::sc_forecast_control_tower::FactForecastActual,ForecastAccuracy_DW.FactForecastActual,SemanticModel.sc_forecast_control_tower,semantic,directLake,False,2026-05-05 08:31:41.221063,Auto-discovered via Fabric API getDefinition — model_id=f06a2361-15fd-4f91-9d37-941fefe62aaf
-semantic::sc_forecast_control_tower::FactForecastKpi,ForecastAccuracy_DW.FactForecastKpi,SemanticModel.sc_forecast_control_tower,semantic,directLake,False,2026-05-05 08:31:43.110440,Auto-discovered via Fabric API getDefinition — model_id=f06a2361-15fd-4f91-9d37-941fefe62aaf
 semantic::sc_forecast_control_tower::DimForecastHorizon,ForecastAccuracy_DW.DimForecastHorizon,SemanticModel.sc_forecast_control_tower,semantic,directLake,False,2026-05-05 08:31:39.677939,Auto-discovered via Fabric API getDefinition — model_id=f06a2361-15fd-4f91-9d37-941fefe62aaf
-semantic::sc_forecast_control_tower::DimProduct,ForecastAccuracy_DW.DimProduct,SemanticModel.sc_forecast_control_tower,semantic,directLake,False,2026-05-05 08:31:37.874484,Auto-discovered via Fabric API getDefinition — model_id=f06a2361-15fd-4f91-9d37-941fefe62aaf
+lineage::202,InventoryHistory_Enh.ForecastSnapshotWeeklySat,InventoryHistory_Enh.AwdHelper,direct,overwrite,False,2026-05-25 03:47:57.523333,Auto 2026-05-22: AwdHelper source swapped from ForecastSnapshotWeekly (DEAD Monday upstream) to ForecastSnapshotWeeklySat (Saturday from Daily).
 lineage::1,ReferenceMaster_Enh.Calendar,ForecastAccuracy_DW.DimCalendar,direct,overwrite,False,2026-05-22 04:21:51.009052,
 lineage::2,ReferenceMaster_Enh.CustomerGrouping,ForecastAccuracy_DW.DimCustomerGrouping,direct,overwrite,False,2026-05-22 04:21:51.009052,
 lineage::3,ReferenceMaster_Enh.ForecastHorizon,ForecastAccuracy_DW.DimForecastHorizon,direct,overwrite,False,2026-05-22 04:21:51.009052,
@@ -47,7 +47,6 @@ lineage::41,InventoryHistory_Enh.AllocatedDemandCandidate,InventoryHealth_DW.Fac
 lineage::42,InventoryHistory_Enh.AtpWeekEnding,InventoryHealth_DW.FactInventoryRiskForward,direct,overwrite,False,2026-05-22 04:21:51.009052,
 lineage::43,InventoryHistory_Enh.ItemMasterExt,InventoryHealth_DW.FactInventoryRiskForward,direct,overwrite,False,2026-05-22 04:21:51.009052,
 lineage::44,InventoryHistory_Enh.SupplyPlan,InventoryHealth_DW.FactInventoryRiskForward,direct,overwrite,False,2026-05-22 04:21:51.009052,
-lineage::45,InventoryHistory_Enh.ForecastSnapshotWeekly,InventoryHistory_Enh.AwdHelper,direct,overwrite,False,2026-05-22 04:21:51.009052,
 lineage::46,InventoryHistory_Enh.InventoryCurrent,InventoryHistory_Enh.AwdHelper,direct,overwrite,False,2026-05-22 04:21:51.009052,
 lineage::47,InventoryHistory_Enh.InventorySnapshotWeekly,InventoryHistory_Enh.AwdHelper,direct,overwrite,False,2026-05-22 04:21:51.009052,
 lineage::48,InventoryHistory_Enh.SalesShipment,InventoryHistory_Enh.AwdHelper,direct,overwrite,False,2026-05-22 04:21:51.009052,
@@ -101,4 +100,7 @@ lineage::95,Enterprise_Lakehouse.SalesHistory_AFI.InvoiceDetail,SalesHistory_Enh
 lineage::96,Enterprise_Lakehouse.SalesHistory_AFI.InvoiceHeader,SalesHistory_Enh.InvoiceDetailLineLevel,direct,overwrite,False,2026-05-22 04:21:51.009052,
 lineage::97,ReferenceMaster_Enh.Calendar,SalesHistory_Enh.InvoiceWeekly,direct,overwrite,False,2026-05-22 04:21:51.009052,
 lineage::98,SalesHistory_Enh.InvoiceDetailLineLevel,SalesHistory_Enh.InvoiceWeekly,direct,overwrite,False,2026-05-22 04:21:51.009052,
+lineage::200,Enterprise_Lakehouse.SupplyChain_Enh_1.DemandForecastSnapshotDaily,Staging_Wrk.DemandForecastSnapshotDaily,direct,incremental,False,2026-05-25 03:22:57.443333,Auto 2026-05-22: cross-mart cleaned Bronze materialization with ROW_NUMBER dedupe (handles row-dup x16 from Q1 2025).
+semantic::sc_forecast_control_tower::FactForecastKpi,ForecastAccuracy_DW.FactForecastKpi,SemanticModel.sc_forecast_control_tower,semantic,directLake,False,2026-05-05 08:31:43.110440,Auto-discovered via Fabric API getDefinition — model_id=f06a2361-15fd-4f91-9d37-941fefe62aaf
+semantic::sc_forecast_control_tower::DimProduct,ForecastAccuracy_DW.DimProduct,SemanticModel.sc_forecast_control_tower,semantic,directLake,False,2026-05-05 08:31:37.874484,Auto-discovered via Fabric API getDefinition — model_id=f06a2361-15fd-4f91-9d37-941fefe62aaf
 semantic::sc_forecast_control_tower::DimCalendar,ForecastAccuracy_DW.DimCalendar,SemanticModel.sc_forecast_control_tower,semantic,directLake,False,2026-05-05 08:31:34.484386,Auto-discovered via Fabric API getDefinition — model_id=f06a2361-15fd-4f91-9d37-941fefe62aaf

@@ -1,6 +1,6 @@
 -- Live VIEW dump from SupplyChain_Processing_Warehouse
 -- Generated 2026-05-22 via OBJECT_DEFINITION
--- 40 views
+-- 42 views
 
 -- ============================================================
 -- ForecastHistory_Enh.v_ForecastDemandMonthly
@@ -8,8 +8,10 @@
 
 CREATE   VIEW ForecastHistory_Enh.v_ForecastDemandMonthly AS
 -- 2026-05-19 SWAP: was Staging_Wrk.DemandForecastSnapshotDailyEdw (SC_LH ver2 → DF2)
--- Now reads EL.SupplyChain_Enh_1.DemandForecastSnapshotDaily (5.9B rows, 2023→2026 daily)
+-- 2026-05-22 SWAP: was EL.SupplyChain_Enh_1.DemandForecastSnapshotDaily (dirty, row-dup x16 from Q1 2025)
+-- Now reads Staging_Wrk.DemandForecastSnapshotDaily (cross-mart cleaned, deduped via ROW_NUMBER=1).
 -- Schema mapping: ts_snapshot → dfcSnapshot, code_customer_group → DfcCustomerGroups, etc.
+-- Logic unchanged: ForecastCycle JOIN, Lag-N HorizonCode, GROUP BY summed forecast.
 WITH Raw AS (
     SELECT 
         f.dfcItem                                            AS ItemSKU,
@@ -19,7 +21,7 @@ WITH Raw AS (
         CAST(f.dfcSnapshot AS DATE)                          AS Snapshot,
         f.dfcResultantForecast                               AS QtyResultantForecast,
         f.dfcPromotionalLift                                 AS QtyPromotionalLift
-    FROM [Enterprise_Lakehouse].[SupplyChain_Enh_1].[DemandForecastSnapshotDaily] AS f
+    FROM Staging_Wrk.DemandForecastSnapshotDaily AS f
     INNER JOIN ReferenceMaster_Enh.ForecastCycle AS c ON CAST(f.dfcSnapshot AS DATE)=c.ForecastSnapshot
 ),
 Calc AS (
@@ -45,7 +47,7 @@ SELECT CAST(TRIM(ItemSKU) AS VARCHAR(50)) AS ItemSKU, CAST(TRIM(WarehouseCode) A
     CAST(Snapshot AS DATE) AS Snapshot, CAST(TRIM(HorizonCode) AS VARCHAR(10)) AS HorizonCode,
     CAST(QtyForecast AS FLOAT) AS QtyForecast, CAST(TRIM(VersionCode) AS VARCHAR(20)) AS VersionCode,
     CAST(TRIM(StatusCode) AS VARCHAR(20)) AS StatusCode
-FROM Calc
+FROM Calc;
 
 GO
 
@@ -77,11 +79,10 @@ GO
 CREATE   VIEW InventoryHistory_Enh.v_AwdHelper AS
 -- 2026-05-20 FIX (Giang #4): forward13w uses FiscalMonthDate (forecast period)
 -- 2026-05-21 PERF OPTIMIZATION: limit latest_snap lookback to 13 weeks of forecast snapshots.
--- Pre-fix: 153M ForecastSnapshotWeekly × 100+ AsOfDates → huge intermediate JOIN.
+-- 2026-05-22 SOURCE SWAP: ForecastSnapshotWeekly (Monday-source, DEAD upstream) → ForecastSnapshotWeeklySat (Saturday from Daily, cleaned via Staging dedupe).
 -- Post-fix: only join snapshots within 13W of each AsOfDate → ~13× weekly snapshots scanned per AsOfDate.
 -- Grain: (ItemSku, WarehouseCode, AsOfDate)
 WITH _InventoryCurrent AS (
-    -- INLINED 2026-05-21 (Option B): was InventoryHistory_Enh.InventoryCurrent (dropped entity)
     SELECT
         CAST(TRIM(b.ITNBR)              AS VARCHAR(50))   AS ItemSku,
         CAST(TRIM(b.HOUSE)              AS VARCHAR(50))   AS WarehouseCode,
@@ -96,12 +97,10 @@ WITH _InventoryCurrent AS (
       AND TRIM(b.HOUSE) NOT IN ('C','CNW','AF','IOR','C35','55','MAX')
 ),
 asof AS (
-    SELECT DISTINCT SnapshotDate AS AsOfDate
-    FROM _InventoryCurrent
+    SELECT DISTINCT SnapshotDate AS AsOfDate FROM _InventoryCurrent
     WHERE SnapshotDate >= DATEADD(day, -7, CAST(SYSUTCDATETIME() AS DATE))
     UNION
-    SELECT DISTINCT SnapshotDate
-    FROM InventoryHistory_Enh.InventorySnapshotWeekly
+    SELECT DISTINCT SnapshotDate FROM InventoryHistory_Enh.InventorySnapshotWeekly
     WHERE SnapshotDate >= DATEADD(week, -104, CAST(SYSUTCDATETIME() AS DATE))
 ),
 item_wh AS (
@@ -109,44 +108,30 @@ item_wh AS (
     UNION
     SELECT DISTINCT ItemSku, WarehouseCode FROM InventoryHistory_Enh.InventorySnapshotWeekly
 ),
--- Pre-limit ForecastSnapshotWeekly to last 13 weeks of snapshots (weekly cadence → ~13 rows per Item×WH)
 fcst_recent AS (
     SELECT ItemSku, WarehouseCode, SnapshotDate, FiscalMonthDate, ForecastQty
-    FROM InventoryHistory_Enh.ForecastSnapshotWeekly
+    FROM InventoryHistory_Enh.ForecastSnapshotWeeklySat
     WHERE SnapshotDate >= DATEADD(week, -104, CAST(SYSUTCDATETIME() AS DATE))
       AND SnapshotDate <= CAST(SYSUTCDATETIME() AS DATE)
 ),
 latest_snap AS (
-    SELECT
-        f.ItemSku, f.WarehouseCode, a.AsOfDate,
-        MAX(f.SnapshotDate) AS LatestSnapshotDate
+    SELECT f.ItemSku, f.WarehouseCode, a.AsOfDate, MAX(f.SnapshotDate) AS LatestSnapshotDate
     FROM fcst_recent f
-    JOIN asof a
-         ON f.SnapshotDate <= a.AsOfDate
-        AND f.SnapshotDate >= DATEADD(week, -13, a.AsOfDate)   -- only look back 13W of weekly snapshots
+    JOIN asof a ON f.SnapshotDate <= a.AsOfDate AND f.SnapshotDate >= DATEADD(week, -13, a.AsOfDate)
     GROUP BY f.ItemSku, f.WarehouseCode, a.AsOfDate
 ),
 forward13w AS (
-    SELECT
-        ls.ItemSku, ls.WarehouseCode, ls.AsOfDate,
-        SUM(f.ForecastQty) AS Fwd13WQty
+    SELECT ls.ItemSku, ls.WarehouseCode, ls.AsOfDate, SUM(f.ForecastQty) AS Fwd13WQty
     FROM latest_snap ls
-    JOIN fcst_recent f
-         ON f.ItemSku = ls.ItemSku
-        AND f.WarehouseCode = ls.WarehouseCode
+    JOIN fcst_recent f ON f.ItemSku = ls.ItemSku AND f.WarehouseCode = ls.WarehouseCode
         AND f.SnapshotDate = ls.LatestSnapshotDate
-        AND f.FiscalMonthDate >= ls.AsOfDate
-        AND f.FiscalMonthDate <  DATEADD(week, 13, ls.AsOfDate)
+        AND f.FiscalMonthDate >= ls.AsOfDate AND f.FiscalMonthDate < DATEADD(week, 13, ls.AsOfDate)
     GROUP BY ls.ItemSku, ls.WarehouseCode, ls.AsOfDate
 ),
 hist13w AS (
-    SELECT
-        s.ItemSku, s.WarehouseCode, a.AsOfDate,
-        SUM(s.QuantityShipped) AS Hist13WQty
+    SELECT s.ItemSku, s.WarehouseCode, a.AsOfDate, SUM(s.QuantityShipped) AS Hist13WQty
     FROM InventoryHistory_Enh.SalesShipment s
-    JOIN asof a
-         ON s.InvoiceDate >  DATEADD(week, -13, a.AsOfDate)
-        AND s.InvoiceDate <= a.AsOfDate
+    JOIN asof a ON s.InvoiceDate > DATEADD(week, -13, a.AsOfDate) AND s.InvoiceDate <= a.AsOfDate
     GROUP BY s.ItemSku, s.WarehouseCode, a.AsOfDate
 )
 SELECT
@@ -155,26 +140,14 @@ SELECT
     CAST(a.AsOfDate        AS DATE)          AS AsOfDate,
     CAST(ISNULL(f.Fwd13WQty, 0) AS DECIMAL(18,4)) AS Fwd13WForecastQty,
     CAST(ISNULL(h.Hist13WQty, 0) AS DECIMAL(18,4)) AS Hist13WShippedQty,
-    CAST(CASE
-        WHEN ISNULL(f.Fwd13WQty, 0) > 0
-        THEN CAST(f.Fwd13WQty / 13.0 AS DECIMAL(18,4))
-        ELSE CAST(ISNULL(h.Hist13WQty, 0) / 13.0 AS DECIMAL(18,4))
-    END AS DECIMAL(18,4))                     AS AwdQty,
-    CAST(CASE
-        WHEN ISNULL(f.Fwd13WQty, 0) > 0 THEN 'Forecast'
-        ELSE 'HistoricalFallback'
-    END AS VARCHAR(20))                       AS AwdSource
+    CAST(CASE WHEN ISNULL(f.Fwd13WQty, 0) > 0 THEN CAST(f.Fwd13WQty / 13.0 AS DECIMAL(18,4))
+              ELSE CAST(ISNULL(h.Hist13WQty, 0) / 13.0 AS DECIMAL(18,4)) END AS DECIMAL(18,4)) AS AwdQty,
+    CAST(CASE WHEN ISNULL(f.Fwd13WQty, 0) > 0 THEN 'Forecast' ELSE 'HistoricalFallback' END AS VARCHAR(20)) AS AwdSource
 FROM item_wh iw
 CROSS JOIN asof a
-LEFT JOIN forward13w f
-       ON f.ItemSku = iw.ItemSku
-      AND f.WarehouseCode = iw.WarehouseCode
-      AND f.AsOfDate = a.AsOfDate
-LEFT JOIN hist13w h
-       ON h.ItemSku = iw.ItemSku
-      AND h.WarehouseCode = iw.WarehouseCode
-      AND h.AsOfDate = a.AsOfDate
-WHERE COALESCE(f.Fwd13WQty, h.Hist13WQty) IS NOT NULL
+LEFT JOIN forward13w f ON f.ItemSku = iw.ItemSku AND f.WarehouseCode = iw.WarehouseCode AND f.AsOfDate = a.AsOfDate
+LEFT JOIN hist13w h ON h.ItemSku = iw.ItemSku AND h.WarehouseCode = iw.WarehouseCode AND h.AsOfDate = a.AsOfDate
+WHERE COALESCE(f.Fwd13WQty, h.Hist13WQty) IS NOT NULL;
 
 GO
 
@@ -208,6 +181,43 @@ GROUP BY
     TRIM(dfcWarehouse),
     CAST(dfcSnapshot AS DATE),
     dfcFiscalMonth
+
+GO
+
+-- ============================================================
+-- InventoryHistory_Enh.v_ForecastSnapshotWeeklySat
+-- ============================================================
+
+CREATE   VIEW InventoryHistory_Enh.v_ForecastSnapshotWeeklySat AS
+-- 2026-05-22: NEW Weekly snapshot from Daily filtered Saturday only.
+-- Drop-in replacement for v_ForecastSnapshotWeekly (Monday-source, DEAD upstream since 2024-03-25).
+-- Source: Staging_Wrk.DemandForecastSnapshotDaily (cross-mart cleaned, deduped via ROW_NUMBER=1).
+-- BRD requirement: 'week ending Saturday' — dfcSnapshot IS the Saturday date.
+-- Schema mirrors live v_ForecastSnapshotWeekly (post-Giang fix 2026-05-20):
+--   ItemSku, WarehouseCode, SnapshotDate, FiscalMonth, FiscalMonthDate, ForecastQty, PermComptQty, SourceSystem, SourceTable
+-- Grain: (ItemSku, WarehouseCode, SnapshotDate, FiscalMonth) — same as Weekly.
+SELECT
+    CAST(TRIM(dfcItem)             AS VARCHAR(50))   AS ItemSku,
+    CAST(TRIM(dfcWarehouse)        AS VARCHAR(50))   AS WarehouseCode,
+    CAST(dfcSnapshot               AS DATE)          AS SnapshotDate,
+    CAST(dfcFiscalMonth            AS INT)           AS FiscalMonth,
+    CAST(DATEFROMPARTS(
+        CAST(dfcFiscalMonth/100 AS INT),
+        CAST(dfcFiscalMonth%100 AS INT),
+        1) AS DATE)                                  AS FiscalMonthDate,
+    CAST(SUM(CAST(dfcResultantForecast AS DECIMAL(18,4))) AS DECIMAL(18,4)) AS ForecastQty,
+    CAST(SUM(CAST(dfcPermComptQty      AS DECIMAL(18,4))) AS DECIMAL(18,4)) AS PermComptQty,
+    CAST('Staging_Wrk'                       AS VARCHAR(64))  AS SourceSystem,
+    CAST('DemandForecastSnapshotDaily (Sat)' AS VARCHAR(128)) AS SourceTable
+FROM Staging_Wrk.DemandForecastSnapshotDaily
+WHERE dfcItem IS NOT NULL AND dfcWarehouse IS NOT NULL
+  AND dfcFiscalMonth IS NOT NULL
+  AND DATENAME(WEEKDAY, dfcSnapshot) = 'Saturday'
+GROUP BY
+    TRIM(dfcItem),
+    TRIM(dfcWarehouse),
+    CAST(dfcSnapshot AS DATE),
+    dfcFiscalMonth;
 
 GO
 
@@ -1340,6 +1350,46 @@ SELECT TRIM(ORDNO) AS OrderID,
     CAST(SHLTC AS INT) AS LeadTimeDays, TRIM(SHINS) AS ShippingInstructionsName,
     TRIM(ACREC) AS RecordTypeCode
 FROM Enterprise_Lakehouse.Wholesale_Codis_AFI.COMAST
+GO
+
+-- ============================================================
+-- Staging_Wrk.v_DemandForecastSnapshotDaily
+-- ============================================================
+
+CREATE VIEW Staging_Wrk.v_DemandForecastSnapshotDaily AS
+-- ============================================================
+-- Cross-mart cleaned Bronze materialization (2026-05-22).
+-- Source: EL.SupplyChain_Enh_1.DemandForecastSnapshotDaily (5.9B rows, dirty with row-dup x16 from Q1 2025)
+-- Transform: ROW_NUMBER() OVER (full grain) = 1 dedupe.
+-- Consumers: Mart A (ForecastHistory_Enh.v_ForecastDemandMonthly) + Mart B (InventoryHistory_Enh.v_ForecastSnapshotWeeklySat NEW)
+-- Idempotent: if DE US fixes upstream dup, this dedupe becomes no-op (no harm).
+-- ============================================================
+WITH dedupe AS (
+  SELECT 
+    dfcItem, dfcWarehouse, dfcFiscalMonth, dfcMainPiece, dfcCollectiveClass,
+    dfcResultantForecast, dfcPromotionalLift, dfcForcedForecast,
+    dfcValidDemandMonths, dfcSnapshot,
+    dfcPermComptQty, dfcUsr25Text, dfcUsr32Text,
+    dfcFCSTTypeCode, dfcDerivedFCSTID, dfcDerivedFCSTFctr, dfcOrderFutureQty,
+    dfcMgmtCode, usra, dtea, usrc, dtec, DfcCustomerGroups,
+    ROW_NUMBER() OVER (
+      PARTITION BY dfcItem, dfcWarehouse, dfcFiscalMonth, dfcSnapshot,
+                   DfcCustomerGroups, dfcFCSTTypeCode, dfcMgmtCode
+      ORDER BY (SELECT NULL)
+    ) AS _rn
+  FROM [Enterprise_Lakehouse].[SupplyChain_Enh_1].[DemandForecastSnapshotDaily]
+)
+SELECT 
+  dfcItem, dfcWarehouse, dfcFiscalMonth, dfcMainPiece, dfcCollectiveClass,
+  dfcResultantForecast, dfcPromotionalLift, dfcForcedForecast,
+  dfcValidDemandMonths, dfcSnapshot,
+  dfcPermComptQty, dfcUsr25Text, dfcUsr32Text,
+  dfcFCSTTypeCode, dfcDerivedFCSTID, dfcDerivedFCSTFctr, dfcOrderFutureQty,
+  dfcMgmtCode, usra, dtea, usrc, dtec, DfcCustomerGroups,
+  CAST(GETUTCDATE() AS DATETIME2(6)) AS LoadDT
+FROM dedupe
+WHERE _rn = 1;
+
 GO
 
 -- ============================================================

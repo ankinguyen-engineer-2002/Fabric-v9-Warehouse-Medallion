@@ -7,13 +7,23 @@
 -- ============================================================
 
 -- ---- ForecastHistory_Enh.v_ForecastDemandMonthly ----
+-- 2026-05-19 SWAP: was Staging_Wrk.DemandForecastSnapshotDailyEdw (SC_LH ver2 → DF2, dropped post-EDW-Exit)
+-- 2026-05-22 SWAP: now reads Staging_Wrk.DemandForecastSnapshotDaily (cross-mart cleaned, deduped via ROW_NUMBER=1)
+--                   — replaces direct EL.SupplyChain_Enh_1.DemandForecastSnapshotDaily (dirty with row-dup x16 from Q1 2025)
+-- Logic unchanged: ForecastCycle JOIN, Lag-N HorizonCode, GROUP BY summed forecast.
+-- See staging_ddl.sql for Staging_Wrk.DemandForecastSnapshotDaily definition.
 CREATE VIEW ForecastHistory_Enh.v_ForecastDemandMonthly AS
 WITH Raw AS (
-    SELECT f.ItemSKU, f.WarehouseCode, UPPER(f.CustomerGroupCode) AS CustomerGroupCode,
-        DATEFROMPARTS(CAST(f.FiscalMonth/100 AS INT), CAST(f.FiscalMonth%100 AS INT), 1) AS FiscalMonth,
-        CAST(f.SnapshotTS AS DATE) AS Snapshot, f.QtyResultantForecast, f.QtyPromotionalLift
-    FROM Staging_Wrk.DemandForecastSnapshotDailyEdw AS f
-    INNER JOIN ReferenceMaster_Enh.ForecastCycle AS c ON CAST(f.SnapshotTS AS DATE)=c.ForecastSnapshot
+    SELECT
+        f.dfcItem                                            AS ItemSKU,
+        f.dfcWarehouse                                       AS WarehouseCode,
+        UPPER(f.DfcCustomerGroups)                           AS CustomerGroupCode,
+        DATEFROMPARTS(CAST(f.dfcFiscalMonth/100 AS INT), CAST(f.dfcFiscalMonth%100 AS INT), 1) AS FiscalMonth,
+        CAST(f.dfcSnapshot AS DATE)                          AS Snapshot,
+        f.dfcResultantForecast                               AS QtyResultantForecast,
+        f.dfcPromotionalLift                                 AS QtyPromotionalLift
+    FROM Staging_Wrk.DemandForecastSnapshotDaily AS f
+    INNER JOIN ReferenceMaster_Enh.ForecastCycle AS c ON CAST(f.dfcSnapshot AS DATE)=c.ForecastSnapshot
 ),
 Calc AS (
     SELECT FC.ItemSKU, FC.WarehouseCode, FC.CustomerGroupCode,

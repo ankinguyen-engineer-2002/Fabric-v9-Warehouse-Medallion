@@ -59,7 +59,8 @@ REUSED from existing ReferenceMaster_Enh (do NOT recreate):
 | Asset | View | Watermark | Source |
 |---|---|---|---|
 | `InventorySnapshotWeekly` | `v_InventorySnapshotWeekly` | SnapshotDate | EL.SupplyChain_Enh_1.DemandInventorySnapshotWeekly (stale 10w accepted Phase 1; ItemBalance promote pending Phase 2 — `df_brz_ItemBalance` workaround ready) |
-| `ForecastSnapshotWeekly` | `v_ForecastSnapshotWeekly` | WeekEndingDate | DemandForecastSnapshotWeekly |
+| ~~`ForecastSnapshotWeekly`~~ | ~~`v_ForecastSnapshotWeekly`~~ | **DEPRECATED 2026-05-22** (upstream EL.Weekly DEAD since 2024-03-25 ~14mo stale) | — |
+| **`ForecastSnapshotWeeklySat` ⭐ NEW** | `v_ForecastSnapshotWeeklySat` | SnapshotDate (Saturday) | `Staging_Wrk.DemandForecastSnapshotDaily` (cross-mart cleaned, deduped). Saturday-only filter matches BRD "week ending Sat". 465M rows materialized. Drop-in replacement for old Weekly (same schema). |
 
 ## §E. InventoryHistory_Enh — Tier 3 helpers (4 views, overwrite daily)
 

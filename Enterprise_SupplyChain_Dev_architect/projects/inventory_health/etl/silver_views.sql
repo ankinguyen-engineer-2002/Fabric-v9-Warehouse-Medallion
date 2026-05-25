@@ -616,23 +616,70 @@ FROM ranked WHERE rn = 1
 GO
 
 
--- ---- InventoryHistory_Enh.v_ForecastSnapshotWeekly ----
--- Channel SUM. dfcSnapshot is the week-ending Saturday.
+-- ---- InventoryHistory_Enh.v_ForecastSnapshotWeekly ----  [DEPRECATED 2026-05-22]
+-- DEPRECATED: upstream EL.SupplyChain_Enh_1.DemandForecastSnapshotWeekly DEAD since 2024-03-25 (14 months stale).
+-- Replaced by v_ForecastSnapshotWeeklySat (Saturday from Daily via Staging_Wrk dedupe).
+-- AssetRegistry: is_active=False; view kept for git history but not refreshed.
+-- (Original view def left untouched below for backward-compat queries; new flow uses Sat variant.)
+-- 2026-05-20 FIX (Giang #2+#3): added FiscalMonth/FiscalMonthDate + renamed WeekEndingDate→SnapshotDate (per live).
 CREATE VIEW InventoryHistory_Enh.v_ForecastSnapshotWeekly AS
 SELECT
     CAST(TRIM(dfcItem)             AS VARCHAR(50))   AS ItemSku,
     CAST(TRIM(dfcWarehouse)        AS VARCHAR(50))   AS WarehouseCode,
-    CAST(dfcSnapshot               AS DATE)          AS WeekEndingDate,
+    CAST(dfcSnapshot               AS DATE)          AS SnapshotDate,
+    CAST(dfcFiscalMonth            AS INT)           AS FiscalMonth,
+    CAST(DATEFROMPARTS(
+        CAST(dfcFiscalMonth/100 AS INT),
+        CAST(dfcFiscalMonth%100 AS INT),
+        1) AS DATE)                                  AS FiscalMonthDate,
     CAST(SUM(CAST(dfcResultantForecast AS DECIMAL(18,4))) AS DECIMAL(18,4)) AS ForecastQty,
     CAST(SUM(CAST(dfcPermComptQty      AS DECIMAL(18,4))) AS DECIMAL(18,4)) AS PermComptQty,
     CAST('SupplyChain_Enh_1'              AS VARCHAR(64))  AS SourceSystem,
     CAST('DemandForecastSnapshotWeekly'   AS VARCHAR(128)) AS SourceTable
 FROM [Enterprise_Lakehouse].[SupplyChain_Enh_1].[DemandForecastSnapshotWeekly]
 WHERE dfcItem IS NOT NULL AND dfcWarehouse IS NOT NULL
+  AND dfcFiscalMonth IS NOT NULL
 GROUP BY
     TRIM(dfcItem),
     TRIM(dfcWarehouse),
-    CAST(dfcSnapshot AS DATE)
+    CAST(dfcSnapshot AS DATE),
+    dfcFiscalMonth
+
+GO
+
+
+-- ---- InventoryHistory_Enh.v_ForecastSnapshotWeeklySat ----  [NEW 2026-05-22]
+-- Drop-in replacement for v_ForecastSnapshotWeekly (Monday-source, DEAD upstream since 2024-03-25).
+-- Source: Staging_Wrk.DemandForecastSnapshotDaily (cross-mart cleaned, deduped via ROW_NUMBER=1).
+-- BRD requirement: 'week ending Saturday' — dfcSnapshot IS the Saturday date.
+-- Schema mirrors live v_ForecastSnapshotWeekly (post-Giang fix 2026-05-20):
+--   ItemSku, WarehouseCode, SnapshotDate, FiscalMonth, FiscalMonthDate, ForecastQty, PermComptQty, SourceSystem, SourceTable
+-- Grain: (ItemSku, WarehouseCode, SnapshotDate=Saturday, FiscalMonth).
+-- Channel SUM across (CustomerGroups, FCSTTypeCode, MgmtCode) to keep grain compact.
+-- Materialized as InventoryHistory_Enh.ForecastSnapshotWeeklySat (465M rows post-aggregate; was 153M for old Weekly).
+CREATE VIEW InventoryHistory_Enh.v_ForecastSnapshotWeeklySat AS
+SELECT
+    CAST(TRIM(dfcItem)             AS VARCHAR(50))   AS ItemSku,
+    CAST(TRIM(dfcWarehouse)        AS VARCHAR(50))   AS WarehouseCode,
+    CAST(dfcSnapshot               AS DATE)          AS SnapshotDate,
+    CAST(dfcFiscalMonth            AS INT)           AS FiscalMonth,
+    CAST(DATEFROMPARTS(
+        CAST(dfcFiscalMonth/100 AS INT),
+        CAST(dfcFiscalMonth%100 AS INT),
+        1) AS DATE)                                  AS FiscalMonthDate,
+    CAST(SUM(CAST(dfcResultantForecast AS DECIMAL(18,4))) AS DECIMAL(18,4)) AS ForecastQty,
+    CAST(SUM(CAST(dfcPermComptQty      AS DECIMAL(18,4))) AS DECIMAL(18,4)) AS PermComptQty,
+    CAST('Staging_Wrk'                       AS VARCHAR(64))  AS SourceSystem,
+    CAST('DemandForecastSnapshotDaily (Sat)' AS VARCHAR(128)) AS SourceTable
+FROM Staging_Wrk.DemandForecastSnapshotDaily
+WHERE dfcItem IS NOT NULL AND dfcWarehouse IS NOT NULL
+  AND dfcFiscalMonth IS NOT NULL
+  AND DATENAME(WEEKDAY, dfcSnapshot) = 'Saturday'
+GROUP BY
+    TRIM(dfcItem),
+    TRIM(dfcWarehouse),
+    CAST(dfcSnapshot AS DATE),
+    dfcFiscalMonth
 
 GO
 
@@ -664,7 +711,8 @@ forward13w AS (
     SELECT
         f.ItemSku, f.WarehouseCode, a.AsOfDate,
         SUM(f.ForecastQty) AS Fwd13WQty
-    FROM InventoryHistory_Enh.ForecastSnapshotWeekly f
+    -- 2026-05-22 SOURCE SWAP: ForecastSnapshotWeekly (Monday-source DEAD) → ForecastSnapshotWeeklySat (Saturday from Daily via Staging_Wrk dedupe)
+    FROM InventoryHistory_Enh.ForecastSnapshotWeeklySat f
     JOIN asof a
          ON f.WeekEndingDate >  a.AsOfDate
         AND f.WeekEndingDate <= DATEADD(week, 13, a.AsOfDate)

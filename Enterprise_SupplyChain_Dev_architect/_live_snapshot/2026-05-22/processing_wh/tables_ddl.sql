@@ -1,10 +1,8 @@
--- Live TABLE DDL (reconstructed from INFORMATION_SCHEMA.COLUMNS) — SupplyChain_Processing_Warehouse
+-- Live TABLE DDL — SupplyChain_Processing_Warehouse
 -- Generated 2026-05-22
--- 55 base tables
+-- 57 tables
 
--- ============================================================
 -- ForecastHistory_Enh.ForecastDemandMonthly (11 cols)
--- ============================================================
 CREATE TABLE [ForecastHistory_Enh].[ForecastDemandMonthly] (
     [ItemSKU] varchar(50),
     [WarehouseCode] varchar(10),
@@ -20,9 +18,7 @@ CREATE TABLE [ForecastHistory_Enh].[ForecastDemandMonthly] (
 );
 GO
 
--- ============================================================
 -- ForecastHistory_Enh.NaiveForecastMonthly (9 cols)
--- ============================================================
 CREATE TABLE [ForecastHistory_Enh].[NaiveForecastMonthly] (
     [ItemSKU] varchar(8000),
     [WarehouseCode] varchar(8000),
@@ -36,9 +32,7 @@ CREATE TABLE [ForecastHistory_Enh].[NaiveForecastMonthly] (
 );
 GO
 
--- ============================================================
 -- InventoryHistory_Enh.AwdHelper (8 cols)
--- ============================================================
 CREATE TABLE [InventoryHistory_Enh].[AwdHelper] (
     [ItemSku] varchar(50),
     [WarehouseCode] varchar(50),
@@ -51,9 +45,7 @@ CREATE TABLE [InventoryHistory_Enh].[AwdHelper] (
 );
 GO
 
--- ============================================================
 -- InventoryHistory_Enh.ForecastSnapshotWeekly (10 cols)
--- ============================================================
 CREATE TABLE [InventoryHistory_Enh].[ForecastSnapshotWeekly] (
     [ItemSku] varchar(50),
     [WarehouseCode] varchar(50),
@@ -68,9 +60,21 @@ CREATE TABLE [InventoryHistory_Enh].[ForecastSnapshotWeekly] (
 );
 GO
 
--- ============================================================
+-- InventoryHistory_Enh.ForecastSnapshotWeeklySat (9 cols)
+CREATE TABLE [InventoryHistory_Enh].[ForecastSnapshotWeeklySat] (
+    [ItemSku] varchar(50),
+    [WarehouseCode] varchar(50),
+    [SnapshotDate] date,
+    [FiscalMonth] int,
+    [FiscalMonthDate] date,
+    [ForecastQty] decimal(18,4),
+    [PermComptQty] decimal(18,4),
+    [SourceSystem] varchar(64),
+    [SourceTable] varchar(128)
+);
+GO
+
 -- InventoryHistory_Enh.HoldingTransferSnapshotDaily (12 cols)
--- ============================================================
 CREATE TABLE [InventoryHistory_Enh].[HoldingTransferSnapshotDaily] (
     [SnapshotDate] date,
     [TransferNumber] varchar(50),
@@ -87,9 +91,7 @@ CREATE TABLE [InventoryHistory_Enh].[HoldingTransferSnapshotDaily] (
 );
 GO
 
--- ============================================================
 -- InventoryHistory_Enh.InventorySnapshotWeekly (15 cols)
--- ============================================================
 CREATE TABLE [InventoryHistory_Enh].[InventorySnapshotWeekly] (
     [ItemSku] varchar(50),
     [WarehouseCode] varchar(50),
@@ -109,9 +111,7 @@ CREATE TABLE [InventoryHistory_Enh].[InventorySnapshotWeekly] (
 );
 GO
 
--- ============================================================
 -- InventoryHistory_Enh.ItemBalanceHistorical (8 cols)
--- ============================================================
 CREATE TABLE [InventoryHistory_Enh].[ItemBalanceHistorical] (
     [ItemSku] varchar(50),
     [WarehouseCode] varchar(50),
@@ -124,9 +124,7 @@ CREATE TABLE [InventoryHistory_Enh].[ItemBalanceHistorical] (
 );
 GO
 
--- ============================================================
 -- InventoryHistory_Enh.LastInvoiceHelper (6 cols)
--- ============================================================
 CREATE TABLE [InventoryHistory_Enh].[LastInvoiceHelper] (
     [ItemSku] varchar(50),
     [WarehouseCode] varchar(50),
@@ -137,9 +135,7 @@ CREATE TABLE [InventoryHistory_Enh].[LastInvoiceHelper] (
 );
 GO
 
--- ============================================================
 -- InventoryHistory_Enh.LogilityItemStatusSnapshotWeekly (10 cols)
--- ============================================================
 CREATE TABLE [InventoryHistory_Enh].[LogilityItemStatusSnapshotWeekly] (
     [WeekEndingDate] date,
     [ItemSku] varchar(50),
@@ -154,9 +150,7 @@ CREATE TABLE [InventoryHistory_Enh].[LogilityItemStatusSnapshotWeekly] (
 );
 GO
 
--- ============================================================
 -- InventoryHistory_Enh.ManufacturingOrderSnapshotDaily (12 cols)
--- ============================================================
 CREATE TABLE [InventoryHistory_Enh].[ManufacturingOrderSnapshotDaily] (
     [SnapshotDate] date,
     [MoNumber] varchar(50),
@@ -173,9 +167,7 @@ CREATE TABLE [InventoryHistory_Enh].[ManufacturingOrderSnapshotDaily] (
 );
 GO
 
--- ============================================================
 -- InventoryHistory_Enh.MovementFlagHelper (6 cols)
--- ============================================================
 CREATE TABLE [InventoryHistory_Enh].[MovementFlagHelper] (
     [ItemSku] varchar(50),
     [WarehouseCode] varchar(50),
@@ -186,9 +178,7 @@ CREATE TABLE [InventoryHistory_Enh].[MovementFlagHelper] (
 );
 GO
 
--- ============================================================
 -- InventoryHistory_Enh.PurchaseOrderSnapshotDaily (19 cols)
--- ============================================================
 CREATE TABLE [InventoryHistory_Enh].[PurchaseOrderSnapshotDaily] (
     [SnapshotDate] date,
     [PoNumber] varchar(50),
@@ -212,9 +202,7 @@ CREATE TABLE [InventoryHistory_Enh].[PurchaseOrderSnapshotDaily] (
 );
 GO
 
--- ============================================================
 -- InventoryHistory_Enh.PurchaseOrderSnapshotHistorical (10 cols)
--- ============================================================
 CREATE TABLE [InventoryHistory_Enh].[PurchaseOrderSnapshotHistorical] (
     [SnapshotDate] date,
     [ItemSku] varchar(50),
@@ -229,9 +217,7 @@ CREATE TABLE [InventoryHistory_Enh].[PurchaseOrderSnapshotHistorical] (
 );
 GO
 
--- ============================================================
 -- InventoryHistory_Enh.SafetyStockHelper (6 cols)
--- ============================================================
 CREATE TABLE [InventoryHistory_Enh].[SafetyStockHelper] (
     [ItemSku] varchar(50),
     [WarehouseCode] varchar(50),
@@ -242,9 +228,7 @@ CREATE TABLE [InventoryHistory_Enh].[SafetyStockHelper] (
 );
 GO
 
--- ============================================================
 -- InventoryHistory_Enh.SalesShipment (12 cols)
--- ============================================================
 CREATE TABLE [InventoryHistory_Enh].[SalesShipment] (
     [InvoiceNumber] decimal(18,0),
     [ItemSequence] decimal(18,0),
@@ -261,9 +245,7 @@ CREATE TABLE [InventoryHistory_Enh].[SalesShipment] (
 );
 GO
 
--- ============================================================
 -- Meta.ApprovalLog (7 cols)
--- ============================================================
 CREATE TABLE [Meta].[ApprovalLog] (
     [approval_id] varchar(128) NOT NULL,
     [asset_id] varchar(128),
@@ -275,9 +257,7 @@ CREATE TABLE [Meta].[ApprovalLog] (
 );
 GO
 
--- ============================================================
 -- Meta.AssetAccessPolicy (9 cols)
--- ============================================================
 CREATE TABLE [Meta].[AssetAccessPolicy] (
     [policy_id] varchar(128) NOT NULL,
     [asset_id] varchar(128),
@@ -291,9 +271,7 @@ CREATE TABLE [Meta].[AssetAccessPolicy] (
 );
 GO
 
--- ============================================================
 -- Meta.AssetRegistry (38 cols)
--- ============================================================
 CREATE TABLE [Meta].[AssetRegistry] (
     [asset_id] varchar(128) NOT NULL,
     [legacy_target_schema] varchar(128),
@@ -336,9 +314,7 @@ CREATE TABLE [Meta].[AssetRegistry] (
 );
 GO
 
--- ============================================================
 -- Meta.AuditLog (10 cols)
--- ============================================================
 CREATE TABLE [Meta].[AuditLog] (
     [AuditID] bigint NOT NULL,
     [AuditDateTime] datetime2 NOT NULL,
@@ -353,9 +329,7 @@ CREATE TABLE [Meta].[AuditLog] (
 );
 GO
 
--- ============================================================
 -- Meta.DQGateRun (8 cols)
--- ============================================================
 CREATE TABLE [Meta].[DQGateRun] (
     [dq_gate_run_id] varchar(128) NOT NULL,
     [asset_id] varchar(128),
@@ -368,9 +342,7 @@ CREATE TABLE [Meta].[DQGateRun] (
 );
 GO
 
--- ============================================================
 -- Meta.DQRule (12 cols)
--- ============================================================
 CREATE TABLE [Meta].[DQRule] (
     [rule_id] int,
     [rule_name] varchar(512),
@@ -387,9 +359,7 @@ CREATE TABLE [Meta].[DQRule] (
 );
 GO
 
--- ============================================================
 -- Meta.DeploymentChecklist (7 cols)
--- ============================================================
 CREATE TABLE [Meta].[DeploymentChecklist] (
     [checklist_id] varchar(128) NOT NULL,
     [phase_name] varchar(256),
@@ -401,9 +371,7 @@ CREATE TABLE [Meta].[DeploymentChecklist] (
 );
 GO
 
--- ============================================================
 -- Meta.LineageEdge (8 cols)
--- ============================================================
 CREATE TABLE [Meta].[LineageEdge] (
     [edge_id] varchar(128) NOT NULL,
     [source_asset] varchar(512),
@@ -416,9 +384,7 @@ CREATE TABLE [Meta].[LineageEdge] (
 );
 GO
 
--- ============================================================
 -- Meta.ObjectClassification (6 cols)
--- ============================================================
 CREATE TABLE [Meta].[ObjectClassification] (
     [asset_id] varchar(128) NOT NULL,
     [legacy_layer] varchar(40),
@@ -429,9 +395,7 @@ CREATE TABLE [Meta].[ObjectClassification] (
 );
 GO
 
--- ============================================================
 -- Meta.PerformanceBaseline (6 cols)
--- ============================================================
 CREATE TABLE [Meta].[PerformanceBaseline] (
     [baseline_id] varchar(128) NOT NULL,
     [asset_id] varchar(128),
@@ -442,9 +406,7 @@ CREATE TABLE [Meta].[PerformanceBaseline] (
 );
 GO
 
--- ============================================================
 -- Meta.PipelineCostLog (8 cols)
--- ============================================================
 CREATE TABLE [Meta].[PipelineCostLog] (
     [cost_log_id] varchar(128) NOT NULL,
     [pipeline_run_id] varchar(128),
@@ -457,9 +419,7 @@ CREATE TABLE [Meta].[PipelineCostLog] (
 );
 GO
 
--- ============================================================
 -- Meta.PipelineRunLog (8 cols)
--- ============================================================
 CREATE TABLE [Meta].[PipelineRunLog] (
     [pipeline_run_id] varchar(128) NOT NULL,
     [pipeline_name] varchar(256),
@@ -472,9 +432,7 @@ CREATE TABLE [Meta].[PipelineRunLog] (
 );
 GO
 
--- ============================================================
 -- Meta.ReconciliationResult (9 cols)
--- ============================================================
 CREATE TABLE [Meta].[ReconciliationResult] (
     [result_id] varchar(128) NOT NULL,
     [rule_id] varchar(128),
@@ -488,9 +446,7 @@ CREATE TABLE [Meta].[ReconciliationResult] (
 );
 GO
 
--- ============================================================
 -- Meta.ReconciliationRule (8 cols)
--- ============================================================
 CREATE TABLE [Meta].[ReconciliationRule] (
     [rule_id] varchar(128) NOT NULL,
     [asset_id] varchar(128),
@@ -503,9 +459,7 @@ CREATE TABLE [Meta].[ReconciliationRule] (
 );
 GO
 
--- ============================================================
 -- Meta.RunLog (12 cols)
--- ============================================================
 CREATE TABLE [Meta].[RunLog] (
     [run_id] varchar(128) NOT NULL,
     [asset_id] varchar(128),
@@ -522,9 +476,7 @@ CREATE TABLE [Meta].[RunLog] (
 );
 GO
 
--- ============================================================
 -- Meta.SecurityPolicy (8 cols)
--- ============================================================
 CREATE TABLE [Meta].[SecurityPolicy] (
     [policy_id] varchar(128) NOT NULL,
     [asset_id] varchar(128),
@@ -537,9 +489,7 @@ CREATE TABLE [Meta].[SecurityPolicy] (
 );
 GO
 
--- ============================================================
 -- Meta.SemanticModelContract (9 cols)
--- ============================================================
 CREATE TABLE [Meta].[SemanticModelContract] (
     [contract_id] varchar(128) NOT NULL,
     [gold_asset_id] varchar(128),
@@ -553,9 +503,7 @@ CREATE TABLE [Meta].[SemanticModelContract] (
 );
 GO
 
--- ============================================================
 -- Meta.SilverDagWaveRuntime (9 cols)
--- ============================================================
 CREATE TABLE [Meta].[SilverDagWaveRuntime] (
     [runtime_id] varchar(128) NOT NULL,
     [project] varchar(128),
@@ -569,9 +517,7 @@ CREATE TABLE [Meta].[SilverDagWaveRuntime] (
 );
 GO
 
--- ============================================================
 -- Meta.SourceContract (10 cols)
--- ============================================================
 CREATE TABLE [Meta].[SourceContract] (
     [contract_id] int,
     [target_table] varchar(256),
@@ -586,9 +532,7 @@ CREATE TABLE [Meta].[SourceContract] (
 );
 GO
 
--- ============================================================
 -- Meta.SourceContractRun (6 cols)
--- ============================================================
 CREATE TABLE [Meta].[SourceContractRun] (
     [contract_run_id] varchar(128) NOT NULL,
     [asset_id] varchar(128),
@@ -599,9 +543,7 @@ CREATE TABLE [Meta].[SourceContractRun] (
 );
 GO
 
--- ============================================================
 -- Meta.SourceFeed (13 cols)
--- ============================================================
 CREATE TABLE [Meta].[SourceFeed] (
     [source_feed_id] varchar(128) NOT NULL,
     [asset_id] varchar(128),
@@ -619,9 +561,7 @@ CREATE TABLE [Meta].[SourceFeed] (
 );
 GO
 
--- ============================================================
 -- Meta.TableDictionary (69 cols)
--- ============================================================
 CREATE TABLE [Meta].[TableDictionary] (
     [ServerName] varchar(50) NOT NULL,
     [DatabaseName] varchar(150) NOT NULL,
@@ -695,9 +635,7 @@ CREATE TABLE [Meta].[TableDictionary] (
 );
 GO
 
--- ============================================================
 -- Meta.TableDictionary_UpdateLog (9 cols)
--- ============================================================
 CREATE TABLE [Meta].[TableDictionary_UpdateLog] (
     [UpdateLogID] bigint NOT NULL,
     [DatabaseName] varchar(150) NOT NULL,
@@ -711,9 +649,7 @@ CREATE TABLE [Meta].[TableDictionary_UpdateLog] (
 );
 GO
 
--- ============================================================
 -- OpenOrderHistory_Enh.OpenOrderLineLevel (26 cols)
--- ============================================================
 CREATE TABLE [OpenOrderHistory_Enh].[OpenOrderLineLevel] (
     [OrderID] varchar(8000),
     [ItemSequenceNum] int,
@@ -744,9 +680,7 @@ CREATE TABLE [OpenOrderHistory_Enh].[OpenOrderLineLevel] (
 );
 GO
 
--- ============================================================
 -- OpenOrderHistory_Enh.OpenOrderMonthly (14 cols)
--- ============================================================
 CREATE TABLE [OpenOrderHistory_Enh].[OpenOrderMonthly] (
     [ItemSKU] varchar(8000),
     [WarehouseCode] varchar(8000),
@@ -765,9 +699,7 @@ CREATE TABLE [OpenOrderHistory_Enh].[OpenOrderMonthly] (
 );
 GO
 
--- ============================================================
 -- ReferenceMaster_Enh.Calendar (75 cols)
--- ============================================================
 CREATE TABLE [ReferenceMaster_Enh].[Calendar] (
     [SKDate] int,
     [MapicsDate] int,
@@ -847,9 +779,7 @@ CREATE TABLE [ReferenceMaster_Enh].[Calendar] (
 );
 GO
 
--- ============================================================
 -- ReferenceMaster_Enh.CustomerAccount (54 cols)
--- ============================================================
 CREATE TABLE [ReferenceMaster_Enh].[CustomerAccount] (
     [Cmacustomernumber] varchar(8000),
     [Cmaphone] varchar(8000),
@@ -908,9 +838,7 @@ CREATE TABLE [ReferenceMaster_Enh].[CustomerAccount] (
 );
 GO
 
--- ============================================================
 -- ReferenceMaster_Enh.CustomerAccountGroup (5 cols)
--- ============================================================
 CREATE TABLE [ReferenceMaster_Enh].[CustomerAccountGroup] (
     [Customer] varchar(8000),
     [CustomerGroupCode] varchar(8000),
@@ -920,9 +848,7 @@ CREATE TABLE [ReferenceMaster_Enh].[CustomerAccountGroup] (
 );
 GO
 
--- ============================================================
 -- ReferenceMaster_Enh.CustomerGrouping (3 cols)
--- ============================================================
 CREATE TABLE [ReferenceMaster_Enh].[CustomerGrouping] (
     [CustomerGroupCode] varchar(8000),
     [Customer] varchar(8000),
@@ -930,9 +856,7 @@ CREATE TABLE [ReferenceMaster_Enh].[CustomerGrouping] (
 );
 GO
 
--- ============================================================
 -- ReferenceMaster_Enh.CustomerShippingLocation (88 cols)
--- ============================================================
 CREATE TABLE [ReferenceMaster_Enh].[CustomerShippingLocation] (
     [Commaudit] bit,
     [Commaudit2] bit,
@@ -1025,9 +949,7 @@ CREATE TABLE [ReferenceMaster_Enh].[CustomerShippingLocation] (
 );
 GO
 
--- ============================================================
 -- ReferenceMaster_Enh.ForecastCycle (8 cols)
--- ============================================================
 CREATE TABLE [ReferenceMaster_Enh].[ForecastCycle] (
     [CycleCode] varchar(8000),
     [CycleDescriptionName] varchar(8000),
@@ -1040,9 +962,7 @@ CREATE TABLE [ReferenceMaster_Enh].[ForecastCycle] (
 );
 GO
 
--- ============================================================
 -- ReferenceMaster_Enh.ForecastHorizon (3 cols)
--- ============================================================
 CREATE TABLE [ReferenceMaster_Enh].[ForecastHorizon] (
     [HorizonCode] varchar(14) NOT NULL,
     [Rank] int NOT NULL,
@@ -1050,9 +970,7 @@ CREATE TABLE [ReferenceMaster_Enh].[ForecastHorizon] (
 );
 GO
 
--- ============================================================
 -- ReferenceMaster_Enh.ItemMaster (174 cols)
--- ============================================================
 CREATE TABLE [ReferenceMaster_Enh].[ItemMaster] (
     [RowID] bigint NOT NULL,
     [ItemSKU] varchar(8000) NOT NULL,
@@ -1231,9 +1149,7 @@ CREATE TABLE [ReferenceMaster_Enh].[ItemMaster] (
 );
 GO
 
--- ============================================================
 -- ReferenceMaster_Enh.OrderType (21 cols)
--- ============================================================
 CREATE TABLE [ReferenceMaster_Enh].[OrderType] (
     [OTCODE] varchar(8000),
     [OTDES1] varchar(8000),
@@ -1259,9 +1175,7 @@ CREATE TABLE [ReferenceMaster_Enh].[OrderType] (
 );
 GO
 
--- ============================================================
 -- ReferenceMaster_Enh.Vendor (5 cols)
--- ============================================================
 CREATE TABLE [ReferenceMaster_Enh].[Vendor] (
     [VendorNumber] varchar(50),
     [VendorName] varchar(200),
@@ -1271,9 +1185,7 @@ CREATE TABLE [ReferenceMaster_Enh].[Vendor] (
 );
 GO
 
--- ============================================================
 -- ReferenceMaster_Enh.Warehouse (9 cols)
--- ============================================================
 CREATE TABLE [ReferenceMaster_Enh].[Warehouse] (
     [AFIWarehousesKey] int,
     [WarehouseCode] varchar(8000),
@@ -1287,9 +1199,7 @@ CREATE TABLE [ReferenceMaster_Enh].[Warehouse] (
 );
 GO
 
--- ============================================================
 -- SalesHistory_Enh.ActualDemandMonthly (10 cols)
--- ============================================================
 CREATE TABLE [SalesHistory_Enh].[ActualDemandMonthly] (
     [ItemSKU] varchar(8000),
     [WarehouseCode] varchar(8000),
@@ -1304,9 +1214,7 @@ CREATE TABLE [SalesHistory_Enh].[ActualDemandMonthly] (
 );
 GO
 
--- ============================================================
 -- SalesHistory_Enh.ActualDemandWeekly (10 cols)
--- ============================================================
 CREATE TABLE [SalesHistory_Enh].[ActualDemandWeekly] (
     [ItemSKU] varchar(8000),
     [WarehouseCode] varchar(8000),
@@ -1321,9 +1229,7 @@ CREATE TABLE [SalesHistory_Enh].[ActualDemandWeekly] (
 );
 GO
 
--- ============================================================
 -- SalesHistory_Enh.InvoiceDetailLineLevel (38 cols)
--- ============================================================
 CREATE TABLE [SalesHistory_Enh].[InvoiceDetailLineLevel] (
     [InvoiceID] decimal(9,0) NOT NULL,
     [InvoiceExtended] varchar(8000),
@@ -1366,9 +1272,7 @@ CREATE TABLE [SalesHistory_Enh].[InvoiceDetailLineLevel] (
 );
 GO
 
--- ============================================================
 -- SalesHistory_Enh.InvoiceWeekly (13 cols)
--- ============================================================
 CREATE TABLE [SalesHistory_Enh].[InvoiceWeekly] (
     [AccountShipTo] varchar(8000),
     [ItemSKU] varchar(8000) NOT NULL,
@@ -1382,6 +1286,35 @@ CREATE TABLE [SalesHistory_Enh].[InvoiceWeekly] (
     [AmtFreight] decimal(38,2),
     [InvoiceLines] int,
     [DistinctInvoices] int,
+    [LoadDT] datetime2
+);
+GO
+
+-- Staging_Wrk.DemandForecastSnapshotDaily (24 cols)
+CREATE TABLE [Staging_Wrk].[DemandForecastSnapshotDaily] (
+    [dfcItem] varchar(8000) NOT NULL,
+    [dfcWarehouse] varchar(8000) NOT NULL,
+    [dfcFiscalMonth] decimal(6,0) NOT NULL,
+    [dfcMainPiece] varchar(8000) NOT NULL,
+    [dfcCollectiveClass] varchar(8000) NOT NULL,
+    [dfcResultantForecast] decimal(9,0),
+    [dfcPromotionalLift] decimal(9,0),
+    [dfcForcedForecast] decimal(9,0) NOT NULL,
+    [dfcValidDemandMonths] decimal(3,0) NOT NULL,
+    [dfcSnapshot] datetime2,
+    [dfcPermComptQty] decimal(11,2),
+    [dfcUsr25Text] varchar(8000),
+    [dfcUsr32Text] varchar(8000),
+    [dfcFCSTTypeCode] varchar(8000),
+    [dfcDerivedFCSTID] varchar(8000),
+    [dfcDerivedFCSTFctr] decimal(5,3),
+    [dfcOrderFutureQty] decimal(9,0),
+    [dfcMgmtCode] varchar(8000),
+    [usra] varchar(8000),
+    [dtea] datetime2,
+    [usrc] varchar(8000),
+    [dtec] datetime2,
+    [DfcCustomerGroups] varchar(8000),
     [LoadDT] datetime2
 );
 GO

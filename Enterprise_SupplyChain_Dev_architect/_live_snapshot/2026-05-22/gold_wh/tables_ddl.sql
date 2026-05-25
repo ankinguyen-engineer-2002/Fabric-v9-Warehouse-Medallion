@@ -1,10 +1,8 @@
--- Live TABLE DDL (reconstructed from INFORMATION_SCHEMA.COLUMNS) — SupplyChain_Gold_Warehouse
+-- Live TABLE DDL — SupplyChain_Gold_Warehouse
 -- Generated 2026-05-22
--- 13 base tables
+-- 13 tables
 
--- ============================================================
 -- ForecastAccuracy_DW.DimCalendar (75 cols)
--- ============================================================
 CREATE TABLE [ForecastAccuracy_DW].[DimCalendar] (
     [DateSK] int,
     [MapicsDate] int,
@@ -84,9 +82,7 @@ CREATE TABLE [ForecastAccuracy_DW].[DimCalendar] (
 );
 GO
 
--- ============================================================
 -- ForecastAccuracy_DW.DimCustomerGrouping (3 cols)
--- ============================================================
 CREATE TABLE [ForecastAccuracy_DW].[DimCustomerGrouping] (
     [CustomerGroupCode] varchar(8000),
     [Customer] varchar(8000),
@@ -94,9 +90,7 @@ CREATE TABLE [ForecastAccuracy_DW].[DimCustomerGrouping] (
 );
 GO
 
--- ============================================================
 -- ForecastAccuracy_DW.DimForecastHorizon (3 cols)
--- ============================================================
 CREATE TABLE [ForecastAccuracy_DW].[DimForecastHorizon] (
     [HorizonCode] varchar(14) NOT NULL,
     [Rank] int NOT NULL,
@@ -104,9 +98,7 @@ CREATE TABLE [ForecastAccuracy_DW].[DimForecastHorizon] (
 );
 GO
 
--- ============================================================
 -- ForecastAccuracy_DW.DimProduct (207 cols)
--- ============================================================
 CREATE TABLE [ForecastAccuracy_DW].[DimProduct] (
     [ItemSKU] varchar(8000) NOT NULL,
     [Item] varchar(8000),
@@ -318,9 +310,7 @@ CREATE TABLE [ForecastAccuracy_DW].[DimProduct] (
 );
 GO
 
--- ============================================================
 -- ForecastAccuracy_DW.DimWarehouse (9 cols)
--- ============================================================
 CREATE TABLE [ForecastAccuracy_DW].[DimWarehouse] (
     [AFIWarehousesKey] int,
     [WarehouseCode] varchar(8000),
@@ -334,9 +324,7 @@ CREATE TABLE [ForecastAccuracy_DW].[DimWarehouse] (
 );
 GO
 
--- ============================================================
 -- ForecastAccuracy_DW.FactForecastActual (10 cols)
--- ============================================================
 CREATE TABLE [ForecastAccuracy_DW].[FactForecastActual] (
     [ItemSKU] varchar(8000),
     [WarehouseCode] varchar(8000),
@@ -351,9 +339,7 @@ CREATE TABLE [ForecastAccuracy_DW].[FactForecastActual] (
 );
 GO
 
--- ============================================================
 -- ForecastAccuracy_DW.FactForecastKpi (19 cols)
--- ============================================================
 CREATE TABLE [ForecastAccuracy_DW].[FactForecastKpi] (
     [ItemSKU] varchar(8000),
     [WarehouseCode] varchar(8000),
@@ -377,9 +363,7 @@ CREATE TABLE [ForecastAccuracy_DW].[FactForecastKpi] (
 );
 GO
 
--- ============================================================
 -- InventoryHealth_DW.CogsRollingHelper (7 cols)
--- ============================================================
 CREATE TABLE [InventoryHealth_DW].[CogsRollingHelper] (
     [ItemSku] varchar(50),
     [WarehouseCode] varchar(50),
@@ -391,9 +375,7 @@ CREATE TABLE [InventoryHealth_DW].[CogsRollingHelper] (
 );
 GO
 
--- ============================================================
 -- InventoryHealth_DW.DimItem (20 cols)
--- ============================================================
 CREATE TABLE [InventoryHealth_DW].[DimItem] (
     [ItemSku] varchar(50),
     [ItemDescription] varchar(200),
@@ -418,18 +400,14 @@ CREATE TABLE [InventoryHealth_DW].[DimItem] (
 );
 GO
 
--- ============================================================
 -- InventoryHealth_DW.DimVendor (2 cols)
--- ============================================================
 CREATE TABLE [InventoryHealth_DW].[DimVendor] (
     [VendorNumber] varchar(50),
     [VendorName] varchar(200)
 );
 GO
 
--- ============================================================
 -- InventoryHealth_DW.DimWarehouse (13 cols)
--- ============================================================
 CREATE TABLE [InventoryHealth_DW].[DimWarehouse] (
     [WarehouseCode] varchar(50),
     [WarehouseName] varchar(50),
@@ -447,9 +425,7 @@ CREATE TABLE [InventoryHealth_DW].[DimWarehouse] (
 );
 GO
 
--- ============================================================
 -- InventoryHealth_DW.FactInventoryHealthSnapshot (44 cols)
--- ============================================================
 CREATE TABLE [InventoryHealth_DW].[FactInventoryHealthSnapshot] (
     [ItemSku] varchar(50),
     [WarehouseCode] varchar(50),
@@ -498,9 +474,7 @@ CREATE TABLE [InventoryHealth_DW].[FactInventoryHealthSnapshot] (
 );
 GO
 
--- ============================================================
 -- InventoryHealth_DW.FactInventoryRiskForward (24 cols)
--- ============================================================
 CREATE TABLE [InventoryHealth_DW].[FactInventoryRiskForward] (
     [ItemSku] varchar(50),
     [WarehouseCode] varchar(50),

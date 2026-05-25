@@ -1,6 +1,19 @@
 # Open Questions — inventory_health mart
 
-> **Status (updated 2026-05-22):** 3 Robert sign-offs ⏳ (H1/H5/M3) + 1 NEW Robert Phase 2 ask ⏳ (Logility past-tracking) + 1 Bob architecture Q ⏳ (cross-mart dim reuse) + ~~4 DE US loads~~ → 3 done + 1 workaround OK + 1 deferred Phase 2.
+> **Status (updated 2026-05-22 evening):** 3 Robert sign-offs ⏳ (H1/H5/M3) + 1 NEW Robert Phase 2 ask ⏳ (Logility past-tracking) + 1 Bob architecture Q resolved (DimCalendar consolidated) + ~~4 DE US loads~~ → 3 done + 1 workaround OK + 1 deferred Phase 2 + **1 NEW critical finding for DE US** (Daily/Weekly forecast snapshot quality).
+>
+> **2026-05-22 evening cleanup** (continued from morning DimDate consolidation):
+> - **NEW layer** `Staging_Wrk.DemandForecastSnapshotDaily` (cross-mart cleaned Bronze materialization)
+>   - 5.53B rows materialized via ROW_NUMBER() = 1 dedupe (raw EL 5.89B → -6%)
+>   - Insulates downstream marts from upstream Logility row-dup x16 bug (2025+)
+> - **Mart A** `ForecastHistory_Enh.v_ForecastDemandMonthly`: source EL.Daily → Staging_Wrk.DemandForecastSnapshotDaily (clean)
+> - **Mart B NEW** `InventoryHistory_Enh.ForecastSnapshotWeeklySat` (replaces Monday-based ForecastSnapshotWeekly):
+>   - Saturday filter from Staging_Wrk.DemandForecastSnapshotDaily
+>   - 465M rows materialized (vs 153M old Weekly — 3x for 160 Saturdays vs 56 Mondays)
+>   - Matches BRD "week ending Saturday" requirement
+> - **AwdHelper** source swapped: ForecastSnapshotWeekly → ForecastSnapshotWeeklySat
+> - **Old ForecastSnapshotWeekly** deactivated (is_active=0) — upstream EL.Weekly DEAD since 2024-03-25 (~14 months)
+> - **Resilient**: dedupe layer idempotent — if DE US fixes upstream dup, no harm; pipeline keeps working.
 >
 > **2026-05-22 cleanup** (post-lineage audit on Streamlit):
 > - **DROPPED 3 dead assets** — `DimRuleVersion` (Gold over-engineering — Aric decision), `v_MovementHistory` + `v_ForecastCurrent` (Silver views tagged orphan in Option B refactor 2026-05-21; never wired into Fact)
@@ -60,6 +73,29 @@ Per Excel `Source_to_KPI` sheet: `DemandFulfilmentCommonContain_Logility.ItemSta
 - **(B)** NO, current-state sufficient → drop the Phase 2 scaffold entirely (clean repo)
 
 **Where in v10**: [etl/silver_views.sql:v_LogilityItemStatus](etl/silver_views.sql) + [etl/silver_views.sql:v_LogilityItemStatusSnapshotWeekly](etl/silver_views.sql) — both annotated `[PHASE 2 DEACTIVATED 2026-05-22]`.
+
+### Q6 — NEW 2026-05-22 PM: DemandForecast Daily/Weekly upstream quality (DE US action)
+
+Probe results on `Enterprise_Lakehouse.SupplyChain_Enh_1.DemandForecastSnapshotDaily` (5.89B rows) + `DemandForecastSnapshotWeekly` (306M rows):
+
+**Finding 1 — Weekly DEAD upstream**:
+- Weekly max snapshot = `2024-03-25` (~14 months stale)
+- Inv_health Silver `ForecastSnapshotWeekly` (Monday-source) was reading this dead source
+- **Workaround applied 2026-05-22**: replaced with `ForecastSnapshotWeeklySat` derived from Daily filtered Saturday
+- DE US action: investigate why Weekly load stopped March 2024 (Logility job? EL pipeline?)
+
+**Finding 2 — Daily row-dup x16 from Q1 2025 onwards**:
+- Q1 2023 → Q1 2024: clean grain
+- Q2 2024: dup leak starts (mild, 2x)
+- **Q1 2025: explosion** to 8x, peaking **Q4 2025 at 27x** (max dup factor)
+- Q4 2025 avg ratio 6.6x — `SUM(dfcResultantForecast)` inflated **~6.6× across all Daily 2025+ data**
+- Cause: TRUE row-level duplicates — every column 100% identical in dup bucket
+- Sample bucket: B1323-53 / ECR / 202709 / 2025-12-15 / HSLIC / M / H had 16 identical rows
+- DE US action: investigate Logility upstream write behavior — appears to write N identical rows per snapshot from Q1 2025
+- **Workaround applied 2026-05-22**: `Staging_Wrk.v_DemandForecastSnapshotDaily` applies `ROW_NUMBER() OVER (full grain) = 1` dedupe → 5.89B raw → 5.53B clean
+- Idempotent: if DE US fixes upstream dup, our dedupe is no-op (no harm to revert)
+
+**Where in v10**: [forecast/etl/staging_ddl.sql:v_DemandForecastSnapshotDaily](../forecast/etl/staging_ddl.sql)
 
 ---
 

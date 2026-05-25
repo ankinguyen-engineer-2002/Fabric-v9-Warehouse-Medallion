@@ -167,12 +167,20 @@ INSERT INTO Meta.AssetRegistry (
  '["Enterprise_Lakehouse.SupplyChain_Enh_1.DemandInventorySnapshotWeekly","InventoryHistory_Enh.ItemBalanceHistorical"]', 'InventoryHistory_Enh.ItemBalanceHistorical',
  'weekly', '0 6 * * 6', 1, 'WarehouseTransform'),
 
+-- DEPRECATED 2026-05-22: ForecastSnapshotWeekly (Monday-source, upstream DEAD since 2024-03-25 ~14mo stale).
+--   Set is_active=0 via UPDATE in WH. Replaced by ForecastSnapshotWeeklySat (Saturday from Daily).
 ('InventoryHistory_Enh.ForecastSnapshotWeekly', 'inventory_health', 'DomainSilver',
  @ws, @wh_proc, 'InventoryHistory_Enh', 'ForecastSnapshotWeekly',
- -- 2026-05-20: load_type swapped incremental → overwrite (standardize; full overwrite of 4.2M rows takes 18s, view returns full history naturally).
  'InventoryHistory_Enh.v_ForecastSnapshotWeekly', 'overwrite', NULL, 'WeekEndingDate,ItemSku,WarehouseCode',
  '["Enterprise_Lakehouse.SupplyChain_Enh_1.DemandForecastSnapshotWeekly"]', NULL,
- 'weekly', '0 6 * * 6', 1, 'WarehouseTransform');
+ 'weekly', '0 6 * * 6', 0, 'WarehouseTransform'),
+
+-- NEW 2026-05-22: ForecastSnapshotWeeklySat — Saturday from Daily via Staging_Wrk dedupe.
+('InventoryHistory_Enh.ForecastSnapshotWeeklySat', 'inventory_health', 'DomainSilver',
+ @ws, @wh_proc, 'InventoryHistory_Enh', 'ForecastSnapshotWeeklySat',
+ 'InventoryHistory_Enh.v_ForecastSnapshotWeeklySat', 'incremental', 'SnapshotDate', 'ItemSku,WarehouseCode,SnapshotDate,FiscalMonth',
+ '["Staging_Wrk.DemandForecastSnapshotDaily"]', NULL,
+ 'weekly', '0 6 * * 0', 1, 'WarehouseTransform');
 
 
 -- ── Tier 3 helpers (4 assets, depend on Tier 1 + Tier 2) ─────
@@ -186,8 +194,9 @@ INSERT INTO Meta.AssetRegistry (
 ('InventoryHistory_Enh.AwdHelper', 'inventory_health', 'DomainSilver',
  @ws, @wh_proc, 'InventoryHistory_Enh', 'AwdHelper',
  'InventoryHistory_Enh.v_AwdHelper', 'overwrite', 'AsOfDate,ItemSku,WarehouseCode',
- '["InventoryHistory_Enh.InventoryCurrent","InventoryHistory_Enh.InventorySnapshotWeekly","InventoryHistory_Enh.ForecastSnapshotWeekly","InventoryHistory_Enh.SalesShipment"]',
- 'InventoryHistory_Enh.ForecastSnapshotWeekly,InventoryHistory_Enh.SalesShipment',
+ -- 2026-05-22 SOURCE SWAP: ForecastSnapshotWeekly → ForecastSnapshotWeeklySat
+ '["InventoryHistory_Enh.InventoryCurrent","InventoryHistory_Enh.InventorySnapshotWeekly","InventoryHistory_Enh.ForecastSnapshotWeeklySat","InventoryHistory_Enh.SalesShipment"]',
+ 'InventoryHistory_Enh.ForecastSnapshotWeeklySat,InventoryHistory_Enh.SalesShipment',
  'daily', '0 3 * * *', 1, 'WarehouseTransform'),
 
 ('InventoryHistory_Enh.LastInvoiceHelper', 'inventory_health', 'DomainSilver',

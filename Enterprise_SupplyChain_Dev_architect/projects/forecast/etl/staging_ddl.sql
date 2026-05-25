@@ -55,3 +55,55 @@ SELECT TRIM(IORD) AS OrderID, CAST(ISEQ AS INT) AS ItemSequenceNum,
 FROM Enterprise_Lakehouse.Wholesale_Codis_AFI.EXTORIT
 
 GO
+
+
+-- ============================================================
+-- 2026-05-22 NEW: Staging_Wrk.DemandForecastSnapshotDaily
+-- ============================================================
+-- CROSS-MART cleaned Bronze materialization (shared by forecast + inventory_health marts).
+-- Source:    Enterprise_Lakehouse.SupplyChain_Enh_1.DemandForecastSnapshotDaily
+--             (5.89B rows, dirty with row-dup x16 from Q1 2025)
+-- Transform: ROW_NUMBER() OVER (full grain) = 1 dedupe.
+-- Result:    5.53B clean rows (-6% via dedup).
+-- Pattern:   Land-and-clean intermediate layer.
+--            Insulates downstream marts from upstream Logility dup quality issue.
+-- Idempotent: if DE US fixes upstream dup, this dedupe becomes no-op (no harm).
+-- Consumers:
+--   • forecast: ForecastHistory_Enh.v_ForecastDemandMonthly (was reading EL.Daily directly)
+--   • inventory_health: InventoryHistory_Enh.v_ForecastSnapshotWeeklySat (NEW)
+
+-- ---- Staging_Wrk.v_DemandForecastSnapshotDaily (dedupe view) ----
+CREATE VIEW Staging_Wrk.v_DemandForecastSnapshotDaily AS
+WITH dedupe AS (
+  SELECT
+    dfcItem, dfcWarehouse, dfcFiscalMonth, dfcMainPiece, dfcCollectiveClass,
+    dfcResultantForecast, dfcPromotionalLift, dfcForcedForecast,
+    dfcValidDemandMonths, dfcSnapshot,
+    dfcPermComptQty, dfcUsr25Text, dfcUsr32Text,
+    dfcFCSTTypeCode, dfcDerivedFCSTID, dfcDerivedFCSTFctr, dfcOrderFutureQty,
+    dfcMgmtCode, usra, dtea, usrc, dtec, DfcCustomerGroups,
+    ROW_NUMBER() OVER (
+      PARTITION BY dfcItem, dfcWarehouse, dfcFiscalMonth, dfcSnapshot,
+                   DfcCustomerGroups, dfcFCSTTypeCode, dfcMgmtCode
+      ORDER BY (SELECT NULL)
+    ) AS _rn
+  FROM [Enterprise_Lakehouse].[SupplyChain_Enh_1].[DemandForecastSnapshotDaily]
+)
+SELECT
+  dfcItem, dfcWarehouse, dfcFiscalMonth, dfcMainPiece, dfcCollectiveClass,
+  dfcResultantForecast, dfcPromotionalLift, dfcForcedForecast,
+  dfcValidDemandMonths, dfcSnapshot,
+  dfcPermComptQty, dfcUsr25Text, dfcUsr32Text,
+  dfcFCSTTypeCode, dfcDerivedFCSTID, dfcDerivedFCSTFctr, dfcOrderFutureQty,
+  dfcMgmtCode, usra, dtea, usrc, dtec, DfcCustomerGroups,
+  CAST(GETUTCDATE() AS DATETIME2(6)) AS LoadDT
+FROM dedupe
+WHERE _rn = 1
+
+GO
+
+-- ---- Staging_Wrk.DemandForecastSnapshotDaily (materialized table — CTAS by pl_sc_staging) ----
+-- CREATE TABLE Staging_Wrk.DemandForecastSnapshotDaily AS SELECT * FROM Staging_Wrk.v_DemandForecastSnapshotDaily;
+-- Initial backfill 2026-05-22: 5,530,726,784 rows materialized in ~12 min.
+-- Future runs: incremental by dfcSnapshot watermark via usp_GenericLoad.
+GO
