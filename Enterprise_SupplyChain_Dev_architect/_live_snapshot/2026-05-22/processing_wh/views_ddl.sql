@@ -1180,8 +1180,19 @@ GO
 -- ============================================================
 -- ReferenceMaster_Enh.v_Warehouse
 -- ============================================================
--- ---- ReferenceMaster_Enh.v_Warehouse ----
-CREATE VIEW ReferenceMaster_Enh.v_Warehouse AS SELECT * FROM Enterprise_Lakehouse.SupplyChain_DW.DimAFIWarehouses
+
+CREATE   VIEW ReferenceMaster_Enh.v_Warehouse AS 
+SELECT 
+    AFIWarehousesKey,
+    RTRIM(WarehouseCode) AS WarehouseCode,
+    IntransitWarehouse,
+    ContainerDirectWarehouse,
+    ControlledWarehouse,
+    WarehouseLocation,
+    WarehouseOrderGroup,
+    FinanceInventoryReportFlag
+FROM Enterprise_Lakehouse.SupplyChain_DW.DimAFIWarehouses;
+
 GO
 
 -- ============================================================

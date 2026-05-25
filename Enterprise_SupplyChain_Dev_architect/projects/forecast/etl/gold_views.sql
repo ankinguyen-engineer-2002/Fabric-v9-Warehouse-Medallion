@@ -136,6 +136,9 @@ GO
 -- Old: SELECT * FROM Staging_Wrk.ProductEdw (table DROPPED)
 -- New: 207-col backward-compat view sourcing ReferenceMaster_Enh.ItemMaster (174 cols)
 --      17 direct + 42 alias + 30 NULL stub + 118 bonus cols. 0 DAX/relationship impact verified.
+-- 2026-05-25 FIX: ItemSKU in EL.DimItemMaster stored CHAR(15) padded — added RTRIM in live view
+--      ALTER (column line: `RTRIM([ItemSKU]) AS [ItemSKU]`) to prevent Power BI Vertipaq join miss
+--      against FactForecastKpi/Actual (which have trimmed key). 381K rows UPDATE'd in materialized table.
 -- Full live definition: _live_snapshot/2026-05-22/gold_wh/views_ddl.sql (search "v_DimProduct")
 -- See memory: [DimProduct compat view]
 

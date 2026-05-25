@@ -283,7 +283,20 @@ CREATE VIEW ReferenceMaster_Enh.v_Product AS SELECT * FROM Staging_Wrk.ProductEd
 GO
 
 -- ---- ReferenceMaster_Enh.v_Warehouse ----
-CREATE VIEW ReferenceMaster_Enh.v_Warehouse AS SELECT * FROM Enterprise_Lakehouse.SupplyChain_DW.DimAFIWarehouses
+-- 2026-05-25 FIX: WarehouseCode in EL.DimAFIWarehouses stored CHAR(10) padded with trailing spaces.
+-- Power BI Vertipaq exact-match → relationship JOIN fails when downstream Fact has trimmed key.
+-- Add RTRIM at Silver source to propagate clean to Gold (DimWarehouse + Fact*).
+CREATE VIEW ReferenceMaster_Enh.v_Warehouse AS
+SELECT
+    AFIWarehousesKey,
+    RTRIM(WarehouseCode) AS WarehouseCode,
+    IntransitWarehouse,
+    ContainerDirectWarehouse,
+    ControlledWarehouse,
+    WarehouseLocation,
+    WarehouseOrderGroup,
+    FinanceInventoryReportFlag
+FROM Enterprise_Lakehouse.SupplyChain_DW.DimAFIWarehouses
 
 GO
 

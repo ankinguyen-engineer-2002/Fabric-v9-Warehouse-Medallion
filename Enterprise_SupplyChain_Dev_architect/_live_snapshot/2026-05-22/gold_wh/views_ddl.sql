@@ -167,7 +167,7 @@ CREATE   VIEW ForecastAccuracy_DW.v_DimProduct AS
 -- ===========================================================================
 SELECT
 -- §A. Direct match (17 cols)
-    [ItemSKU],
+    RTRIM([ItemSKU]) AS [ItemSKU],
     [Item],
     [SeriesName],
     [ItemClassCode],
