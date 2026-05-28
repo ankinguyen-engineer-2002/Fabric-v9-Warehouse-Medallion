@@ -1,4 +1,14 @@
 sp_name,status,rows_affected,duration_seconds,start_time,load_type
+InventoryHistory_Enh.PurchaseOrderSnapshotDaily,success,44042655,29,2026-05-28 04:12:31.706667,datekey
+InventoryHistory_Enh.HoldingTransferSnapshotDaily,success,2383,3,2026-05-28 04:12:25.986667,datekey
+SalesHistory_Enh.ActualDemandWeekly,success,599931,6,2026-05-28 03:58:21.550000,overwrite
+OpenOrderHistory_Enh.OpenOrderMonthly,success,63218,6,2026-05-28 03:57:34.963333,overwrite
+SalesHistory_Enh.ActualDemandMonthly,success,284963,8,2026-05-28 03:57:18.263333,overwrite
+SalesHistory_Enh.InvoiceWeekly,success,15622720,55,2026-05-28 03:57:17.146667,overwrite
+ForecastHistory_Enh.ForecastDemandMonthly,success,138004165,95,2026-05-28 03:52:31.936667,overwrite
+OpenOrderHistory_Enh.OpenOrderLineLevel,success,142074,7,2026-05-28 03:51:54.350000,overwrite
+SalesHistory_Enh.InvoiceDetailLineLevel,success,128317729,26,2026-05-28 03:51:53.516667,overwrite
+ReferenceMaster_Enh.Warehouse,success,53,2,2026-05-28 03:49:14.556667,overwrite
 ReferenceMaster_Enh.Warehouse,success,53,1,2026-05-27 18:45:27.330000,overwrite
 ReferenceMaster_Enh.Warehouse,success,54,1,2026-05-27 18:42:52.580000,overwrite
 InventoryHistory_Enh.SafetyStockHelper,success,32312869,71,2026-05-27 17:37:43.006667,overwrite
@@ -39,13 +49,3 @@ InventoryHistory_Enh.SalesShipment,success,127418735,45,2026-05-26 07:52:32.2600
 ForecastHistory_Enh.NaiveForecastMonthly,success,188013,5,2026-05-26 07:34:49.606667,overwrite
 SalesHistory_Enh.ActualDemandMonthly,success,275022,7,2026-05-26 07:30:50.816667,overwrite
 OpenOrderHistory_Enh.OpenOrderMonthly,success,65565,5,2026-05-26 07:30:02.140000,overwrite
-SalesHistory_Enh.InvoiceWeekly,success,15517840,58,2026-05-26 07:29:41.003333,overwrite
-SalesHistory_Enh.ActualDemandWeekly,success,590250,10,2026-05-26 07:29:40.920000,overwrite
-OpenOrderHistory_Enh.OpenOrderLineLevel,success,148993,7,2026-05-26 07:22:18.133333,overwrite
-SalesHistory_Enh.InvoiceDetailLineLevel,success,127418735,37,2026-05-26 07:21:29.493333,overwrite
-ForecastHistory_Enh.ForecastDemandMonthly,success,138004165,227,2026-05-26 07:21:28.160000,overwrite
-ReferenceMaster_Enh.Warehouse,success,55,2,2026-05-26 07:17:19.806667,overwrite
-InventoryHistory_Enh.SafetyStockHelper,success,33888550,222,2026-05-22 04:02:05.616667,overwrite
-InventoryHistory_Enh.LastInvoiceHelper,success,35434191,139,2026-05-22 03:57:42.496667,overwrite
-InventoryHistory_Enh.MovementFlagHelper,success,10985335,68,2026-05-22 03:56:20.060000,overwrite
-InventoryHistory_Enh.AwdHelper,success,9541876,116,2026-05-22 03:54:14.846667,overwrite
