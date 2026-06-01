@@ -1,4 +1,8 @@
 sp_name,status,rows_affected,duration_seconds,start_time,load_type
+ReferenceMaster_Enh.ForecastCycle,success,43,2,2026-06-01 04:05:35.550000,overwrite
+ReferenceMaster_Enh.ForecastCycle,success,43,2,2026-06-01 03:47:17.580000,overwrite
+ReferenceMaster_Enh.ForecastHorizon,success,8,1,2026-06-01 03:23:41.736667,overwrite
+ReferenceMaster_Enh.ForecastCycle,success,43,1,2026-06-01 03:23:37.156667,overwrite
 InventoryHistory_Enh.SafetyStockHelper,success,3011057,80,2026-05-29 16:56:52.913333,overwrite
 InventoryHistory_Enh.LastInvoiceHelper,success,4826943,21,2026-05-29 16:56:21.500000,overwrite
 InventoryHistory_Enh.AwdHelper,success,2027989,79,2026-05-29 16:56:18.756667,overwrite
@@ -45,7 +49,3 @@ InventoryHistory_Enh.PurchaseOrderSnapshotDaily,success,44043231,38,2026-05-28 0
 InventoryHistory_Enh.ManufacturingOrderSnapshotDaily,success,1213103,3,2026-05-28 06:32:25.913333,datekey
 InventoryHistory_Enh.AwdHelper,success,2027905,44,2026-05-28 06:31:37.413333,overwrite
 InventoryHistory_Enh.SafetyStockHelper,success,3011057,40,2026-05-28 06:30:53.780000,overwrite
-InventoryHistory_Enh.MovementFlagHelper,success,1279540,23,2026-05-28 06:30:28.866667,overwrite
-InventoryHistory_Enh.LastInvoiceHelper,success,4826841,18,2026-05-28 06:30:08.383333,overwrite
-InventoryHistory_Enh.InventorySnapshotWeeklyFactBase,success,60823881,22,2026-05-28 06:29:42.470000,daterange
-InventoryHistory_Enh.InventorySnapshotWeekly,success,97190388,106,2026-05-28 06:25:03.926667,overwrite
